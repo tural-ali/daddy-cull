@@ -1,0 +1,7 @@
+.cache/
+state/
+web/node_modules/
+web/dist/
+/cull
+
+.env

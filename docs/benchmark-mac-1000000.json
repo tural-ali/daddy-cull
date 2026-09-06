@@ -1,0 +1,16 @@
+{
+  "assets": 1000000,
+  "database_including_wal_mib": 203.75606536865234,
+  "failures": 0,
+  "go": "go1.27.1",
+  "go_heap_mib_excludes_native": 1.36273193359375,
+  "p50_ms": 0.627,
+  "p95_ms": 1.165,
+  "p99_ms": 1.63,
+  "platform": "darwin/arm64",
+  "requests": 2000,
+  "requests_per_second": 11730.749915638313,
+  "scope": "synthetic metadata, in-process HTTP handler; no media or network",
+  "seed_seconds": 4.579807542,
+  "workers": 8
+}

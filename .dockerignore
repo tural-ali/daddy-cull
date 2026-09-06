@@ -1,0 +1,9 @@
+web/node_modules
+web/dist
+state
+.cache
+docs
+README.md
+*.db*
+
+.env
