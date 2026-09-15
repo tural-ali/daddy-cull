@@ -19,8 +19,8 @@ const gridPixels = 512
 // itself, cached on disk so the decode happens once per file rather than once
 // per view. The file streams straight into the decoder: nothing holds the whole
 // original in memory, which matters when the original is a 13 MB screenshot.
-func thumbnail(file io.ReadSeeker, cacheDir string, id int64, size, mtime int64) ([]byte, error) {
-	return cachedBytes(cacheDir, "tile", id, size, mtime, func() ([]byte, error) {
+func thumbnail(file io.ReadSeeker, cacheDir, subject string, size, mtime int64) ([]byte, error) {
+	return cachedBytes(cacheDir, "tile", subject, size, mtime, func() ([]byte, error) {
 		return shrinkToTile(file)
 	})
 }

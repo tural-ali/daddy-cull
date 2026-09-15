@@ -27,13 +27,17 @@ const previewTimeout = 20 * time.Second
 //
 // The key includes size and modification time, so a file replaced on disk yields
 // a new key rather than a stale tile, and kind separates the several previews
-// that can be derived from one asset. A cache directory that cannot be written
-// is not an error: the preview is simply rebuilt each time. Nothing is ever
-// written back to a media mount.
-func cachedBytes(cacheDir, kind string, id, size, mtime int64, produce func() ([]byte, error)) ([]byte, error) {
+// that can be derived from one file. subject names the file within its own
+// numbering, and carries that numbering's name with it, because the catalogue
+// and the imported Bin history each count from one and their small integers
+// would otherwise collide in this one shared directory.
+//
+// A cache directory that cannot be written is not an error: the preview is
+// simply rebuilt each time. Nothing is ever written back to a media mount.
+func cachedBytes(cacheDir, kind, subject string, size, mtime int64, produce func() ([]byte, error)) ([]byte, error) {
 	key := ""
 	if cacheDir != "" {
-		sum := sha256.Sum256([]byte(kind + ":" + strconv.FormatInt(id, 10) + ":" + strconv.FormatInt(size, 10) + ":" + strconv.FormatInt(mtime, 10)))
+		sum := sha256.Sum256([]byte(kind + ":" + subject + ":" + strconv.FormatInt(size, 10) + ":" + strconv.FormatInt(mtime, 10)))
 		key = filepath.Join(cacheDir, hex.EncodeToString(sum[:])[:32]+".jpg")
 		if cached, err := os.ReadFile(key); err == nil {
 			return cached, nil

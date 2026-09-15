@@ -28,11 +28,11 @@ var rawTags = []string{"PreviewImage", "JpgFromRaw", "ThumbnailImage"}
 //
 // As with video frames, the extractor is handed the already-validated descriptor
 // rather than a path, so no second lookup can resolve anywhere else.
-func rawPreview(ctx context.Context, tool string, file *os.File, cacheDir string, id, size, mtime int64) ([]byte, error) {
+func rawPreview(ctx context.Context, tool string, file *os.File, cacheDir, subject string, size, mtime int64) ([]byte, error) {
 	if tool == "" {
 		return nil, fmt.Errorf("no raw extractor configured")
 	}
-	return cachedBytes(cacheDir, "raw", id, size, mtime, func() ([]byte, error) {
+	return cachedBytes(cacheDir, "raw", subject, size, mtime, func() ([]byte, error) {
 		return withWorker(ctx, func() ([]byte, error) {
 			for _, tag := range rawTags {
 				embedded, err := runRawExtractor(ctx, tool, file, tag)

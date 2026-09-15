@@ -178,6 +178,16 @@ func (s *Store) Handler() http.Handler {
 		}
 		writeJSON(w, groups)
 	})
+	mux.HandleFunc("GET /api/marked", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		marked, err := s.MarkedForBin(ctx, 1000)
+		if err != nil {
+			http.Error(w, "catalogue unavailable", 503)
+			return
+		}
+		writeJSON(w, marked)
+	})
 	mux.HandleFunc("GET /api/legacy-bin", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()

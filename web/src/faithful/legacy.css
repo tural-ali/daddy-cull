@@ -434,6 +434,14 @@ main:has(.gal) .blankstate { max-width: 88ch; }
 .mo .cap .dim { color: rgba(242, 244, 247, .72); }
 .mo .cap .due { color: var(--warn); }
 .mo .tick { position: absolute; top: 6px; left: 6px; z-index: 4; }
+
+/* A Bin card carries more than a tile does: the size, which disk the stored copy
+   sits on, and why it was culled. Side by side that squeezes the filename down
+   to a few letters, and the filename is the thing being judged, so the caption
+   stacks instead of competing for one line. */
+.mo .cap.stack { display: block; }
+.mo .cap.stack > * { display: block; }
+.mo .cap.stack .dim { margin-top: .1rem; }
 .mo.keeper { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--good) 60%, transparent); }
 
 /* ------------------------------------------------------------ selection --

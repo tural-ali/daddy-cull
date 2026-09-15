@@ -218,6 +218,9 @@ func main() {
 		}
 		if mediaRoots.Archive != "" || mediaRoots.Screenshots != "" || mediaRoots.Upgrades != "" || mediaRoots.Disks != "" || mediaRoots.Review != "" {
 			mux.Handle("/api/media/{id}/{mode}", s.LocalMediaHandler(mediaRoots))
+			// The Bin's own files live inside the archive share, so they are
+			// previewable wherever the archive is mounted.
+			mux.Handle("/api/bin-media/{id}/{mode}", s.LegacyBinMediaHandler(mediaRoots))
 		} else if *upstream != "" {
 			mux.Handle("/api/media/{id}/{mode}", s.MediaHandler(*upstream))
 		}

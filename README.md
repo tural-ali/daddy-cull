@@ -75,7 +75,12 @@ The physically shadowed copies sit at paths the merged share resolves to the oth
 It points at a flat directory of hardlinks named by asset id, where a collision cannot occur by construction and the name is exactly what the request already carries.
 A real mount for the tree always wins over it.
 
-Previews are generated rather than proxied, into the directory given by `-preview-cache`, keyed by asset, size and modification time.
+The Bin's own files are served the same way, through `/api/bin-media/{id}`.
+A culled file has not left the archive share, it has moved to a `.culled` folder inside it, so it can still be looked at: deciding whether to restore or permanently delete a photograph from its filename alone is not a real choice.
+The recorded disk-qualified path is rewritten to the path the merged share uses, and the rewrite is refused when another file still in the Bin has that same path on a different disk, since the share exposes only one of the two and nothing here can tell which.
+
+Previews are generated rather than proxied, into the directory given by `-preview-cache`, keyed by file, size and modification time.
+The catalogue and the imported Bin history each number from one, so the key carries which of the two it counts in and their small integers cannot collide in the one shared cache directory.
 A gallery tile is a downscaled JPEG, which took a 13 MB screenshot from 13,193,991 bytes to 21,206.
 `-frame-tool` (default `ffmpeg`) decodes a frame for video and for HEIC, and `-raw-tool` (default `exiftool`) reads the full-size JPEG a camera embeds in a RAW file, which is around nine times faster than demosaicing it.
 Both are handed the already-validated file descriptor rather than a path, so no second path lookup can resolve anywhere else.

@@ -23,11 +23,11 @@ var browserBlindStill = map[string]bool{".heic": true, ".heif": true}
 //
 // The decoder is given no input other than that descriptor: it never sees a
 // request value, and it only ever reads.
-func videoFrame(ctx context.Context, tool string, file *os.File, cacheDir string, id, size, mtime int64) ([]byte, error) {
+func videoFrame(ctx context.Context, tool string, file *os.File, cacheDir, subject string, size, mtime int64) ([]byte, error) {
 	if tool == "" {
 		return nil, fmt.Errorf("no frame extractor configured")
 	}
-	return cachedBytes(cacheDir, "frame", id, size, mtime, func() ([]byte, error) {
+	return cachedBytes(cacheDir, "frame", subject, size, mtime, func() ([]byte, error) {
 		return withWorker(ctx, func() ([]byte, error) {
 			// A second past the start avoids the black or half-faded opening
 			// frame most phone clips begin with; a clip shorter than that falls
@@ -54,11 +54,11 @@ func videoFrame(ctx context.Context, tool string, file *os.File, cacheDir string
 // from tiles through a complex filtergraph, and the decoder refuses a scale
 // filter on a stream fed from one. So the frame comes back at full resolution
 // and is reduced here, through the same path as every other tile.
-func stillFrame(ctx context.Context, tool string, file *os.File, cacheDir string, id, size, mtime int64) ([]byte, error) {
+func stillFrame(ctx context.Context, tool string, file *os.File, cacheDir, subject string, size, mtime int64) ([]byte, error) {
 	if tool == "" {
 		return nil, fmt.Errorf("no frame extractor configured")
 	}
-	return cachedBytes(cacheDir, "still", id, size, mtime, func() ([]byte, error) {
+	return cachedBytes(cacheDir, "still", subject, size, mtime, func() ([]byte, error) {
 		return withWorker(ctx, func() ([]byte, error) {
 			full, err := runFrameExtractor(ctx, tool, file, "", false)
 			if err != nil {
