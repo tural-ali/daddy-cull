@@ -70,6 +70,11 @@ Each tree the catalogue names has its own mount, so a preview can never be drawn
 A tree with no mount answers 404 rather than reaching into another one.
 The one exception is deliberate: the cache half of a shadowed pair is the copy the user share already resolves that path to, so it is served from the archive mount when no disk mount exists.
 
+`-review-media` is the last resort for files the share cannot expose under their own names.
+The physically shadowed copies sit at paths the merged share resolves to the other copy, and some pairs differ only by letter case, which a case-insensitive client folds together, so neither half can be addressed by name.
+It points at a flat directory of hardlinks named by asset id, where a collision cannot occur by construction and the name is exactly what the request already carries.
+A real mount for the tree always wins over it.
+
 Previews are generated rather than proxied, into the directory given by `-preview-cache`, keyed by asset, size and modification time.
 A gallery tile is a downscaled JPEG, which took a 13 MB screenshot from 13,193,991 bytes to 21,206.
 `-frame-tool` (default `ffmpeg`) decodes a frame for video and for HEIC, and `-raw-tool` (default `exiftool`) reads the full-size JPEG a camera embeds in a RAW file, which is around nine times faster than demosaicing it.

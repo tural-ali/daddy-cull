@@ -39,6 +39,7 @@ func main() {
 	screenshotsMedia := flag.String("screenshots-media", "", "read-only mount of the screenshot holding area, served for previews")
 	upgradesMedia := flag.String("upgrades-media", "", "read-only mount of the Takeout upgrade staging area, served for previews")
 	disksMedia := flag.String("disks-media", "", "read-only mount holding the physical disk roots behind the share, served for Shadowed previews")
+	reviewMedia := flag.String("review-media", "", "flat directory of hardlinks named by asset id, for files the share cannot expose under their own names")
 	previewCache := flag.String("preview-cache", "state/preview-cache", "writable directory for generated gallery thumbnails; never inside a media mount")
 	frameTool := flag.String("frame-tool", "ffmpeg", "frame extractor used for videos with no captured poster; empty disables video previews")
 	rawTool := flag.String("raw-tool", "exiftool", "reader for the JPEG a camera embeds in a RAW file; empty disables RAW previews")
@@ -209,12 +210,13 @@ func main() {
 			Screenshots: *screenshotsMedia,
 			Upgrades:    *upgradesMedia,
 			Disks:       *disksMedia,
+			Review:      *reviewMedia,
 			Posters:     *socialPosters,
 			Cache:       *previewCache,
 			FFmpeg:      resolveTool(*frameTool),
 			RawTool:     resolveTool(*rawTool),
 		}
-		if mediaRoots.Archive != "" || mediaRoots.Screenshots != "" || mediaRoots.Upgrades != "" || mediaRoots.Disks != "" {
+		if mediaRoots.Archive != "" || mediaRoots.Screenshots != "" || mediaRoots.Upgrades != "" || mediaRoots.Disks != "" || mediaRoots.Review != "" {
 			mux.Handle("/api/media/{id}/{mode}", s.LocalMediaHandler(mediaRoots))
 		} else if *upstream != "" {
 			mux.Handle("/api/media/{id}/{mode}", s.MediaHandler(*upstream))

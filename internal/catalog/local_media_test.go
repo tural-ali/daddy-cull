@@ -526,3 +526,48 @@ func TestLocalMediaTilesAJpegWearingARawExtension(t *testing.T) {
 		t.Fatalf("tile is %d tall, wanted %d", decoded.Bounds().Dy(), gridPixels)
 	}
 }
+
+// The physical copies behind a shadowed pair cannot be reached under their own
+// names: the merged share resolves that path to the other copy, and some pairs
+// differ only by letter case, which a case-insensitive client folds together. A
+// flat directory of hardlinks named by asset id is how they are reached, and the
+// two halves of a case pair must come back as different files.
+func TestLocalMediaReachesShadowedCopiesThroughTheReviewFarm(t *testing.T) {
+	s := testStore(t)
+	farm := t.TempDir()
+	if err := os.WriteFile(filepath.Join(farm, "1.mov"), []byte("upper case copy"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(farm, "2.mov"), []byte("lower case copy"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.write.Exec(`INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES
+		(1,'/disks/disk1/2021/2021-12/2021-12-18/IMG_0016.MOV',1,'video',15,'shadow'),
+		(2,'/disks/disk1/2021/2021-12/2021-12-18/IMG_0016.mov',1,'video',15,'shadow'),
+		(3,'/disks/disk1/2021/2021-12/2021-12-18/IMG_9999.MOV',1,'video',15,'shadow')`); err != nil {
+		t.Fatal(err)
+	}
+	handler := s.LocalMediaHandler(MediaRoots{Review: farm})
+
+	for id, want := range map[string]string{"1": "upper case copy", "2": "lower case copy"} {
+		if got := serveMedia(t, handler, id, "original", nil); got.Code != 200 || got.Body.String() != want {
+			t.Fatalf("asset %s served %d %q, wanted %q", id, got.Code, got.Body.String(), want)
+		}
+	}
+	// A file with no link in the farm is still an honest miss.
+	if got := serveMedia(t, handler, "3", "original", nil); got.Code != 404 {
+		t.Fatalf("unlinked asset returned %d", got.Code)
+	}
+	// A real disk mount still wins, so the farm never shadows one.
+	disks := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(disks, "disk1/2021/2021-12/2021-12-18"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(disks, "disk1/2021/2021-12/2021-12-18/IMG_0016.MOV"), []byte("from the disk"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mounted := s.LocalMediaHandler(MediaRoots{Review: farm, Disks: disks})
+	if got := serveMedia(t, mounted, "1", "original", nil); got.Body.String() != "from the disk" {
+		t.Fatalf("farm shadowed a real mount: %q", got.Body.String())
+	}
+}

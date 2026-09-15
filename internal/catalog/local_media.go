@@ -35,6 +35,7 @@ type MediaRoots struct {
 	Screenshots string // "/screenshots/..." the flat screenshot holding area
 	Upgrades    string // "/upgrades/..."  read-only Takeout upgrade staging
 	Disks       string // "/disks/<disk>/..." physical disk roots behind the share
+	Review      string // flat hardlink farm, one entry per asset id, for trees with no mount
 	Posters     string // stills captured during social detection
 	Cache       string // writable directory for generated gallery thumbnails
 	FFmpeg      string // frame extractor for videos with no captured poster
@@ -44,7 +45,15 @@ type MediaRoots struct {
 // root returns the mount holding a catalogued path, and the path relative to it.
 // A prefix with no configured mount reports false, which the handler answers as
 // a plain 404.
-func (m MediaRoots) root(relative string) (string, string, bool) {
+//
+// Review is the last resort for files the share cannot expose under their own
+// names: the physical copies behind a shadowed pair live at paths the merged
+// share resolves to something else, and some differ from each other only by
+// letter case, which a case-insensitive client folds together. So they are
+// reached instead through a flat directory of hardlinks named by asset id,
+// where a collision cannot occur by construction and the name is exactly what
+// the request already carries.
+func (m MediaRoots) root(relative string, id int64) (string, string, bool) {
 	// A shadowed pair is one relative path present on two disks, and the share
 	// exposes whichever copy sits on the cache. So the cache half of a pair is
 	// reachable through the archive mount at that same relative path even when
@@ -62,10 +71,13 @@ func (m MediaRoots) root(relative string) (string, string, bool) {
 	} {
 		if strings.HasPrefix(relative, entry.prefix) {
 			if entry.root == "" {
-				return "", "", false
+				break
 			}
 			return entry.root, strings.TrimPrefix(relative, entry.prefix), true
 		}
+	}
+	if m.Review != "" {
+		return m.Review, strconv.FormatInt(id, 10) + strings.ToLower(filepath.Ext(relative)), true
 	}
 	return "", "", false
 }
@@ -105,7 +117,7 @@ func (s *Store) LocalMediaHandler(roots MediaRoots) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		mountRoot, inMount, known := roots.root(relative)
+		mountRoot, inMount, known := roots.root(relative, id)
 		if !known {
 			http.NotFound(w, r)
 			return
