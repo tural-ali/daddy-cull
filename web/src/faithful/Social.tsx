@@ -45,6 +45,7 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
   const [current,setCurrent]=useState(page);
   const [selected,setSelected]=useState<Set<number>>(new Set());
   const [anchor,setAnchor]=useState<number|null>(null);
+  const [playing,setPlaying]=useState<number|null>(null);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
   const [error,setError]=useState('');
@@ -143,13 +144,24 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
       ? <p className="note">{total===0?'Every candidate has been decided. Nothing is left to review.':'Nothing matches this filter.'}</p>
       : <div className="socialgrid">{items.map((item,index)=><figure className={`socialcard${selected.has(item.id)?' picked':''}`} key={item.id}>
           <div className="socialshot" onClick={event=>toggle(index,event.shiftKey)}>
-            {item.poster
-              ? <img src={`/api/social-poster/${item.id}`} alt={item.name} loading="lazy" decoding="async"/>
-              : <div className="media-missing"><span>No still captured</span><small>{item.kind.toUpperCase()} · Original untouched</small></div>}
+            {playing===item.id
+              // Judging a clip from one frame is guesswork, so the still swaps for
+              // the video in place. Clicks inside the player must not reach the
+              // card, or scrubbing would toggle the selection underneath it.
+              ? <video className="socialplayer" controls autoPlay playsInline preload="metadata"
+                  poster={item.poster?`/api/social-poster/${item.id}`:undefined}
+                  src={`/api/media/${item.id}/original`}
+                  onClick={event=>event.stopPropagation()}
+                  onEnded={()=>setPlaying(null)}/>
+              : item.poster
+                ? <img src={`/api/social-poster/${item.id}`} alt={item.name} loading="lazy" decoding="async"/>
+                : <div className="media-missing"><span>No still captured</span><small>{item.kind.toUpperCase()} · Original untouched</small></div>}
             <div className="bdg">
               <span className={`b score ${item.band}`} title={`Evidence score ${item.score}: ${BAND_WORD[item.band]} evidence this came from an app rather than a camera`}>{BAND_WORD[item.band]} {item.score}</span>
               {item.letterbox&&<span className="b play">letterbox</span>}
             </div>
+            <button type="button" className="socialplay" aria-label={playing===item.id?`Stop ${item.name}`:`Play ${item.name}`}
+              onClick={event=>{event.stopPropagation();setPlaying(current=>current===item.id?null:item.id)}}>{playing===item.id?'■':'▶'}</button>
             <label className="socialpick" onClick={event=>event.stopPropagation()}>
               <input type="checkbox" checked={selected.has(item.id)} onChange={event=>toggle(index,(event.nativeEvent as MouseEvent).shiftKey)} aria-label={`Select ${item.name}`}/>
             </label>
