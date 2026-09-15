@@ -66,6 +66,16 @@ Byte ranges are served, which is what lets a browser seek within a video rather 
 Without the flag the media routes are simply not mounted and every card keeps its honest "preview unavailable" state.
 A candidate already in the catalogue is linked to that asset so its decisions survive a re-import.
 
+Each tree the catalogue names has its own mount, so a preview can never be drawn from the wrong file: `-archive-media`, `-screenshots-media`, `-upgrades-media` and `-disks-media`.
+A tree with no mount answers 404 rather than reaching into another one.
+The one exception is deliberate: the cache half of a shadowed pair is the copy the user share already resolves that path to, so it is served from the archive mount when no disk mount exists.
+
+Previews are generated rather than proxied, into the directory given by `-preview-cache`, keyed by asset, size and modification time.
+A gallery tile is a downscaled JPEG, which took a 13 MB screenshot from 13,193,991 bytes to 21,206.
+`-frame-tool` (default `ffmpeg`) decodes a frame for video and for HEIC, and `-raw-tool` (default `exiftool`) reads the full-size JPEG a camera embeds in a RAW file, which is around nine times faster than demosaicing it.
+Both are handed the already-validated file descriptor rather than a path, so no second path lookup can resolve anywhere else.
+A tool that is not installed is logged once at startup and the previews that needed it stay unavailable; nothing else is affected.
+
 ## Local development
 
 Requires Go 1.27.1 with a C compiler, and Node 22.12+ or Node 24.

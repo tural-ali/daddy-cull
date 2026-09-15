@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"syscall"
@@ -35,6 +36,12 @@ func main() {
 	upgradeArchivePrefix := flag.String("upgrade-archive-prefix", "/mnt/user/family-archive", "host archive prefix recorded in the upgrade report")
 	upstream := flag.String("media-upstream", "", "trusted legacy read-only media service URL")
 	archiveMedia := flag.String("archive-media", "", "read-only archive mount served directly for previews and video playback")
+	screenshotsMedia := flag.String("screenshots-media", "", "read-only mount of the screenshot holding area, served for previews")
+	upgradesMedia := flag.String("upgrades-media", "", "read-only mount of the Takeout upgrade staging area, served for previews")
+	disksMedia := flag.String("disks-media", "", "read-only mount holding the physical disk roots behind the share, served for Shadowed previews")
+	previewCache := flag.String("preview-cache", "state/preview-cache", "writable directory for generated gallery thumbnails; never inside a media mount")
+	frameTool := flag.String("frame-tool", "ffmpeg", "frame extractor used for videos with no captured poster; empty disables video previews")
+	rawTool := flag.String("raw-tool", "exiftool", "reader for the JPEG a camera embeds in a RAW file; empty disables RAW previews")
 	seed := flag.Int("seed", 0, "seed an empty catalogue with synthetic metadata, then exit")
 	addr := flag.String("listen", "127.0.0.1:8830", "loopback address only; prototype has no authentication")
 	demoNetwork := flag.Bool("demo-network", false, "allow private-network access; media access uses fixed read-only proxy routes")
@@ -197,8 +204,18 @@ func main() {
 		// A local read-only mount is preferred when one is given: it needs no
 		// second service and, unlike the thumbnail proxy, streams byte ranges so
 		// video can be played and seeked in place.
-		if *archiveMedia != "" {
-			mux.Handle("/api/media/{id}/{mode}", s.LocalMediaHandler(*archiveMedia, *socialPosters))
+		mediaRoots := catalog.MediaRoots{
+			Archive:     *archiveMedia,
+			Screenshots: *screenshotsMedia,
+			Upgrades:    *upgradesMedia,
+			Disks:       *disksMedia,
+			Posters:     *socialPosters,
+			Cache:       *previewCache,
+			FFmpeg:      resolveTool(*frameTool),
+			RawTool:     resolveTool(*rawTool),
+		}
+		if mediaRoots.Archive != "" || mediaRoots.Screenshots != "" || mediaRoots.Upgrades != "" || mediaRoots.Disks != "" {
+			mux.Handle("/api/media/{id}/{mode}", s.LocalMediaHandler(mediaRoots))
 		} else if *upstream != "" {
 			mux.Handle("/api/media/{id}/{mode}", s.MediaHandler(*upstream))
 		}
@@ -233,4 +250,19 @@ func main() {
 	if err = server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
+}
+
+// resolveTool turns a frame-extractor name into an absolute path once at start
+// up, so nothing later resolves a bare command name against PATH. An empty name,
+// or one that is not on this machine, simply disables video previews.
+func resolveTool(name string) string {
+	if name == "" {
+		return ""
+	}
+	resolved, err := exec.LookPath(name)
+	if err != nil {
+		log.Printf("preview tool %q not found; the previews that need it will be unavailable", name)
+		return ""
+	}
+	return resolved
 }

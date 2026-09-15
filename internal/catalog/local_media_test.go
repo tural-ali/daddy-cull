@@ -1,7 +1,12 @@
 package catalog
 
 import (
+	"bytes"
 	"context"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -58,7 +63,7 @@ func TestLocalMediaStaysInsideTheArchiveRoot(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	handler := s.LocalMediaHandler(root, "")
+	handler := s.LocalMediaHandler(MediaRoots{Archive: root})
 
 	if got := serveMedia(t, handler, "1", "original", nil); got.Code != 200 || got.Body.String() != "0123456789" {
 		t.Fatalf("catalogued file not served: %d %q", got.Code, got.Body.String())
@@ -84,7 +89,7 @@ func TestLocalMediaServesByteRangesForPlayback(t *testing.T) {
 	if _, err := s.write.Exec("INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(1,'/archive/clip.mp4',1,'video',10,'archive')"); err != nil {
 		t.Fatal(err)
 	}
-	handler := s.LocalMediaHandler(root, "")
+	handler := s.LocalMediaHandler(MediaRoots{Archive: root})
 	got := serveMedia(t, handler, "1", "original", http.Header{"Range": {"bytes=2-5"}})
 	if got.Code != http.StatusPartialContent || got.Body.String() != "2345" {
 		t.Fatalf("range request returned %d %q", got.Code, got.Body.String())
@@ -114,7 +119,7 @@ func TestLocalMediaPreviewUsesPosterForVideo(t *testing.T) {
 	if _, err := s.write.ExecContext(ctx, "INSERT INTO social_items(asset_id,path,day,name,score,evidence,size_bytes,width,height,duration,letterbox_top,letterbox_bottom,poster,state) VALUES(1,'/archive/clip.mp4','2020-09-28','clip.mp4',10,'test',5,100,100,1,0,0,'00001.jpg','waiting')"); err != nil {
 		t.Fatal(err)
 	}
-	handler := s.LocalMediaHandler(root, posters)
+	handler := s.LocalMediaHandler(MediaRoots{Archive: root, Posters: posters})
 	if got := serveMedia(t, handler, "1", "preview", nil); got.Code != 200 || got.Body.String() != "jpegbytes" {
 		t.Fatalf("poster not served for video preview: %d %q", got.Code, got.Body.String())
 	}
@@ -138,7 +143,7 @@ func TestLocalMediaRefusesFormatsNeedingATranscode(t *testing.T) {
 	if _, err := s.write.Exec("INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(1,'/archive/raw.ARW',1,'image',3,'archive')"); err != nil {
 		t.Fatal(err)
 	}
-	handler := s.LocalMediaHandler(root, "")
+	handler := s.LocalMediaHandler(MediaRoots{Archive: root})
 	if got := serveMedia(t, handler, "1", "original", nil); got.Code != http.StatusUnsupportedMediaType {
 		t.Fatalf("RAW original returned %d", got.Code)
 	}
@@ -147,7 +152,7 @@ func TestLocalMediaRefusesFormatsNeedingATranscode(t *testing.T) {
 // Nothing on this path may write, so every method that could is refused.
 func TestLocalMediaIsReadOnly(t *testing.T) {
 	s := testStore(t)
-	handler := s.LocalMediaHandler(t.TempDir(), "")
+	handler := s.LocalMediaHandler(MediaRoots{Archive: t.TempDir()})
 	for _, method := range []string{"POST", "PUT", "DELETE", "PATCH"} {
 		request := httptest.NewRequest(method, "/api/media/1/original", nil)
 		request.SetPathValue("id", strconv.Itoa(1))
@@ -157,5 +162,367 @@ func TestLocalMediaIsReadOnly(t *testing.T) {
 		if response.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("%s returned %d", method, response.Code)
 		}
+	}
+}
+
+// Each logical tree is served only from its own mount. A tree with no mount
+// configured must answer 404 rather than reaching into another tree, because a
+// preview drawn from the wrong file is what makes a reviewer delete the wrong
+// one.
+func TestLocalMediaKeepsEachTreeInItsOwnMount(t *testing.T) {
+	s := testStore(t)
+	archive := t.TempDir()
+	shots := t.TempDir()
+	if err := os.WriteFile(filepath.Join(archive, "clip.mp4"), []byte("archivebytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(shots, "2020-11-26_IMG_3421.png"), []byte("shotbytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The archive holds a file of the same name, so serving the screenshot from
+	// the archive root would silently succeed with the wrong bytes.
+	if err := os.WriteFile(filepath.Join(archive, "2020-11-26_IMG_3421.png"), []byte("wrongtree"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.write.Exec(`INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES
+		(1,'/archive/clip.mp4',1,'video',12,'archive'),
+		(2,'/screenshots/2020-11-26_IMG_3421.png',1,'image',9,'screenshots'),
+		(3,'/upgrades/Takeout/x.mp4',1,'video',3,'takeout'),
+		(4,'/disks/disk1/2021/clip.mov',1,'video',3,'shadow')`); err != nil {
+		t.Fatal(err)
+	}
+	handler := s.LocalMediaHandler(MediaRoots{Archive: archive, Screenshots: shots})
+
+	if got := serveMedia(t, handler, "2", "preview", nil); got.Code != 200 || got.Body.String() != "shotbytes" {
+		t.Fatalf("screenshot served from the wrong mount: %d %q", got.Code, got.Body.String())
+	}
+	if got := serveMedia(t, handler, "1", "original", nil); got.Code != 200 || got.Body.String() != "archivebytes" {
+		t.Fatalf("archive file not served: %d %q", got.Code, got.Body.String())
+	}
+	// Neither upgrades nor disks has a mount here, so both are simply absent.
+	for _, id := range []string{"3", "4"} {
+		if got := serveMedia(t, handler, id, "original", nil); got.Code != 404 {
+			t.Fatalf("unmounted tree for asset %s returned %d", id, got.Code)
+		}
+	}
+}
+
+// A gallery tile must be a downscaled JPEG, not the original. The screenshot
+// holding area routinely holds 13 MB PNGs, and a grid of 120 of those is what
+// made the page unusable.
+func TestLocalMediaScalesGalleryTiles(t *testing.T) {
+	s := testStore(t)
+	root := t.TempDir()
+	cache := t.TempDir()
+	wide := image.NewRGBA(image.Rect(0, 0, 2000, 1000))
+	for y := 0; y < 1000; y++ {
+		for x := 0; x < 2000; x++ {
+			wide.Set(x, y, color.RGBA{R: uint8(x % 256), G: uint8(y % 256), B: 90, A: 255})
+		}
+	}
+	shot, err := os.Create(filepath.Join(root, "big.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = png.Encode(shot, wide); err != nil {
+		t.Fatal(err)
+	}
+	shot.Close()
+	info, err := os.Stat(filepath.Join(root, "big.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.write.Exec("INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(1,'/screenshots/big.png',1,'image',?,'screenshots')", info.Size()); err != nil {
+		t.Fatal(err)
+	}
+	handler := s.LocalMediaHandler(MediaRoots{Screenshots: root, Cache: cache})
+
+	tile := serveMedia(t, handler, "1", "preview", nil)
+	if tile.Code != 200 {
+		t.Fatalf("tile request returned %d", tile.Code)
+	}
+	if got := tile.Header().Get("Content-Type"); got != "image/jpeg" {
+		t.Fatalf("tile content type %q", got)
+	}
+	decoded, _, err := image.Decode(bytes.NewReader(tile.Body.Bytes()))
+	if err != nil {
+		t.Fatalf("tile did not decode: %v", err)
+	}
+	if decoded.Bounds().Dx() != gridPixels {
+		t.Fatalf("tile is %d wide, wanted %d", decoded.Bounds().Dx(), gridPixels)
+	}
+	if tile.Body.Len() >= int(info.Size()) {
+		t.Fatalf("tile (%d bytes) is no smaller than the original (%d)", tile.Body.Len(), info.Size())
+	}
+	// The second request must come from the cache, and match byte for byte.
+	entries, err := os.ReadDir(cache)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("expected one cached tile, got %d (%v)", len(entries), err)
+	}
+	if again := serveMedia(t, handler, "1", "preview", nil); !bytes.Equal(again.Body.Bytes(), tile.Body.Bytes()) {
+		t.Fatal("cached tile differs from the generated one")
+	}
+	// Asking for the large view still gets the untouched original.
+	request := httptest.NewRequest("GET", "/api/media/1/preview?size=large", nil)
+	request.SetPathValue("id", "1")
+	request.SetPathValue("mode", "preview")
+	large := httptest.NewRecorder()
+	handler.ServeHTTP(large, request)
+	if large.Code != 200 || large.Body.Len() != int(info.Size()) {
+		t.Fatalf("large preview returned %d with %d bytes, wanted the %d-byte original", large.Code, large.Body.Len(), info.Size())
+	}
+}
+
+// The cache half of a shadowed pair is the copy the user share actually
+// resolves that path to, so it is previewable through the archive mount with no
+// disk mount at all. The disk half is not, and saying so honestly is the point
+// of the page that lists them.
+func TestLocalMediaPreviewsTheVisibleHalfOfAShadowedPair(t *testing.T) {
+	s := testStore(t)
+	archive := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(archive, "2021/2021-12/2021-12-18"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(archive, "2021/2021-12/2021-12-18/IMG_0016.mov"), []byte("cachecopy"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.write.Exec(`INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES
+		(1,'/disks/cache/2021/2021-12/2021-12-18/IMG_0016.mov',1,'video',9,'shadow'),
+		(2,'/disks/disk1/2021/2021-12/2021-12-18/IMG_0016.mov',1,'video',9,'shadow')`); err != nil {
+		t.Fatal(err)
+	}
+	handler := s.LocalMediaHandler(MediaRoots{Archive: archive})
+
+	if got := serveMedia(t, handler, "1", "original", nil); got.Code != 200 || got.Body.String() != "cachecopy" {
+		t.Fatalf("visible half not served: %d %q", got.Code, got.Body.String())
+	}
+	if got := serveMedia(t, handler, "2", "original", nil); got.Code != 404 {
+		t.Fatalf("hidden half returned %d, wanted an honest 404", got.Code)
+	}
+
+	// With the disks mounted, each half comes from its own disk rather than the
+	// archive, so the fallback never shadows a real mount.
+	disks := t.TempDir()
+	for _, disk := range []string{"cache", "disk1"} {
+		if err := os.MkdirAll(filepath.Join(disks, disk, "2021/2021-12/2021-12-18"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(disks, disk, "2021/2021-12/2021-12-18/IMG_0016.mov"), []byte(disk), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mounted := s.LocalMediaHandler(MediaRoots{Archive: archive, Disks: disks})
+	for id, want := range map[string]string{"1": "cache", "2": "disk1"} {
+		if got := serveMedia(t, mounted, id, "original", nil); got.Code != 200 || got.Body.String() != want {
+			t.Fatalf("asset %s served %q, wanted %q", id, got.Body.String(), want)
+		}
+	}
+}
+
+// A RAW file carries the camera's own JPEG preview, so a tile can be built from
+// it without decoding sensor data. The extractor is stubbed here because what is
+// under test is the wiring - that the tile is downscaled, cached, and served as
+// a JPEG - not exiftool.
+func TestLocalMediaBuildsRawTilesFromTheEmbeddedPreview(t *testing.T) {
+	s := testStore(t)
+	root := t.TempDir()
+	cache := t.TempDir()
+	tools := t.TempDir()
+
+	// The embedded preview a camera writes is full-size, which is exactly why it
+	// has to be downscaled rather than served as-is.
+	embedded := image.NewRGBA(image.Rect(0, 0, 1616, 1080))
+	for y := 0; y < 1080; y++ {
+		for x := 0; x < 1616; x++ {
+			embedded.Set(x, y, color.RGBA{R: uint8(x % 256), G: 40, B: uint8(y % 256), A: 255})
+		}
+	}
+	var preview bytes.Buffer
+	if err := jpeg.Encode(&preview, embedded, nil); err != nil {
+		t.Fatal(err)
+	}
+	previewFile := filepath.Join(tools, "preview.jpg")
+	if err := os.WriteFile(previewFile, preview.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Answers only -PreviewImage, so the tag fallback is exercised too, and only
+	// when handed the descriptor at /dev/fd/3.
+	extractor := filepath.Join(tools, "extract")
+	script := "#!/bin/sh\nhead -c1 \"$3\" >/dev/null || exit 1\n[ \"$2\" = \"-PreviewImage\" ] || exit 1\ncat " + previewFile + "\n"
+	if err := os.WriteFile(extractor, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "A7408429.ARW"), []byte("sensor data, not an image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.write.Exec("INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(1,'/archive/A7408429.ARW',1,'raw',25,'archive')"); err != nil {
+		t.Fatal(err)
+	}
+	handler := s.LocalMediaHandler(MediaRoots{Archive: root, Cache: cache, RawTool: extractor})
+
+	tile := serveMedia(t, handler, "1", "preview", nil)
+	if tile.Code != 200 || tile.Header().Get("Content-Type") != "image/jpeg" {
+		t.Fatalf("raw tile returned %d %q", tile.Code, tile.Header().Get("Content-Type"))
+	}
+	decoded, _, err := image.Decode(bytes.NewReader(tile.Body.Bytes()))
+	if err != nil {
+		t.Fatalf("raw tile did not decode: %v", err)
+	}
+	if decoded.Bounds().Dx() != gridPixels {
+		t.Fatalf("raw tile is %d wide, wanted %d", decoded.Bounds().Dx(), gridPixels)
+	}
+	if entries, _ := os.ReadDir(cache); len(entries) != 1 {
+		t.Fatalf("expected one cached raw tile, got %d", len(entries))
+	}
+	if again := serveMedia(t, handler, "1", "preview", nil); !bytes.Equal(again.Body.Bytes(), tile.Body.Bytes()) {
+		t.Fatal("cached raw tile differs from the generated one")
+	}
+	// The original is still refused: nothing here transcodes sensor data.
+	if got := serveMedia(t, handler, "1", "original", nil); got.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("raw original returned %d", got.Code)
+	}
+	// With no extractor configured the answer is an honest miss, not a tile.
+	bare := s.LocalMediaHandler(MediaRoots{Archive: root, Cache: cache})
+	if got := serveMedia(t, bare, "1", "preview", nil); got.Code != 404 {
+		t.Fatalf("raw preview without an extractor returned %d", got.Code)
+	}
+}
+
+// HEIC is the whole iPhone library and no browser decodes it. Unlike RAW it
+// carries no embedded preview, so the frame extractor decodes it, and unlike a
+// video the frame arrives at full resolution because a HEIF stream cannot be
+// scaled on the way out. What is under test is that it still reaches the page as
+// a tile-sized JPEG.
+func TestLocalMediaDecodesHeicIntoATile(t *testing.T) {
+	s := testStore(t)
+	root := t.TempDir()
+	cache := t.TempDir()
+	tools := t.TempDir()
+
+	full := image.NewRGBA(image.Rect(0, 0, 2320, 3088))
+	for y := 0; y < 3088; y++ {
+		for x := 0; x < 2320; x++ {
+			full.Set(x, y, color.RGBA{R: 30, G: uint8(x % 256), B: uint8(y % 256), A: 255})
+		}
+	}
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, full, nil); err != nil {
+		t.Fatal(err)
+	}
+	frameFile := filepath.Join(tools, "frame.jpg")
+	if err := os.WriteFile(frameFile, encoded.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Refuses a scale filter, exactly as the real decoder does for HEIF, so a
+	// tile only appears if the caller asked for no scaling and shrank it itself.
+	extractor := filepath.Join(tools, "frames")
+	script := "#!/bin/sh\nfor a in \"$@\"; do [ \"$a\" = \"-vf\" ] && exit 1; done\nhead -c1 /dev/fd/3 >/dev/null || exit 1\ncat " + frameFile + "\n"
+	if err := os.WriteFile(extractor, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "IMG_8156.HEIC"), []byte("heic container"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.write.Exec("INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(1,'/archive/IMG_8156.HEIC',1,'image',14,'archive')"); err != nil {
+		t.Fatal(err)
+	}
+	handler := s.LocalMediaHandler(MediaRoots{Archive: root, Cache: cache, FFmpeg: extractor})
+
+	tile := serveMedia(t, handler, "1", "preview", nil)
+	if tile.Code != 200 || tile.Header().Get("Content-Type") != "image/jpeg" {
+		t.Fatalf("heic tile returned %d %q", tile.Code, tile.Header().Get("Content-Type"))
+	}
+	decoded, _, err := image.Decode(bytes.NewReader(tile.Body.Bytes()))
+	if err != nil {
+		t.Fatalf("heic tile did not decode: %v", err)
+	}
+	if decoded.Bounds().Dy() != gridPixels {
+		t.Fatalf("heic tile is %d tall, wanted %d", decoded.Bounds().Dy(), gridPixels)
+	}
+	if tile.Body.Len() >= encoded.Len() {
+		t.Fatalf("heic tile (%d bytes) is no smaller than the decoded frame (%d)", tile.Body.Len(), encoded.Len())
+	}
+	if entries, _ := os.ReadDir(cache); len(entries) != 1 {
+		t.Fatalf("expected one cached heic tile, got %d", len(entries))
+	}
+	// Without an extractor the page gets an honest miss rather than a container
+	// the <img> cannot read.
+	bare := s.LocalMediaHandler(MediaRoots{Archive: root, Cache: cache})
+	if got := serveMedia(t, bare, "1", "preview", nil); got.Code != 404 {
+		t.Fatalf("heic preview without an extractor returned %d", got.Code)
+	}
+}
+
+// The catalogued kind came from the earlier tool and is not always right: 86
+// .MPG files arrived recorded as images. A tile has to follow the container the
+// decoder will actually see, not the label.
+func TestLocalMediaFramesAVideoTheCatalogueCallsAnImage(t *testing.T) {
+	s := testStore(t)
+	root := t.TempDir()
+	tools := t.TempDir()
+	frame := image.NewRGBA(image.Rect(0, 0, 320, 240))
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, frame, nil); err != nil {
+		t.Fatal(err)
+	}
+	frameFile := filepath.Join(tools, "frame.jpg")
+	if err := os.WriteFile(frameFile, encoded.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	extractor := filepath.Join(tools, "frames")
+	if err := os.WriteFile(extractor, []byte("#!/bin/sh\ncat "+frameFile+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "MOV00759.MPG"), []byte("mpeg program stream"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.write.Exec("INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(1,'/archive/MOV00759.MPG',1,'image',19,'archive')"); err != nil {
+		t.Fatal(err)
+	}
+	handler := s.LocalMediaHandler(MediaRoots{Archive: root, Cache: t.TempDir(), FFmpeg: extractor})
+	if got := serveMedia(t, handler, "1", "preview", nil); got.Code != 200 || got.Header().Get("Content-Type") != "image/jpeg" {
+		t.Fatalf("mislabelled video returned %d %q", got.Code, got.Header().Get("Content-Type"))
+	}
+}
+
+// A file can carry a RAW extension and hold an ordinary JPEG, which has no
+// embedded preview because it is the picture. It still has to reach the page.
+func TestLocalMediaTilesAJpegWearingARawExtension(t *testing.T) {
+	s := testStore(t)
+	root := t.TempDir()
+	tools := t.TempDir()
+	picture := image.NewRGBA(image.Rect(0, 0, 3024, 4032))
+	shot, err := os.Create(filepath.Join(root, "IMG_8405.DNG"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = jpeg.Encode(shot, picture, nil); err != nil {
+		t.Fatal(err)
+	}
+	shot.Close()
+	info, err := os.Stat(filepath.Join(root, "IMG_8405.DNG"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Finds nothing, exactly as the real extractor does on a plain JPEG.
+	extractor := filepath.Join(tools, "extract")
+	if err = os.WriteFile(extractor, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.write.Exec("INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(1,'/archive/IMG_8405.DNG',1,'raw',?,'archive')", info.Size()); err != nil {
+		t.Fatal(err)
+	}
+	handler := s.LocalMediaHandler(MediaRoots{Archive: root, Cache: t.TempDir(), RawTool: extractor})
+
+	tile := serveMedia(t, handler, "1", "preview", nil)
+	if tile.Code != 200 {
+		t.Fatalf("mislabelled JPEG returned %d", tile.Code)
+	}
+	decoded, _, err := image.Decode(bytes.NewReader(tile.Body.Bytes()))
+	if err != nil {
+		t.Fatalf("tile did not decode: %v", err)
+	}
+	if decoded.Bounds().Dy() != gridPixels {
+		t.Fatalf("tile is %d tall, wanted %d", decoded.Bounds().Dy(), gridPixels)
 	}
 }
