@@ -2,7 +2,7 @@ import {useEffect,useState,type ReactNode} from 'react';
 import {Layout,type LegacyRoute} from './Layout';
 import {Today,type TodayData} from './Today';
 import {Year,type YearData} from './Year';
-import {Duplicates,type DuplicateGroup} from './Duplicates';
+import {Duplicates,type DuplicateGroup,type DuplicateReport} from './Duplicates';
 import {Settings,type Stats} from './Settings';
 import {Log,type HistoryEvent} from './Log';
 import {Bin} from './Bin';
@@ -69,12 +69,10 @@ export function App(){
         return {route:'today',content:<Today initial={oneDay}/>} as PageState;
       }
       if(path==='/year')return {route,content:<Year {...await json<YearData>('/api/year')}/>} as PageState;
-      if(path==='/duplicates'){
-        // The count of fully hashed files is what makes an empty result readable:
-        // no groups with no evidence is a different statement from no groups found.
-        const [groups,counts]=await Promise.all([json<DuplicateGroup[]>('/api/duplicates?limit=1000'),json<Stats>('/api/stats')]);
-        return {route,content:<Duplicates initial={groups} hashed={counts.fullHashes}/>} as PageState;
-      }
+      // Coverage against the files that could possibly be duplicates is what makes
+      // an empty result readable: no groups found is a different statement from no
+      // groups because nothing was ever hashed.
+      if(path==='/duplicates')return {route,content:<Duplicates report={await json<DuplicateReport>('/api/duplicate-report?limit=1000')}/>} as PageState;
       if(path==='/upgrades')return {route,content:<Upgrades initial={await json<UpgradePage>('/api/upgrades')}/>} as PageState;
       if(path==='/log')return {route,content:<Log initial={await json<HistoryEvent[]>('/api/log?limit=200')}/>} as PageState;
       if(path==='/bin')return {route,content:<Bin/>} as PageState;

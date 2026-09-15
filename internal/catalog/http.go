@@ -66,6 +66,29 @@ func (s *Store) Handler() http.Handler {
 		}
 		writeJSON(w, groups)
 	})
+	mux.HandleFunc("GET /api/duplicate-report", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		limit := 100
+		if value := r.URL.Query().Get("limit"); value != "" {
+			parsed, err := strconv.Atoi(value)
+			if err != nil {
+				http.Error(w, "invalid limit", 400)
+				return
+			}
+			limit = parsed
+		}
+		report, err := s.DuplicateOverview(ctx, r.URL.Query().Get("md"), limit)
+		if err != nil {
+			status := 503
+			if errors.Is(err, ErrInvalid) {
+				status = 400
+			}
+			http.Error(w, http.StatusText(status), status)
+			return
+		}
+		writeJSON(w, report)
+	})
 	mux.HandleFunc("GET /api/upgrades", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
