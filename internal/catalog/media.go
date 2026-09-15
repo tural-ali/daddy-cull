@@ -45,7 +45,7 @@ func (s *Store) MediaHandler(upstream string) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		if strings.HasPrefix(p, "/upgrades/") {
+		if strings.HasPrefix(p, "/upgrades/") && r.PathValue("mode") == "original" {
 			serveTakeout(w, r, p)
 			return
 		}

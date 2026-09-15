@@ -12,10 +12,11 @@ type Undo={asset:Asset;status:Status;favourite:boolean;wasResolved:boolean};
 function newRequestId(){const bytes=crypto.getRandomValues(new Uint8Array(16));return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('')}
 const labels:Record<Status,string>={unreviewed:'Not reviewed',keep:'Keeping',later:'For later',cull:'Marked for culling'};
 type Resume={cursor:string;assetId:number;review:boolean;comparison:boolean;kind:string;from:string;status:string;matches:boolean};
-function readResume():Partial<Resume>{try{const r=JSON.parse(localStorage.getItem('cull.session.v1')||'{}');return r&&typeof r==='object'?r:{}}catch{return {}}}
+function readResume():Partial<Resume>{try{const r=JSON.parse(localStorage.getItem('cull.session.v1')||'{}');const saved=r&&typeof r==='object'?r:{};return new URLSearchParams(location.search).get('view')==='grid'?{...saved,review:false,comparison:false}:saved}catch{return {}}}
 function App(){
   const resume=useRef(readResume()).current;
   const resumeApplied=useRef(false);
+  useEffect(()=>{const url=new URL(location.href);if(url.searchParams.get('view')==='grid'){url.searchParams.delete('view');window.history.replaceState(window.history.state,'',url)}},[]);
   const [page,setPage]=useState<Page>({assets:[],next:''});
   const [total,setTotal]=useState<number|null>(null);
   const [source,setSource]=useState('');const [kind,setKind]=useState(resume.kind||'');
@@ -112,7 +113,7 @@ function App(){
     window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);
   });
   return <div className={review||comparison?"app reviewing":"app"}>
-    <header><a className="brand" href="/">Daddy, Cull!<span>Make room for the memories.</span></a><div><button disabled={locked} onClick={()=>{setBinOpen(true);setReview(false)}}>Marked files & Bin</button></div></header>
+    <header><a className="brand" href="/?view=grid">Daddy, Cull!<span>Make room for the memories.</span></a><div><button disabled={locked} onClick={()=>{setBinOpen(true);setReview(false)}}>Marked files & Bin</button></div></header>
     <div className="prototype">{synthetic?"Sample catalogue":"Your real family archive"} · Review choices save first. Files move only through the Bin workflow.</div>
     <main>
       {recovering?<div className="empty">Recovering any pending choices…</div>:recoveryError?<div className="error" role="alert">{recoveryError} <button onClick={()=>void recover()}>Retry recovery</button></div>:binOpen?<Bin onClose={()=>{setBinOpen(false);setCursor('');setReload(x=>x+1)}}/>:<>

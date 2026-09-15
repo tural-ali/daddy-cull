@@ -1,0 +1,1306 @@
+/* Daddy, Cull!
+   ------------------------------------------------------------------------
+   Apple Photos restraint, and the photographs provide all the colour. The
+   chrome's whole job is to get out of the way of a grid of family pictures for
+   twenty minutes at a time, so: neutral grounds, one restrained accent, hairline
+   separators, no shadows, no gradients, no glass, no gamification.
+
+   Colour is spent only on state that carries a consequence - what is about to
+   leave the archive, what is already gone, what is favourited - and never on
+   decoration. A badge is small and grey until it means something.
+
+   Progressive disclosure runs through the whole sheet:
+     always      image, year, progress, group indicator
+     on hover    cull, favourite, capture time
+     Info panel  filename, path, size, resolution, camera, hashes
+   A filename under every tile is 38 pieces of noise on a page whose entire
+   argument is that these are memories rather than files.
+*/
+
+:root {
+  color-scheme: dark light;
+
+  /* Neutrals biased very slightly cool, so they read as chosen rather than
+     inherited, and so a warm photograph sits forward of its surroundings. */
+  --bg:        #101116;
+  --bg-2:      #17181e;
+  --bg-3:      #1e2027;
+  --bg-4:      #262932;
+  --line:      #282b34;
+  --line-2:    #343845;
+  --text:      #e8e9ee;
+  --muted:     #9297a3;
+  --faint:     #6c717d;
+
+  --accent:    #6d9eff;
+  --good:      #4ec98b;
+  --warn:      #dfa441;
+  --bad:       #e8695f;
+  --fav:       #f2789d;
+
+  --radius:    8px;
+  --radius-sm: 5px;
+  --gap:       10px;      /* §15: 8-12 px gallery gaps */
+  --ease:      140ms cubic-bezier(.4, 0, .2, 1);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:     #fbfbfc;
+    --bg-2:   #ffffff;
+    --bg-3:   #f1f2f5;
+    --bg-4:   #e7e9ee;
+    --line:   #e3e5ea;
+    --line-2: #d2d6de;
+    --text:   #16181d;
+    --muted:  #61656f;
+    --faint:  #8b8f99;
+    --accent: #2f6ad9;
+    --good:   #17864f;
+    --warn:   #8a5d0d;
+    --bad:    #c2402f;
+    --fav:    #cf4a75;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  padding-bottom: 4.5rem;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+h1, h2, h3 { font-weight: 600; letter-spacing: -.011em; text-wrap: balance; }
+.dim { color: var(--muted); }
+.hint { color: var(--faint); font-size: 12.5px; }
+
+:where(a, button, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+
+/* ---------------------------------------------------------------- top bar -- */
+
+.bar {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 1.4rem;
+  padding: .55rem 1.25rem;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 650; letter-spacing: -.02em; color: var(--text); }
+.brand:hover { text-decoration: none; }
+.bar nav { display: flex; gap: 1.1rem; }
+.bar nav a, .bar .cog { color: var(--muted); transition: color var(--ease); }
+.bar nav a.on { color: var(--text); }
+.bar nav a:hover, .bar .cog:hover { color: var(--text); text-decoration: none; }
+.bar .cog { margin-left: auto; font-size: 13px; }
+/* Nine destinations do not fit a phone. The bar wraps to a second line rather
+   than dragging the whole document sideways, which is what a nowrap row here
+   was doing to every page. */
+@media (max-width: 720px) {
+  .bar { flex-wrap: wrap; gap: .6rem 1rem; }
+  .bar nav { flex-wrap: wrap; gap: .5rem .9rem; }
+  .bar .cog { margin-left: 0; }
+}
+
+.pill {
+  display: inline-block; min-width: 1.45em; padding: 0 .35em;
+  border-radius: 999px; background: var(--bad); color: #fff;
+  font-size: 11px; line-height: 1.45; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.flash {
+  margin: 0; padding: .65rem 1.25rem;
+  background: color-mix(in oklab, var(--good) 15%, var(--bg-2));
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+}
+
+main { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1.25rem 0; }
+main.wide { max-width: 1680px; }
+
+/* A page built around a grid of photographs is the one kind that gets better
+   with more room: more per row, each one larger, and less scrolling to see the
+   same day. The 1120px measure exists for reading, so it is lifted only where
+   there is a gallery, and the prose on those pages keeps a measure of its own -
+   a hint stretched across a 34" monitor is not easier to read, it is harder. */
+main:has(.gal) { max-width: 100%; }
+main:has(.gal) .note,
+main:has(.gal) .hint,
+main:has(.gal) .ysum,
+main:has(.gal) .blankstate { max-width: 88ch; }
+
+/* --------------------------------------------------------- notes and bars -- */
+
+.note {
+  margin: 1rem 0; padding: .7rem .9rem;
+  background: var(--bg-2); border: 1px solid var(--line);
+  border-radius: var(--radius); color: var(--muted);
+}
+.note.warn {
+  border-color: color-mix(in oklab, var(--warn) 45%, var(--line));
+  background: color-mix(in oklab, var(--warn) 9%, var(--bg-2));
+  color: var(--text);
+}
+
+.btn {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .42rem .8rem;
+  font: inherit; font-size: 13px;
+  color: var(--text); background: var(--bg-3);
+  border: 1px solid var(--line-2); border-radius: var(--radius-sm);
+  cursor: pointer; transition: background var(--ease), border-color var(--ease);
+}
+.btn:hover { background: var(--bg-4); text-decoration: none; }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.small { padding: .28rem .6rem; font-size: 12.5px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: color-mix(in oklab, var(--accent) 85%, #000); }
+.btn.danger { color: #fff; background: var(--bad); border-color: var(--bad); }
+.btn.danger:hover { background: color-mix(in oklab, var(--bad) 85%, #000); }
+.btn.danger.ghosty { color: var(--bad); background: transparent; border-color: color-mix(in oklab, var(--bad) 50%, var(--line)); }
+.btn.danger.ghosty:hover { background: color-mix(in oklab, var(--bad) 12%, transparent); }
+
+.tag {
+  display: inline-block; padding: .08rem .42rem; margin-left: .5rem;
+  font-size: 11px; font-weight: 500; letter-spacing: .01em;
+  border-radius: 4px; background: var(--bg-4); color: var(--muted);
+  vertical-align: .18em;
+}
+.tag.today { background: color-mix(in oklab, var(--accent) 22%, var(--bg-3)); color: var(--accent); }
+.tag.done  { background: color-mix(in oklab, var(--good) 20%, var(--bg-3)); color: var(--good); }
+
+/* ================================================================= TODAY == */
+/* The gallery has to begin as high on the page as it can, so everything above
+   it is one line of type per idea: where you are, what is here, how far in. */
+
+.dhead {
+  display: flex; align-items: baseline; gap: 1rem;
+  margin: 0 0 .2rem;
+}
+.dhead h1 { margin: 0; font-size: 28px; letter-spacing: -.02em; }
+.dhead .step {
+  font-size: 13px; color: var(--muted);
+  padding: .2rem .5rem; border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+.dhead .step:hover { background: var(--bg-3); color: var(--text); text-decoration: none; }
+.dhead .step[data-nav="next"] { margin-left: auto; }
+
+.dline {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .45rem;
+  margin: 0 0 .8rem; color: var(--muted); font-size: 13.5px;
+}
+.dline .count { color: var(--text); font-weight: 550; }
+.dline .sep { color: var(--line-2); }
+
+/* One bar. Not six statistic cards - those were the reason the photographs
+   started below the fold. */
+.dprog {
+  display: flex; align-items: center; gap: .8rem;
+  margin: 0 0 1.4rem;
+}
+/* Named .pbar rather than .bar: the top navigation is already .bar, and a
+   second rule on the same class quietly overwrote the header's height and
+   background from further down the sheet. */
+.pbar {
+  flex: 1; height: 4px; min-width: 6rem;
+  background: var(--bg-4); border-radius: 999px; overflow: hidden;
+}
+.pbar > span {
+  display: block; height: 100%;
+  background: var(--accent); border-radius: 999px;
+  transition: width 220ms cubic-bezier(.4, 0, .2, 1);
+}
+.pbar.wide { height: 6px; margin: .6rem 0 1.6rem; display: block; }
+.dprog .ofn {
+  font-size: 12.5px; color: var(--muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* Small and secondary, on purpose. Encouragement, not a score. */
+.dprog .streak, .dprog .clock {
+  font-size: 12px; color: var(--faint);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+.goalbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .5rem;
+  margin: 0 0 1.2rem; padding: .6rem .85rem;
+  background: color-mix(in oklab, var(--good) 11%, var(--bg-2));
+  border: 1px solid color-mix(in oklab, var(--good) 32%, var(--line));
+  border-radius: var(--radius); font-size: 13px;
+}
+.goalbar .gacts { margin-left: auto; display: flex; gap: .45rem; }
+
+/* ----------------------------------------------------------- year section -- */
+
+.yr { margin: 0 0 2rem; }
+.yr.settled { opacity: .62; }
+.yr.settled:hover { opacity: 1; }
+.yhead {
+  display: flex; align-items: baseline; gap: .7rem;
+  padding: 0 0 .5rem; margin-bottom: .7rem;
+  border-bottom: 1px solid var(--line);
+}
+.yhead h2 { margin: 0; font-size: 19px; font-variant-numeric: tabular-nums; }
+.yhead .ymeta { font-size: 12.5px; color: var(--muted); }
+.yact { display: flex; align-items: center; gap: .8rem; margin: .7rem 0 0; font-size: 12.5px; }
+.yact form { margin: 0; }
+
+/* --------------------------------------------------------------- gallery -- */
+/* 4-6 columns on a desktop, by viewport rather than by media query: the tile
+   floor is what decides, so an ultrawide gets more and a laptop gets fewer
+   without a breakpoint list to keep in step. */
+
+.gal {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(288px, 1fr));
+  gap: var(--gap);
+}
+.gal.tight { grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: 8px; }
+
+.mo {
+  position: relative; margin: 0;
+  aspect-ratio: 1;
+  background: var(--bg-3);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: transform var(--ease), opacity var(--ease);
+}
+/* The preview fallback had no rule of its own, so a failed thumbnail rendered as
+   loose text that escaped whatever box it was in - most visibly as overlapping
+   lines down the Log. It now fills its container and clips, and in a 40px row
+   thumbnail it drops the words and stays a plain tile. */
+.media-missing {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: .15rem;
+  width: 100%; height: 100%;
+  padding: .35rem;
+  overflow: hidden;
+  text-align: center; text-wrap: balance;
+  background: var(--bg-3);
+  color: var(--faint);
+  font-size: 11px; line-height: 1.2;
+}
+.media-missing small { font-size: 9.5px; opacity: .8; }
+.media-missing button { margin-top: .3rem; }
+.log .lthumb .media-missing { border-radius: 4px; }
+.log .lthumb .media-missing span, .log .lthumb .media-missing small { display: none; }
+
+.mo img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+  background: var(--bg-3);
+}
+.mo .shot { display: block; width: 100%; height: 100%; cursor: zoom-in; }
+.mo:hover { transform: translateY(-1px); }
+
+/* Seen, but kept. A quiet mark so the reviewer can tell at a glance what is
+   left, without the page shouting about the ones already handled. */
+.mo.seen::after {
+  content: ""; position: absolute; inset: 0;
+  border: 2px solid transparent; border-radius: var(--radius);
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--good) 55%, transparent);
+  pointer-events: none;
+}
+.mo.fav .acts .fav { color: var(--fav); }
+.mo.fav::before {
+  content: "\2665"; position: absolute; top: 7px; right: 9px; z-index: 3;
+  color: var(--fav); font-size: 14px; line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .6);
+}
+
+/* Group indicators are always visible: they change what the decision means. */
+.bdg {
+  position: absolute; top: 7px; left: 7px; z-index: 2;
+  display: flex; flex-wrap: wrap; gap: 4px;
+  max-width: calc(100% - 3rem);
+  pointer-events: none;
+}
+.bdg .b {
+  padding: .1rem .38rem;
+  font-size: 10.5px; font-weight: 500; letter-spacing: .01em;
+  color: #f2f3f6; background: rgba(12, 13, 17, .72);
+  border-radius: 4px; white-space: nowrap;
+}
+.bdg .b.dupe { background: color-mix(in oklab, var(--warn) 82%, #000); }
+.bdg .b.keep { background: color-mix(in oklab, var(--good) 78%, #000); }
+.bdg .b.play { font-variant-numeric: tabular-nums; }
+
+/* The badge that counts the files is also the way into the comparison, so it -
+   and only it - takes pointer events back from the container above. Everything
+   else in .bdg stays inert so it never steals a click from the photograph. */
+.bdg .b.tocmp {
+  pointer-events: auto; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, .28);
+  font: inherit; font-size: 10.5px; font-weight: 500;
+  padding: .1rem .38rem;
+  display: inline-flex; align-items: center; gap: .28rem;
+}
+.bdg .b.tocmp::after {
+  /* A quiet affordance: two panes, which is what pressing it produces. */
+  content: '\25A3'; font-size: 11px; opacity: .8;
+}
+.bdg .b.tocmp:hover,
+.bdg .b.tocmp:focus-visible {
+  background: var(--accent, #2f6fed); border-color: transparent; color: #fff;
+}
+
+/* Cull and Favourite appear on hover or keyboard focus, per §15. */
+.acts {
+  position: absolute; bottom: 0; left: 0; right: 0; z-index: 3;
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px;
+  opacity: 0; transition: opacity var(--ease);
+  background: linear-gradient(to top, rgba(10, 11, 15, .78), transparent);
+}
+.mo:hover .acts, .mo:focus-within .acts { opacity: 1; }
+.act {
+  font: inherit; font-size: 12px; line-height: 1;
+  padding: .32rem .55rem;
+  color: #f2f3f6; background: rgba(20, 22, 28, .82);
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: var(--radius-sm); cursor: pointer;
+  transition: background var(--ease), color var(--ease);
+}
+.act:hover { background: rgba(32, 35, 43, .95); }
+.act.cull:hover { background: var(--bad); border-color: var(--bad); }
+.act.fav { margin-left: auto; font-size: 14px; padding: .26rem .48rem; }
+.act.fav:hover { color: var(--fav); }
+.act[aria-pressed="true"] { color: var(--fav); }
+
+/* Capture time: on hover, because it is context rather than identity. */
+.when {
+  position: absolute; bottom: 7px; right: 8px; z-index: 2;
+  font-size: 11px; color: #e9eaee;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .7);
+  font-variant-numeric: tabular-nums;
+  opacity: 0; transition: opacity var(--ease);
+}
+.mo:hover .when { opacity: 1; }
+.mo:hover .acts + .when { opacity: 0; }
+
+/* A culled tile keeps its place in the grid and dims, so the row does not
+   reflow under the cursor mid-decision, and Undo is exactly where the eye
+   already is. */
+.mo.culled { opacity: .34; }
+.mo.culled img { filter: grayscale(1); }
+.mo.culled .acts, .mo.culled .bdg, .mo.culled .when { display: none; }
+.mo .undo {
+  position: absolute; inset: auto 0 0 0; z-index: 4;
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  padding: 7px; font-size: 12px; color: #f2f3f6;
+  background: rgba(10, 11, 15, .82);
+}
+/* `[hidden]` has to beat the rule above. The browser's own `[hidden]` default is
+   specificity (0,1,0) and `.mo .undo` is (0,2,0), so without this every tile
+   shows an "Removed / Undo" bar before anything has been removed. The JS drops
+   the attribute when a removal actually happens. */
+.mo .undo[hidden] { display: none; }
+.mo.culled { opacity: .5; }
+
+.mo.gone { opacity: .7; }
+.mo.gone img { filter: grayscale(.75); }
+.mo.gone.due { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--warn) 60%, transparent); }
+.mo .cap {
+  position: absolute; inset: auto 0 0 0;
+  padding: .35rem .5rem;
+  display: flex; gap: .4rem; flex-wrap: wrap;
+  font-size: 11px; color: #dfe1e6;
+  background: linear-gradient(to top, rgba(10, 11, 15, .82), transparent);
+}
+.mo .cap .due { color: var(--warn); }
+.mo .tick { position: absolute; top: 6px; left: 6px; z-index: 4; }
+.mo.keeper { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--good) 60%, transparent); }
+
+/* ------------------------------------------------------------ selection --
+ * Selection has to read at a glance across a grid of near-identical frames, so
+ * it gets the loudest state on the tile: the accent ring, a lift, and the
+ * thumbnail brightened rather than dimmed. It deliberately outranks the keeper,
+ * seen and favourite rings - they describe what a file is, this one describes
+ * what is about to happen to it - which is why it sits below them here rather
+ * than above: same specificity, later wins.
+ */
+.mo.sel {
+  box-shadow: inset 0 0 0 3px var(--accent), 0 4px 14px rgba(0, 0, 0, .3);
+  transform: translateY(-1px);
+  opacity: 1;
+}
+.mo.sel img { filter: none; opacity: 1; }
+.mo.sel::after {
+  content: "\2713";
+  position: absolute; top: 6px; left: 7px; z-index: 4;
+  display: grid; place-items: center;
+  width: 17px; height: 17px;
+  color: var(--bg); background: var(--accent);
+  border-radius: 50%;
+  font-size: 11px; line-height: 1;
+}
+/* The badges start in the same corner, so they step aside rather than being
+   covered - "keep this one" is precisely the label you need to still be able to
+   read while deciding what the selection contains. */
+.mo.sel .bdg { padding-left: 22px; }
+/* Where a tile carries a real checkbox, that is already the tick. */
+.mo.sel:has(.tick)::after { display: none; }
+/* Bottom right, because the toast lives bottom left and the tile's own Remove
+   and Keep buttons sit at the bottom of each thumbnail - a centred bar covers
+   exactly the controls a reviewer is reaching for. */
+.selbar {
+  position: fixed; right: 1.1rem; bottom: 1.1rem;
+  z-index: 210;
+  display: flex; align-items: center; flex-wrap: wrap; gap: .45rem;
+  max-width: calc(100vw - 2.2rem);
+  padding: .5rem .6rem;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .35);
+}
+.selbar[hidden] { display: none; }
+.selbar .n {
+  padding: 0 .5rem 0 .3rem;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.selbar [hidden] { display: none; }
+.selbar [data-sel="clear"] { color: var(--muted); background: transparent; }
+.selbar kbd { margin-left: .3rem; }
+
+@media (max-width: 560px) {
+  .selbar { left: 1.1rem; right: 1.1rem; justify-content: center; }
+}
+
+/* ------------------------------------------------------ duplicate groups -- */
+
+.xdupes { margin: 0 0 2.2rem; }
+.xdupes > h2, .binday > h2 {
+  margin: 0 0 .8rem; font-size: 17px;
+  padding-bottom: .5rem; border-bottom: 1px solid var(--line);
+}
+.xdupes h2 small, .binday h2 small { font-weight: 400; color: var(--muted); font-size: 12.5px; margin-left: .5rem; }
+.xgroup {
+  margin: 0 0 1rem; padding: .8rem;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.xmeta { margin: 0 0 .6rem; font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.xmeta .gnum {
+  display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem;
+  background: var(--bg-4); border-radius: 4px; color: var(--text);
+  font-size: 11.5px; font-variant-numeric: tabular-nums;
+}
+.xmeta .hash { margin-left: auto; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--faint); }
+.xact { display: flex; align-items: center; gap: .8rem; margin: .7rem 0 0; flex-wrap: wrap; }
+.dupehead .pager { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: .8rem 0; }
+
+/* --------------------------------------------------------------- the bin -- */
+
+.binhead, .yearview, .dupehead, .settings { margin-bottom: 1.4rem; }
+.binhead h1, .yearview h1, .dupehead h1, .settings h1 { margin: 0 0 .3rem; font-size: 26px; }
+.ysum { margin: 0 0 .5rem; color: var(--muted); font-size: 13.5px; }
+.ysum b { color: var(--text); font-variant-numeric: tabular-nums; }
+.ysum .pc { color: var(--accent); margin-left: .3rem; font-variant-numeric: tabular-nums; }
+/* Shadowed's two kinds, stated side by side. The badge leads each line so the
+   wording here and the badge on every pair below are visibly the same label. */
+.kinds { display: grid; gap: .45rem; margin: .1rem 0 .7rem; max-width: 62rem;
+         color: var(--muted); font-size: 13px; line-height: 1.5; }
+.kinds > span { display: block; }
+.kinds .b { margin-right: .45rem; }
+.kinds b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+.binacts { display: flex; gap: .5rem; flex-wrap: wrap; margin: .9rem 0 0; }
+.binacts form { margin: 0; }
+.sel { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------------- year view -- */
+
+.calendar { overflow-x: auto; padding-bottom: .4rem; }
+.cmonth {
+  display: grid;
+  grid-template-columns: 2.6rem repeat(31, 24px);
+  align-items: center; gap: 3px;
+  margin-bottom: 3px;
+}
+.cmonth .mlabel { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.cell {
+  display: grid; place-items: center;
+  width: 24px; height: 24px;
+  border-radius: 4px;
+  font-size: 10.5px; font-variant-numeric: tabular-nums;
+  color: var(--faint); background: var(--bg-3);
+  transition: transform var(--ease), background var(--ease);
+}
+.cell:hover { transform: scale(1.18); text-decoration: none; z-index: 2; }
+.cell.blank { visibility: hidden; }
+.cell.none { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.cell.todo { background: var(--bg-4); color: var(--muted); }
+.cell.part { background: color-mix(in oklab, var(--warn) 45%, var(--bg-4)); color: #fff; }
+.cell.done { background: color-mix(in oklab, var(--good) 62%, var(--bg-4)); color: #fff; }
+.cell.now  { box-shadow: 0 0 0 2px var(--accent); color: var(--text); }
+
+.legend { display: flex; flex-wrap: wrap; gap: .9rem; margin: 1rem 0; font-size: 12px; color: var(--muted); }
+.legend .lg { display: inline-flex; align-items: center; white-space: nowrap; }
+.legend .key { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: .3rem; vertical-align: -1px; }
+.legend .key.none { box-shadow: inset 0 0 0 1px var(--line-2); }
+.legend .key.todo { background: var(--bg-4); }
+.legend .key.part { background: color-mix(in oklab, var(--warn) 45%, var(--bg-4)); }
+.legend .key.done { background: color-mix(in oklab, var(--good) 62%, var(--bg-4)); }
+.legend .key.now  { box-shadow: 0 0 0 2px var(--accent); }
+
+/* ------------------------------------------------------------- completion -- */
+/* The photograph is the largest thing here. The numbers are small, there is no
+   confetti, and nothing animates: the reward is the picture, not the ceremony. */
+
+.done { max-width: 40rem; margin: 2rem auto 0; text-align: center; }
+.done .tick {
+  width: 2.6rem; height: 2.6rem; margin: 0 auto .8rem;
+  display: grid; place-items: center;
+  border-radius: 50%; font-size: 20px;
+  color: var(--good); background: color-mix(in oklab, var(--good) 16%, var(--bg-2));
+}
+.done h1 { margin: 0 0 1.4rem; font-size: 24px; }
+.keepsake { margin: 0 0 1.6rem; }
+.keepsake img {
+  max-width: 100%; max-height: 52vh;
+  border-radius: var(--radius); display: block; margin: 0 auto;
+}
+.keepsake figcaption { margin-top: .55rem; font-size: 12.5px; color: var(--faint); }
+
+.tally { display: flex; flex-wrap: wrap; justify-content: center; gap: 1.6rem; margin: 0 0 1.4rem; }
+.tally div { text-align: center; }
+.tally dt { font-size: 11.5px; color: var(--faint); letter-spacing: .02em; }
+.tally dd { margin: .1rem 0 0; font-size: 19px; font-weight: 550; font-variant-numeric: tabular-nums; }
+.done .rest, .done .next { color: var(--muted); font-size: 13.5px; }
+.done .next b { color: var(--faint); font-size: 11.5px; letter-spacing: .02em; text-transform: uppercase; }
+.dacts { display: flex; justify-content: center; gap: .5rem; flex-wrap: wrap; margin: 1.4rem 0 1rem; }
+
+/* --------------------------------------------------------------- settings -- */
+
+.settings h2 { margin: 1.8rem 0 .5rem; font-size: 16px; }
+.kv { margin: .6rem 0 1rem; display: grid; gap: .3rem; }
+.kv div { display: flex; gap: .8rem; border-bottom: 1px solid var(--line); padding-bottom: .3rem; }
+.kv dt { flex: 0 0 15rem; color: var(--muted); font-size: 13px; }
+.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+.kv.mono dd { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+.cmd {
+  margin: .5rem 0 0; padding: .6rem .8rem; overflow-x: auto;
+  background: var(--bg-3); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); font-size: 12.5px;
+}
+ul.plain { padding-left: 1.1rem; }
+ul.plain li { margin-bottom: .5rem; color: var(--muted); }
+
+/* ------------------------------------------------------------ bottom bar -- */
+
+.fbar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 25;
+  display: flex; align-items: center; gap: 1rem;
+  padding: .55rem 1.25rem;
+  background: var(--bg-2); border-top: 1px solid var(--line);
+}
+.fbar .fleft { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
+.fbar .fright { margin-left: auto; display: flex; align-items: center; gap: .6rem; }
+.fbar form { margin: 0; }
+.fbar b { color: var(--muted); font-weight: 600; }
+
+/* =========================================================== REVIEW MODE == */
+/* The fastest path through a large batch, so the photograph gets nearly the
+   whole screen and everything else is one row of small type that fades. */
+
+html.rv-open, html.rv-open body { overflow: hidden; }
+
+.rv {
+  position: fixed; inset: 0; z-index: 100;
+  display: none; flex-direction: column;
+  background: #0a0b0e;
+}
+.rv.on { display: flex; }
+
+.rvtop {
+  display: flex; align-items: center; gap: .8rem;
+  padding: .6rem 1rem;
+  color: #cdd0d7; font-size: 13px;
+  transition: opacity var(--ease);
+}
+.rvtop .rvwhen { color: #8b8f99; font-variant-numeric: tabular-nums; }
+.rvtop .rvpos { margin-left: auto; font-variant-numeric: tabular-nums; color: #8b8f99; }
+.rvtop .rvbar { width: 8rem; height: 3px; background: #24262c; border-radius: 999px; overflow: hidden; }
+.rvtop .rvbar > span { display: block; height: 100%; background: var(--accent); }
+
+/* Flex, not grid, and deliberately so. A grid with no explicit rows sizes its
+   row to its content, so the image's `max-height: 100%` had no definite height
+   to resolve against: on a wide screen the photograph was sized by width, grew
+   past the viewport, and pushed the action bar off the bottom of the screen. A
+   flex item resolves its percentage against the container's own definite
+   height, which is what `flex: 1` already gives this. `overflow: hidden` is the
+   belt to that braces - nothing here may ever scroll the chrome away. */
+.rvstage {
+  flex: 1 1 0; position: relative; min-height: 0; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 1rem;
+}
+.rvstage img, .rvstage video {
+  /* No `width: 100%`: a photograph is never upscaled past its own pixels. */
+  max-width: 100%; max-height: 100%;
+  width: auto; height: auto;
+  object-fit: contain; display: block;
+  transition: opacity 110ms linear;
+}
+.rvstage.zoom {
+  padding: 0; overflow: auto; cursor: grab;
+  align-items: flex-start; justify-content: flex-start;
+}
+.rvstage.zoom img {
+  max-width: none; max-height: none;
+  width: auto; height: auto; cursor: grab;
+  margin: auto;  /* keeps an image smaller than the stage centred while zoomed */
+}
+.rvstage .rvspin {
+  position: absolute; color: #6c717d; font-size: 13px;
+  display: flex; align-items: center; gap: .5rem;
+}
+.rvstage .rvspin::before {
+  content: ""; width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid #3a3d45; border-top-color: #8b8f99;
+  animation: rvspin 700ms linear infinite;
+}
+@keyframes rvspin { to { transform: rotate(360deg); } }
+
+/* Arrow zones over the image itself, so a mouse never has to find a button.
+   They stop short of the bottom: a video draws its own control bar there, and a
+   full-height zone sat on top of the scrubber, so dragging the playhead landed
+   on "next" instead of seeking. */
+.rvnav {
+  position: absolute; top: 0; bottom: 0; width: 22%;
+  display: grid; place-items: center;
+  border: 0; background: none; cursor: pointer;
+  color: #fff; font-size: 26px; opacity: 0;
+  transition: opacity var(--ease);
+}
+.rvnav:hover { opacity: .8; }
+.rvnav.prev { left: 0; } .rvnav.next { right: 0; }
+/* Narrower and clear of the controls whenever a video is on the stage. */
+.rvstage.hasvideo .rvnav { width: 12%; bottom: 5rem; }
+
+.rvbot {
+  display: flex; align-items: center; justify-content: center; gap: .5rem;
+  padding: .7rem 1rem 1rem;
+  transition: opacity var(--ease);
+}
+.rvbtn {
+  font: inherit; font-size: 13px;
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .45rem .85rem;
+  color: #e8e9ee; background: #1a1c22;
+  border: 1px solid #2c2f38; border-radius: var(--radius-sm);
+  cursor: pointer; transition: background var(--ease), color var(--ease), border-color var(--ease);
+}
+.rvbtn:hover { background: #23262e; }
+/* `display` on the class beats the browser's own [hidden] rule, so Compare was
+   showing on single files despite being marked hidden. */
+.rvbtn[hidden] { display: none; }
+.rvbtn kbd {
+  font: inherit; font-size: 10.5px; padding: 0 .25rem;
+  color: #8b8f99; background: #24262c; border-radius: 3px;
+}
+.rvbtn.cull:hover { background: var(--bad); border-color: var(--bad); color: #fff; }
+.rvbtn.cull:hover kbd { color: #fff; background: rgba(0,0,0,.25); }
+/* The only control in the comparison that leaves nothing behind, so it carries
+   its warning at rest rather than only on hover - the row it sits in is three
+   buttons wide and the other two are both ways of keeping something. */
+.rvbtn.cmpall {
+  color: color-mix(in oklab, var(--bad) 72%, #e8e9ee);
+  border-color: color-mix(in oklab, var(--bad) 40%, transparent);
+}
+.rvbtn .ico { font-size: 13px; margin-right: .15rem; }
+/* Favourite lost its button, so the state it carried shows on the frame itself. */
+/* The one control here that is a state rather than an action, so it is the one
+   that carries a colour when it is on. */
+.rvbtn.fav.on {
+  color: var(--fav);
+  border-color: color-mix(in oklab, var(--fav) 45%, transparent);
+}
+.rvbtn.fav.on .ico { color: var(--fav); }
+
+.rv.isfav .rvstage { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--fav) 60%, transparent); }
+
+/* The close control, top-right where a full-screen overlay is always expected
+   to carry one. */
+.rvx {
+  font: inherit; font-size: 20px; line-height: 1;
+  display: grid; place-items: center;
+  width: 30px; height: 30px; margin-left: .3rem; padding: 0 0 2px;
+  color: #cdd0d7; background: #1a1c22;
+  border: 1px solid #2c2f38; border-radius: 50%;
+  cursor: pointer; transition: background var(--ease), color var(--ease);
+}
+.rvx:hover { background: #2b2f38; color: #fff; }
+
+/* Tapping hides the chrome, per §17. The close button is the one exception:
+   whatever else fades, there is always a visible way out. */
+.rv.bare .rvtop, .rv.bare .rvbot { opacity: 0; pointer-events: none; }
+.rv.bare .rvtop { opacity: 1; }
+.rv.bare .rvtop > :not(.rvx) { opacity: 0; }
+.rv.bare .rvx { opacity: 1; pointer-events: auto; }
+
+/* Info panel: everything technical, one keystroke away and nowhere else. */
+.rvinfo {
+  position: absolute; top: 0; right: 0; bottom: 0; width: min(23rem, 82vw);
+  z-index: 3; overflow-y: auto;
+  padding: 1rem 1.1rem;
+  background: rgba(14, 15, 19, .96);
+  border-left: 1px solid #23262c;
+  transform: translateX(100%); transition: transform 160ms cubic-bezier(.4,0,.2,1);
+}
+.rv.info .rvinfo { transform: none; }
+.rvinfo h3 { margin: 0 0 .7rem; font-size: 13px; color: #cdd0d7; }
+.rvinfo dl { margin: 0; display: grid; gap: .35rem; }
+.rvinfo dl div { display: grid; grid-template-columns: 6.5rem 1fr; gap: .5rem; align-items: baseline; }
+.rvinfo dt { font-size: 11.5px; color: #6c717d; }
+.rvinfo dd { margin: 0; font-size: 12px; color: #cdd0d7; word-break: break-all; }
+.rvinfo dd.mono { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; }
+.rvinfo .members { margin-top: 1rem; }
+.rvinfo .members li { font-size: 11.5px; color: #9297a3; word-break: break-all; margin-bottom: .3rem; }
+.rvinfo .members li.gh {
+  color: #6c717d;
+  margin: .8rem 0 .35rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-size: 10.5px;
+}
+/* A value worth reading is usually a value worth pasting, so every path and
+   link in the panel is a button that copies itself. */
+.rvinfo .copyval {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  word-break: break-all;
+}
+.rvinfo .copyval:hover { color: #fff; text-decoration: underline; }
+
+/* Compare Mode: the whole group at once, because that is the only way the
+   decision is actually easy. */
+.rvcmp {
+  position: absolute; inset: 0; z-index: 4;
+  display: none; grid-template-rows: auto 1fr auto auto;
+  background: #0a0b0e;
+}
+.rv.cmp .rvcmp { display: grid; }
+.rvcmp .ctop { padding: .6rem 1rem; color: #cdd0d7; font-size: 13px; display: flex; gap: .7rem; align-items: center; }
+.rvcmp .cgrid {
+  display: grid; gap: 8px; padding: 0 1rem; min-height: 0;
+  grid-auto-flow: column; grid-auto-columns: 1fr;
+}
+.rvcmp figure { margin: 0; position: relative; min-height: 0; display: grid; grid-template-rows: 1fr auto; gap: .4rem; }
+.rvcmp img, .rvcmp video { width: 100%; height: 100%; object-fit: contain; min-height: 0; }
+/* The close control sits at the far end of the compare header. */
+.rvcmp .ctop .cmpx { margin-left: auto; }
+.rvcmp figcaption { text-align: center; font-size: 11.5px; color: #8b8f99; }
+.rvcmp .pick {
+  position: absolute; top: 6px; left: 8px;
+  display: grid; place-items: center; width: 1.3rem; height: 1.3rem;
+  background: rgba(12,13,17,.8); border-radius: 4px;
+  font-size: 11px; color: #cdd0d7;
+}
+.rvcmp figure.on { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.rvcmp .cbot { padding: .7rem 1rem 1rem; display: flex; justify-content: center; gap: .5rem; }
+
+/* The facts panel. Sits between the frames and the actions because it is read
+   after looking and before deciding, and because putting it anywhere else means
+   the frames lose height to it on a screen that is already short. */
+.rvcmp .cfacts { padding: .55rem 1rem 0; color: #cdd0d7; font-size: 12.5px; }
+.rvcmp .cwait { color: #7d818c; font-size: 12px; }
+.rvcmp .verdict { display: flex; flex-wrap: wrap; gap: .1rem .7rem; align-items: baseline; margin-bottom: .45rem; }
+.rvcmp .verdict b { color: var(--accent); font-size: 13px; }
+.rvcmp .verdict.tied b { color: #cdd0d7; }
+.rvcmp .verdict ul { margin: 0; padding: 0; list-style: none; color: #9aa0ab; }
+.rvcmp .verdict li { display: inline; }
+.rvcmp .verdict li + li::before { content: ' \00b7 '; color: #5a5f6a; }
+.rvcmp table.facts { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.rvcmp table.facts th,
+.rvcmp table.facts td {
+  padding: .22rem .5rem; text-align: left; border-top: 1px solid #1c1f26;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 22vw;
+}
+.rvcmp table.facts thead th { border-top: 0; color: #cdd0d7; font-weight: 600; }
+.rvcmp table.facts thead th.win { color: var(--accent); }
+.rvcmp table.facts tbody th { color: #7d818c; font-weight: 400; width: 6.5rem; }
+.rvcmp table.facts td { color: #9aa0ab; }
+/* The winner on a row, where the gap is big enough to mean anything. */
+.rvcmp table.facts td.hi { color: #e7e9ee; font-weight: 600; }
+.rvcmp table.facts .n { color: #7d818c; }
+.rvcmp table.facts .tick {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  padding: .05rem .3rem; border: 1px solid var(--accent); border-radius: 3px;
+}
+/* The recommendation, said again where the eye already is. */
+.rvcmp figure.best { outline: 1px dashed var(--accent); outline-offset: 2px; border-radius: 4px; }
+.rvcmp figure.best.on { outline: 2px solid var(--accent); }
+
+/* Shortcut overlay. */
+.rvkeys {
+  position: absolute; inset: 0; z-index: 6;
+  display: none; place-items: center;
+  background: rgba(6, 7, 9, .9);
+}
+.rv.keys .rvkeys { display: grid; }
+.rvkeys table { border-collapse: collapse; font-size: 13px; color: #cdd0d7; }
+.rvkeys td { padding: .3rem .9rem; }
+.rvkeys td:first-child { text-align: right; color: #8b8f99; font-family: ui-monospace, Menlo, monospace; }
+
+/* Toast, for the undo that has to survive an auto-advance.
+
+   Bottom left, not centre. Centred, it landed exactly on top of the tile's own
+   Remove and Keep buttons and on the viewer's bottom bar, so the confirmation of
+   one decision blocked the next one for as long as it was up. Out at the corner
+   it is still the first thing in the eye's path after a removal, and it covers
+   nothing that can be pressed. */
+.toast {
+  position: fixed; left: 1.1rem; bottom: 1.1rem;
+  z-index: 200;
+  max-width: min(30rem, calc(100vw - 2.2rem));
+  display: none; align-items: center; gap: .7rem;
+  padding: .55rem .8rem;
+  color: #e8e9ee; background: #1c1f26;
+  border: 1px solid #2f3340; border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+  font-size: 13px;
+}
+.toast.on { display: flex; }
+/* The filename is the expendable half: Undo must never be pushed off the edge
+   by a long name, so the text truncates and the button keeps its size. */
+.toast > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast button { flex: none; }
+.toast button {
+  font: inherit; font-size: 12.5px; padding: .2rem .55rem;
+  color: #e8e9ee; background: #282c35;
+  border: 1px solid #383d49; border-radius: 4px; cursor: pointer;
+}
+.toast button:hover { background: #333844; }
+.toast.bad { border-color: color-mix(in oklab, var(--bad) 55%, #2f3340); }
+
+/* ------------------------------------------------------------ small screens -- */
+/* Mobile is for the daily habit, not administration: one column, bigger tap
+   targets, and the actions permanently visible because there is no hover. */
+
+@media (max-width: 720px) {
+  main, main.wide { padding: 1rem .8rem 0; }
+  .dhead { flex-wrap: wrap; gap: .5rem; }
+  .dhead h1 { font-size: 22px; order: -1; flex: 1 0 100%; }
+  .dhead .step[data-nav="next"] { margin-left: auto; }
+  .gal { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+  .gal.tight { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
+  .mo .acts { opacity: 1; }
+  .mo .when { opacity: 1; }
+  .kv div { flex-direction: column; gap: .1rem; }
+  .kv dt { flex: none; }
+  .fbar { flex-wrap: wrap; gap: .5rem; }
+  .fbar .hint { display: none; }
+  .rvbtn kbd { display: none; }
+  .rvnav { opacity: 0 !important; }
+  .tally { gap: 1.1rem; }
+}
+
+/* ====================================================== SECONDARY VIEWS == */
+/* All days, Upgrades, and the empty state. Reached from Settings, so they get a
+   plain, quiet treatment rather than their own visual language: this is a review
+   tool with one vocabulary, not four screens that each invented their own. */
+
+/* Named .blankstate, not .blank: the year calendar pads short months with
+   `.cell.blank` grid items, and a bare `.blank` rule also matched those - the
+   `margin: 3rem auto` below was landing on calendar cells and inflating whole
+   month rows. */
+.blankstate { max-width: 34rem; margin: 3rem auto; text-align: center; }
+.blankstate h1 { font-size: 22px; margin: 0 0 .5rem; }
+.blankstate p { color: var(--muted); }
+.empty { color: var(--muted); margin: 1.4rem 0; }
+.meta { color: var(--muted); font-size: 12.5px; }
+
+.summary { display: flex; flex-wrap: wrap; gap: 1.6rem; margin: 0 0 1rem; }
+.summary .stat b {
+  display: block; font-size: 20px; font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+.summary .stat span { font-size: 11.5px; color: var(--faint); letter-spacing: .02em; }
+
+.progress {
+  height: 5px; background: var(--bg-4);
+  border-radius: 999px; overflow: hidden; margin: 0 0 .5rem;
+}
+.progress > span { display: block; height: 100%; background: var(--accent); }
+
+.legend .key.pending { background: var(--bg-4); }
+.legend .key.flagged { background: color-mix(in oklab, var(--warn) 55%, var(--bg-4)); }
+
+.year { margin: 0 0 1.6rem; }
+.year h2 { margin: 0 0 .5rem; font-size: 17px; font-variant-numeric: tabular-nums; }
+.year h2 small { font-weight: 400; font-size: 12px; color: var(--muted); margin-left: .5rem; }
+.month { display: flex; align-items: center; gap: .6rem; margin-bottom: 4px; }
+.month .mlabel {
+  flex: 0 0 2.4rem; font-size: 11.5px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 3px; }
+.chip {
+  display: grid; place-items: center;
+  width: 23px; height: 23px; border-radius: 4px;
+  font-size: 10.5px; font-variant-numeric: tabular-nums;
+  color: var(--muted); background: var(--bg-4);
+  transition: transform var(--ease);
+}
+.chip:hover { transform: scale(1.18); text-decoration: none; z-index: 2; }
+.chip.flagged { background: color-mix(in oklab, var(--warn) 50%, var(--bg-4)); color: #fff; }
+.chip.done { background: color-mix(in oklab, var(--good) 60%, var(--bg-4)); color: #fff; }
+
+/* Upgrades: the archive copy and the Takeout candidate, side by side. */
+.pair {
+  margin: 0 0 1rem; padding: .8rem;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.pair.settled { opacity: .6; }
+.phead { margin: 0 0 .6rem; font-size: 12.5px; color: var(--muted); }
+.sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--gap); }
+.card.side { position: relative; margin: 0; background: var(--bg-3); border-radius: var(--radius); overflow: hidden; }
+.card.side img { width: 100%; display: block; aspect-ratio: 1; object-fit: cover; }
+.card.side.better { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--good) 60%, transparent); }
+.card.side .fn, .card.side .sz {
+  display: block; padding: 0 .5rem; font-size: 11.5px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.card.side .fn { padding-top: .4rem; color: var(--text); }
+.card.side .sz { padding-bottom: .4rem; }
+.allfiles { margin: .7rem 0 0; font-size: 12px; color: var(--faint); }
+.gact { display: flex; align-items: center; gap: .7rem; margin: .7rem 0 0; flex-wrap: wrap; }
+.gact form { margin: 0; }
+/* `:not(.btn)` throughout. These are the bare buttons the legacy screens use,
+   and a type-plus-class selector like `button.danger` is (0,1,1), which outranks
+   the primary `.btn` at (0,1,0) - without the guard these were setting the
+   font-size and padding of every `.btn.danger` in the new UI, so the bin's
+   delete buttons rendered a different size from the ones beside them. */
+button.ghost:not(.btn), .ghost:not(.btn) {
+  font: inherit; font-size: 12.5px; padding: .3rem .65rem;
+  color: var(--text); background: var(--bg-3);
+  border: 1px solid var(--line-2); border-radius: var(--radius-sm); cursor: pointer;
+}
+button.ghost:not(.btn):hover { background: var(--bg-4); }
+button.danger:not(.btn) {
+  font: inherit; font-size: 12.5px; padding: .3rem .65rem;
+  color: #fff; background: var(--bad); border: 1px solid var(--bad);
+  border-radius: var(--radius-sm); cursor: pointer;
+}
+.dayhead { margin-bottom: 1rem; }
+.dayhead .nav { display: flex; align-items: baseline; gap: 1rem; }
+.dayhead h1 { margin: 0; font-size: 24px; }
+.arrow { color: var(--muted); font-size: 13px; }
+.warnbar {
+  margin: 1rem 0; padding: .7rem .9rem;
+  background: color-mix(in oklab, var(--warn) 10%, var(--bg-2));
+  border: 1px solid color-mix(in oklab, var(--warn) 40%, var(--line));
+  border-radius: var(--radius);
+}
+
+/* --------------------------------------------------- Apple Photos handoff --
+ * Culling a file here leaves the same photograph in Photos, so the bin ends by
+ * saying so and counting what is outstanding. It is a status panel, not a
+ * control: the Photos side is finished by Cull Sync on the Mac, deliberately,
+ * because a web page on the LAN has no business reaching into a photo library.
+ */
+.handoff {
+  margin: 2rem 0 1rem;
+  padding: 1rem 1.1rem 1.2rem;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.handoff h2 { margin: 0 0 .35rem; font-size: 15px; }
+.handoff .ysum { margin: .5rem 0; }
+
+.handoff .held { margin-top: .9rem; }
+.handoff .held summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.handoff .heldlist {
+  margin: .5rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+/* ============================================================== shadowed == */
+/* The two cleanup errands: shadowed duplicates and the screenshot backlog.
+   Both reuse the gallery and the badge system; what they add is a vocabulary for
+   saying which physical disk a copy is on and how confident the comparison is,
+   because on this page those two facts are the decision. */
+
+.bdg .b.disk {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px; letter-spacing: .02em;
+  background: rgba(12, 13, 17, .82);
+  border: 1px solid rgba(255, 255, 255, .22);
+}
+.bdg .b.warn { background: color-mix(in oklab, var(--warn) 82%, #000); }
+
+/* On a case-only pair both tiles carry the same disk name, so the extension is
+   the only thing telling the two copies apart. It reads as a sibling of the
+   disk chip because that is what it is: the other half of the address. */
+.bdg .b.ext {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px; letter-spacing: .02em;
+  background: rgba(12, 13, 17, .82);
+  border: 1px solid rgba(255, 255, 255, .22);
+  color: var(--accent);
+}
+
+/* An exact byte count is longer than "28.9 MB" and is shown precisely when the
+   two sides would otherwise look equal, so it is set in figures that line up. */
+.cap .exact { font-variant-numeric: tabular-nums; font-size: 11px; }
+
+/* Verdict and shape badges sit in the group header, not on a tile, so they are
+   plain inline chips rather than overlays. */
+/* The header legend uses the same badges as the pairs below it, which is the
+   point of the legend: the label a reader learns there is the label they then
+   see on every group. */
+.xmeta .b, .kinds .b {
+  padding: .1rem .4rem; margin-right: .3rem;
+  font-size: 10.5px; font-weight: 500;
+  border-radius: 4px; white-space: nowrap;
+  background: var(--bg-4); color: var(--muted);
+}
+.xmeta .b.same                          { background: color-mix(in oklab, var(--good) 22%, var(--bg-3)); color: var(--good); }
+.xmeta .b.differ                        { background: color-mix(in oklab, var(--warn) 22%, var(--bg-3)); color: var(--warn); }
+.xmeta .b.shadowed, .kinds .b.shadowed  { background: color-mix(in oklab, var(--bad) 20%, var(--bg-3));  color: var(--bad); }
+.xmeta .b.casey,    .kinds .b.casey     { background: color-mix(in oklab, var(--accent) 20%, var(--bg-3)); color: var(--accent); }
+
+/* An unread pair is deliberately dimmed and gets no recommendation: "identical"
+   and "not compared yet" must never look alike, because they lead to opposite
+   decisions. */
+.xgroup.unread { opacity: .72; }
+.xgroup.unread .mo { box-shadow: none; }
+
+/* ============================================================ screenshots == */
+/* Denser than the review grid. This is a backlog of 2,400 near-identical
+   rectangles of text, and the job is to get through them, not to dwell. */
+.gal.shots { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); }
+
+.acts .act.keep { color: var(--good); }
+.mo.kept { opacity: .45; }
+.mo.kept img { filter: grayscale(.4); }
+.mo.kept::after {
+  content: 'kept';
+  position: absolute; inset: auto 6px 6px auto; z-index: 4;
+  padding: .1rem .38rem; border-radius: 4px;
+  font-size: 10.5px; color: #f2f3f6;
+  background: color-mix(in oklab, var(--good) 78%, #000);
+}
+
+/* The active filter has to be readable as a state, not just a slightly different
+   grey: --bg-4 against --bg-3 is a two-percent step and disappeared on the light
+   theme. The accent carries it, kept to the border and a wash so the chip still
+   reads as one of a row rather than a primary action. */
+.btn.small.on {
+  background: color-mix(in oklab, var(--accent) 13%, var(--bg-2));
+  border-color: color-mix(in oklab, var(--accent) 60%, var(--line-2));
+  color: var(--text);
+  font-weight: 600;
+}
+.btn.small.on:hover { background: color-mix(in oklab, var(--accent) 20%, var(--bg-2)); }
+
+/* ------------------------------------------------------------- file path --
+   The identity of the thing on screen, in the terms the reviewer will need it:
+   the path as the share serves it, not as this container mounts it. It sits in
+   the top bar rather than behind Info because "which file is this" is asked
+   constantly and answered nowhere else, and it is a button because reading a
+   path off a screen and retyping it is how transcription errors happen.
+   Truncated from the left: the tail of an archive path is what distinguishes
+   two files, the head is the same for all of them. */
+.rvtop .rvpath {
+  flex: none;
+  margin-left: 1rem;
+  padding: 0.15rem 0.4rem;
+  border: 0;
+  border-radius: 5px;
+  background: #1b1d22;
+  color: #8b8f99;
+  font: inherit;
+  font-size: 0.78rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  line-height: 1;
+  opacity: 0.75;
+  cursor: pointer;
+}
+.rvtop .rvpath:hover { background: #24262c; color: #e6e7ea; }
+.rvtop .rvpath:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 700px) { .rvtop .rvpath { display: none; } }
+
+/* ------------------------------------------------------------------ the log --
+   A list, not a table: the eye goes down one column of times and one column of
+   pictures, and the widths are fixed so those two columns actually line up.
+   Only the filename can grow, because it is the only part with anything to say. */
+.log { list-style: none; margin: 1.2rem 0 0; padding: 0; }
+.log .lday {
+  margin: 1.4rem 0 .5rem;
+  font-size: 11.5px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.log .lday:first-child { margin-top: 0; }
+.log .lrow {
+  display: grid;
+  grid-template-columns: 3.2rem 9rem 40px minmax(0, 1fr) 5rem;
+  gap: .7rem;
+  align-items: center;
+  padding: .32rem .5rem;
+  border-radius: var(--radius-sm);
+}
+.log .lrow:hover { background: var(--bg-3); }
+.log .lwhen { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.log .lverb { font-size: 11.5px; color: var(--muted); }
+.log .lverb.bad { color: var(--bad); }
+.log .lverb.ok  { color: var(--good); }
+.log .lverb.fav { color: var(--fav); }
+.log .lthumb { width: 40px; height: 40px; }
+.log .lthumb img {
+  width: 40px; height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--bg-3);
+}
+.log .lname { min-width: 0; font-size: 13px; color: var(--text); }
+.log .lname a { color: var(--text); }
+.log .lpath {
+  display: block;
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.log .lsize { font-size: 11.5px; color: var(--faint); text-align: right; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 700px) {
+  /* The path is the first thing to go: on a phone it is never fully readable
+     anyway, and the filename plus the picture is enough to recognise a file. */
+  .log .lrow { grid-template-columns: 3.2rem 40px minmax(0, 1fr); row-gap: .2rem; }
+  .log .lverb { grid-column: 1 / 3; }
+  .log .lsize, .log .lpath { display: none; }
+}
+.log .lby { display: block; font-size: 11px; color: var(--warn); }
+
+/* The archive finds sit above the holding area and need to read as a different
+   thing: same grid, but a heading of its own and a warning-tinted rule, because
+   these files are still in the family archive. */
+.dupehead.found { border-top: 1px solid var(--line); padding-top: 1.1rem; }
+.dupehead.found h2 { margin: 0 0 .4rem; font-size: 16px; }
+.note.ok { color: var(--good); }
+
+/* A divider row inside the shortcut panel: the grid keys are a different world
+   from the viewer keys and reading them as one list is how you end up pressing
+   Cmd-A inside the viewer. */
+.rvkeys .ksec {
+  padding-top: .8rem;
+  color: var(--faint);
+  font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+}
+
+/* The bin's two halves. A heading rather than a tab, because both lists are
+   worth seeing at once: the split exists to stop one being mistaken for the
+   other, not to hide either. */
+.binsec {
+  margin: 1.6rem 0 .5rem;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.binsec + .hint { margin-top: 0; }
+
+/* Saved-from-social review. These are portrait clips whose evidence is often the
+   letterbox itself, so the still is shown whole rather than cropped square, and the
+   reasons sit under it in normal flow instead of over the picture. */
+.socialgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+}
+@media (min-width: 560px) {
+  .socialgrid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+}
+.socialcard {
+  margin: 0;
+  display: flex; flex-direction: column;
+  background: var(--bg-3);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.socialshot {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  background: #0a0b0f;
+}
+.socialshot img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.socialshot .media-missing { position: absolute; inset: 0; }
+.socialcard figcaption {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: .45rem .55rem .55rem;
+  font-size: 11.5px; color: var(--text);
+}
+.socialcard .socialday { display: flex; justify-content: space-between; gap: .5rem; }
+.socialspec { font-variant-numeric: tabular-nums; font-size: 11px; }
+.socialwhy {
+  font-size: 11px; line-height: 1.4; color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.socialname { font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Selection. The still is the hit area because that is what the reviewer is
+   judging, and the tick stays drawn at all times: a control that appears on
+   hover does not exist on a touch screen. */
+.socialshot { cursor: pointer; }
+.socialpick {
+  position: absolute; top: 5px; right: 5px; z-index: 3;
+  display: flex; padding: 4px;
+  background: rgba(10, 11, 15, .6);
+  border-radius: 6px;
+}
+.socialpick input { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--accent); }
+.socialcard.picked { outline: 2px solid var(--accent); outline-offset: -2px; }
+.socialcard.picked .socialshot img { opacity: .82; }
+.selbar .selall { display: flex; align-items: center; gap: .35rem; font-size: 12.5px; }
+.selbar .selall input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
+
+/* The evidence score sits on a photograph, so it carries its own opaque ground
+   rather than borrowing the page's. It reads as a word plus a number because a
+   bare number on a picture says nothing about what is being counted; the dot
+   repeats the band for anyone scanning rather than reading. */
+.bdg .b.score {
+  display: inline-flex; align-items: center; gap: .3rem;
+  background: rgba(10, 11, 15, .88);
+  border: 1px solid rgba(255, 255, 255, .2);
+  color: #f2f3f6;
+  font-variant-numeric: tabular-nums;
+}
+.bdg .b.score::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+.bdg .b.score.likely::before { background: var(--bad); }
+.bdg .b.score.possible::before { background: var(--warn); }

@@ -10,7 +10,7 @@ import (
 // os.Root rejects traversal and escaping symlinks. The mount is also read-only.
 // JPEG/PNG originals preserve browser EXIF orientation until worker previews land.
 func serveTakeout(w http.ResponseWriter, r *http.Request, p string) {
-	root, e := os.OpenRoot("/takeout")
+	root, e := os.OpenRoot("/upgrades")
 	if e != nil {
 		http.Error(w, "Takeout unavailable", 503)
 		return

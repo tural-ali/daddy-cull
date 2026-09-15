@@ -36,7 +36,7 @@ func Open(path string) (*Store, error) {
 	if err = w.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return fail(err)
 	}
-	if version > 2 {
+	if version > 8 {
 		return fail(fmt.Errorf("catalogue schema is newer than this application"))
 	}
 	if err = w.QueryRow("SELECT count(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'").Scan(&tables); err != nil {
@@ -56,13 +56,13 @@ func Open(path string) (*Store, error) {
 	if _, err = w.Exec(fmt.Sprintf(`
 BEGIN IMMEDIATE;
 PRAGMA application_id=%d;
-PRAGMA user_version=2;
+PRAGMA user_version=8;
 CREATE TABLE IF NOT EXISTS sources (
  id TEXT PRIMARY KEY,
  label TEXT NOT NULL,
  read_only INTEGER NOT NULL CHECK(read_only=1)
 );
-INSERT OR IGNORE INTO sources VALUES('archive','Family archive (sample)',1),('takeout','Google Takeout (sample)',1);
+INSERT OR IGNORE INTO sources VALUES('archive','Family archive',1),('takeout','Google Takeout',1),('screenshots','Screenshot holding area',1),('shadow','Physical disk copy',1);
 CREATE TABLE IF NOT EXISTS assets (
  id INTEGER PRIMARY KEY,
  relative_path TEXT NOT NULL,
@@ -101,6 +101,136 @@ CREATE TABLE IF NOT EXISTS file_state (asset_id INTEGER PRIMARY KEY REFERENCES a
 CREATE TABLE IF NOT EXISTS file_plans (id TEXT PRIMARY KEY, body TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS related_assets (asset_id INTEGER PRIMARY KEY REFERENCES assets(id), group_key TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS related_group ON related_assets(group_key,asset_id);
+CREATE TABLE IF NOT EXISTS asset_days (
+ asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
+ day TEXT NOT NULL CHECK(length(day)=10)
+);
+CREATE INDEX IF NOT EXISTS asset_days_calendar ON asset_days(substr(day,6,5),day,asset_id);
+CREATE TABLE IF NOT EXISTS day_progress (
+ day TEXT PRIMARY KEY,
+ status TEXT NOT NULL CHECK(status IN ('pending','done')),
+ reviewed_at TEXT
+);
+CREATE TABLE IF NOT EXISTS day_progress_events (
+ request_id TEXT PRIMARY KEY,
+ day TEXT NOT NULL,
+ status TEXT NOT NULL,
+ previous_status TEXT NOT NULL,
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS asset_evidence (
+ asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
+ mtime INTEGER,
+ partial_signature TEXT,
+ full_hash TEXT,
+ perceptual_hash TEXT,
+ hashed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS asset_evidence_full_hash ON asset_evidence(full_hash) WHERE full_hash IS NOT NULL;
+CREATE INDEX IF NOT EXISTS asset_evidence_perceptual_hash ON asset_evidence(perceptual_hash) WHERE perceptual_hash IS NOT NULL;
+CREATE TABLE IF NOT EXISTS legacy_culled (
+ legacy_id INTEGER PRIMARY KEY,
+ batch TEXT NOT NULL,
+ kind TEXT NOT NULL,
+ original_path TEXT NOT NULL,
+ culled_path TEXT NOT NULL,
+ day TEXT,
+ size_bytes INTEGER NOT NULL,
+ reason TEXT,
+ culled_at TEXT NOT NULL,
+ restored_at TEXT,
+ purged_at TEXT,
+ photos_deleted_at TEXT
+);
+CREATE INDEX IF NOT EXISTS legacy_culled_live ON legacy_culled(restored_at,purged_at);
+CREATE TABLE IF NOT EXISTS shadow_entries (
+ kind TEXT NOT NULL,
+ group_key TEXT NOT NULL,
+ disk TEXT NOT NULL,
+ relative_path TEXT NOT NULL,
+ size_bytes INTEGER NOT NULL,
+ mtime INTEGER NOT NULL,
+ asset_id INTEGER REFERENCES assets(id),
+ PRIMARY KEY(kind,group_key,disk,relative_path)
+);
+CREATE TABLE IF NOT EXISTS screenshot_suspects (
+ path TEXT PRIMARY KEY,
+ day TEXT,
+ name TEXT NOT NULL,
+ size_bytes INTEGER NOT NULL,
+ width INTEGER,
+ height INTEGER,
+ reason TEXT NOT NULL,
+ found_at TEXT NOT NULL,
+ verdict TEXT,
+ decided_at TEXT,
+ moved_to TEXT
+ ,asset_id INTEGER REFERENCES assets(id)
+);
+CREATE TABLE IF NOT EXISTS screenshot_items (
+ asset_id INTEGER PRIMARY KEY REFERENCES assets(id),
+ path TEXT UNIQUE NOT NULL,
+ day TEXT,
+ name TEXT NOT NULL,
+ size_bytes INTEGER NOT NULL,
+ mtime INTEGER NOT NULL,
+ state TEXT NOT NULL CHECK(state IN ('waiting','kept','bin','missing'))
+);
+CREATE INDEX IF NOT EXISTS screenshot_items_state ON screenshot_items(state,day,name);
+CREATE TABLE IF NOT EXISTS social_items (
+ asset_id INTEGER PRIMARY KEY REFERENCES assets(id),
+ path TEXT UNIQUE NOT NULL,
+ day TEXT,
+ name TEXT NOT NULL,
+ size_bytes INTEGER NOT NULL,
+ score INTEGER NOT NULL,
+ evidence TEXT NOT NULL,
+ width INTEGER NOT NULL DEFAULT 0,
+ height INTEGER NOT NULL DEFAULT 0,
+ duration REAL NOT NULL DEFAULT 0,
+ letterbox_top INTEGER NOT NULL DEFAULT 0,
+ letterbox_bottom INTEGER NOT NULL DEFAULT 0,
+ poster TEXT NOT NULL DEFAULT '',
+ state TEXT NOT NULL CHECK(state IN ('waiting','missing'))
+);
+CREATE INDEX IF NOT EXISTS social_items_rank ON social_items(state,score DESC,day,name);
+CREATE TABLE IF NOT EXISTS upgrade_history (
+ archive_file TEXT PRIMARY KEY,
+ source_file TEXT NOT NULL,
+ accepted_as TEXT NOT NULL,
+ size_bytes INTEGER NOT NULL,
+ accepted_at TEXT NOT NULL,
+ via TEXT
+);
+CREATE TABLE IF NOT EXISTS upgrade_candidates (
+ archive_asset_id INTEGER NOT NULL REFERENCES assets(id),
+ source_asset_id INTEGER NOT NULL REFERENCES assets(id),
+ capture_date TEXT NOT NULL,
+ archive_day TEXT NOT NULL,
+ ratio REAL NOT NULL CHECK(ratio>1),
+ source_pixels TEXT NOT NULL,
+ archive_pixels TEXT NOT NULL,
+ album TEXT NOT NULL,
+ source_available INTEGER NOT NULL CHECK(source_available IN (0,1)),
+ PRIMARY KEY(archive_asset_id,source_asset_id)
+);
+CREATE INDEX IF NOT EXISTS upgrade_candidates_ratio ON upgrade_candidates(ratio DESC,archive_asset_id);
+CREATE TABLE IF NOT EXISTS upgrade_plans (
+ id TEXT PRIMARY KEY,
+ archive_asset_id INTEGER NOT NULL REFERENCES assets(id),
+ source_asset_id INTEGER NOT NULL REFERENCES assets(id),
+ body TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS legacy_file_plans (
+ id TEXT PRIMARY KEY,
+ body TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS screenshot_plans (
+ id TEXT PRIMARY KEY,
+ asset_id INTEGER NOT NULL REFERENCES assets(id),
+ body TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS screenshot_plans_asset ON screenshot_plans(asset_id);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS stats (id INTEGER PRIMARY KEY CHECK(id=1), total INTEGER NOT NULL);
 INSERT OR IGNORE INTO stats VALUES(1,0);

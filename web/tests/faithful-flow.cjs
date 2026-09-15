@@ -1,0 +1,53 @@
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const assert=require('node:assert/strict');
+
+const asset=(id,name,day)=>({id,path:`/archive/${day.slice(0,4)}/${day.slice(0,7)}/${day}/${name}`,capturedAt:Date.parse(`${day}T12:00:00Z`)/1000,kind:'image',source:'archive',size:100,status:'unreviewed',favourite:false,revision:0,alternativeCount:0,relatedCount:1,day});
+const first=asset(1,'FAMILY.JPG','2000-09-07');
+const copy=asset(2,'FAMILY (2).JPG','2010-09-07');
+const third={...asset(3,'THIRD.JPG','2010-09-07'),relatedCount:0};
+const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
+
+(async()=>{
+  const browser=await chromium.launch({channel:'chrome',headless:true});
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  const writes=[],individualWrites=[];
+  await page.route('**/api/**',async route=>{
+    const request=route.request(),url=new URL(request.url());
+    if(url.pathname==='/api/stats')return route.fulfill({json:{total:61208,synthetic:false,snapshotAt:'2026-09-06 01:49:00',candidates:1,calendarDays:2749,reviewedDays:0,decisions:80,favourites:2,evidence:4277,fullHashes:1357,marked:2}});
+    if(url.pathname==='/api/today/09-07')return route.fulfill({json:{md:'09-07',label:'7 September',previous:'09-06',next:'09-08',years:[{day:'2000-09-07',year:2000,files:1,bytes:100,status:'pending',assets:[first]},{day:'2010-09-07',year:2010,files:3,bytes:300,status:'pending',assets:[copy,third,fourth]}],memories:4,bytes:400}});
+    if(url.pathname==='/api/duplicates')return route.fulfill({json:[{hash:'abcdef0123456789abcdef0123456789',size:100,reclaimable:100,members:[first,copy]}]});
+    if(url.pathname==='/api/year')return route.fulfill({json:{months:Array.from({length:12},(_,month)=>({name:new Date(Date.UTC(2000,month,1)).toLocaleString('en',{month:'long',timeZone:'UTC'}),cells:Array.from({length:31},(_,index)=>({md:`${String(month+1).padStart(2,'0')}-${String(index+1).padStart(2,'0')}`,dom:index+1,years:month===8&&index===6?2:0,files:month===8&&index===6?2:0,done:0,state:month===8&&index===6?'todo':'none'}))})),prog:{dates:1,done:0,part:0,filesDone:0,files:2},today:'09-07',streak:0,week:{days:0,seconds:0}}});
+    if(url.pathname==='/api/decisions/batch'){writes.push(request.postDataJSON());return route.fulfill({json:[{revision:1,previousStatus:'unreviewed',previousFavourite:false},{revision:1,previousStatus:'unreviewed',previousFavourite:false}]})}
+    if(url.pathname==='/api/decisions'){const body=request.postDataJSON();individualWrites.push(body);await new Promise(resolve=>setTimeout(resolve,200));return route.fulfill({json:{revision:body.expectedRevision+1,previousStatus:'unreviewed',previousFavourite:false}})}
+    if(url.pathname.startsWith('/api/media/'))return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><rect width="800" height="800" fill="#526b52"/></svg>'});
+    throw new Error(`${request.method()} ${url.pathname}`);
+  });
+  await page.goto(process.env.APP_URL||'http://127.0.0.1:8842/');
+  await page.getByRole('heading',{name:/7 September/}).waitFor();
+  assert.equal(await page.locator('.xgroup').count(),1);
+  assert.match(await page.locator('.xdupes').innerText(),/byte-identical, verified by full hash/);
+  await page.getByRole('button',{name:'choose as keeper'}).click();
+  await page.getByRole('button',{name:/Keep the selected copy/}).click();
+  await page.getByText(/verified copy marked for the Bin/).waitFor();
+  assert.equal(writes.length,1);
+  assert.equal(writes[0].find(item=>item.assetId===2).status,'keep');
+  assert.equal(writes[0].find(item=>item.assetId===1).status,'cull');
+  await page.getByRole('link',{name:'Year',exact:true}).click();
+  await page.getByRole('heading',{name:'Your archive'}).waitFor();
+  assert.equal(await page.locator('.cmonth').count(),12);
+  await page.getByRole('link',{name:'Daddy, Cull!'}).click();
+  await page.getByRole('heading',{name:/7 September/}).waitFor();
+  assert.match(page.url(),/\/on\/09-07$/);
+  await page.getByRole('button',{name:'Start reviewing'}).click();
+  await page.getByRole('dialog',{name:'Photo review'}).waitFor();
+  const started=Date.now();
+  await page.keyboard.press('k');
+  await page.locator('.rvpos').filter({hasText:'2 / 4'}).waitFor();
+  assert.ok(Date.now()-started<180,'viewer waited for the network before advancing');
+  await page.keyboard.press('k');
+  await page.locator('.rvpos').filter({hasText:'3 / 4'}).waitFor();
+  await page.waitForFunction(()=>Object.keys(localStorage).filter(key=>key.startsWith('cull.pending.')).every(key=>JSON.parse(localStorage[key]).length===0));
+  assert.deepEqual(individualWrites.map(item=>item.assetId),[1,2]);
+  await browser.close();
+  console.log(JSON.stringify({faithfulToday:true,verifiedDuplicates:true,keeperChoiceAtomic:true,calendar:true,logoReturnsToday:true,instantKeyboardAdvance:true,durableQueueDrained:true},null,2));
+})().catch(error=>{console.error(error);process.exit(1)});
