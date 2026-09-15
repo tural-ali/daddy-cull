@@ -34,6 +34,7 @@ func main() {
 	upgradeSourcePrefix := flag.String("upgrade-source-prefix", "/mnt/disk1/takeout-upgrades", "host path prefix recorded in the upgrade report")
 	upgradeArchivePrefix := flag.String("upgrade-archive-prefix", "/mnt/user/family-archive", "host archive prefix recorded in the upgrade report")
 	upstream := flag.String("media-upstream", "", "trusted legacy read-only media service URL")
+	archiveMedia := flag.String("archive-media", "", "read-only archive mount served directly for previews and video playback")
 	seed := flag.Int("seed", 0, "seed an empty catalogue with synthetic metadata, then exit")
 	addr := flag.String("listen", "127.0.0.1:8830", "loopback address only; prototype has no authentication")
 	demoNetwork := flag.Bool("demo-network", false, "allow private-network access; media access uses fixed read-only proxy routes")
@@ -193,7 +194,12 @@ func main() {
 		}
 		mux.Handle("/", engine.Handler(secret))
 	} else {
-		if *upstream != "" {
+		// A local read-only mount is preferred when one is given: it needs no
+		// second service and, unlike the thumbnail proxy, streams byte ranges so
+		// video can be played and seeked in place.
+		if *archiveMedia != "" {
+			mux.Handle("/api/media/{id}/{mode}", s.LocalMediaHandler(*archiveMedia, *socialPosters))
+		} else if *upstream != "" {
 			mux.Handle("/api/media/{id}/{mode}", s.MediaHandler(*upstream))
 		}
 		if *socialPosters != "" {

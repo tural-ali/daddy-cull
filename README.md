@@ -56,10 +56,14 @@ Decisions go out twenty at a time, the server's batch limit, so a large selectio
 
 ```bash
 go run ./cmd/cull -db state/preview.db -import-social social-report.tsv
-go run ./cmd/cull -db state/preview.db -web web/dist -social-posters state/social-posters
+go run ./cmd/cull -db state/preview.db -web web/dist -social-posters state/social-posters -archive-media /Volumes/family-archive
 ```
 
 `-social-archive-prefix` maps the host paths in the report onto the catalogue's archive root, and `-social-posters` is a read-only directory of stills captured during detection.
+`-archive-media` points at a mounted copy of the archive and is what makes previews and video playback work without a separate media service.
+The request carries nothing but a catalogue ID, the path comes from the database, and the handler opens files through `os.Root`, so it cannot read outside that mount even through a symlink, and it answers GET and HEAD only.
+Byte ranges are served, which is what lets a browser seek within a video rather than pulling the whole file first.
+Without the flag the media routes are simply not mounted and every card keeps its honest "preview unavailable" state.
 A candidate already in the catalogue is linked to that asset so its decisions survive a re-import.
 
 ## Local development
