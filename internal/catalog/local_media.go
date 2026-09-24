@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -210,7 +211,10 @@ func (s *Store) serveMedia(w http.ResponseWriter, r *http.Request, roots MediaRo
 		}
 		if rawErr != nil {
 			// No embedded preview is an honest miss: the page keeps its own
-			// fallback rather than an <img> being handed sensor data.
+			// fallback rather than an <img> being handed sensor data. It is
+			// still logged, because a decoder that cannot run looks exactly
+			// like a file with nothing to show.
+			log.Printf("preview %s: %v", source.subject, rawErr)
 			s.servePoster(w, r, source.posterID, roots.Posters)
 			return
 		}
@@ -226,6 +230,7 @@ func (s *Store) serveMedia(w http.ResponseWriter, r *http.Request, roots MediaRo
 			// No poster and no frame is an honest miss: the page keeps its
 			// own fallback rather than an <img> being handed a container it
 			// cannot decode.
+			log.Printf("frame %s: %v", source.subject, frameErr)
 			http.NotFound(w, r)
 			return
 		}

@@ -81,7 +81,12 @@ func runFrameExtractor(ctx context.Context, tool string, file *os.File, seconds 
 	}
 	ctx, cancel := context.WithTimeout(ctx, previewTimeout)
 	defer cancel()
-	arguments := []string{"-nostdin", "-loglevel", "error"}
+	// One thread for the decoder and one for the filter graph. An iPhone HEIC is
+	// a grid of dozens of HEVC tiles, each of which would otherwise start a
+	// thread per core: hundreds for one photograph, past a container's process
+	// limit, and slower besides, since starting them costs more than one frame
+	// gains. Parallelism comes from the preview workers instead.
+	arguments := []string{"-nostdin", "-loglevel", "error", "-filter_threads", "1", "-threads", "1"}
 	if seconds != "" {
 		arguments = append(arguments, "-ss", seconds)
 	}

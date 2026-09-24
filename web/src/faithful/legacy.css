@@ -698,21 +698,21 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 }
 @keyframes rvspin { to { transform: rotate(360deg); } }
 
-/* Arrow zones over the image itself, so a mouse never has to find a button.
-   They stop short of the bottom: a video draws its own control bar there, and a
-   full-height zone sat on top of the scrubber, so dragging the playhead landed
-   on "next" instead of seeking. */
+/* Compact arrow buttons at the edges. They used to be invisible zones covering
+   a fifth of the stage each side, which swallowed the clicks on the dark area
+   around a photograph that are meant to close the review. Kept to the vertical
+   middle so they never sit on a video's scrubber. */
 .rvnav {
-  position: absolute; top: 0; bottom: 0; width: 22%;
+  position: absolute; top: 50%; width: 3.5rem; height: 6rem;
+  transform: translateY(-50%);
   display: grid; place-items: center;
-  border: 0; background: none; cursor: pointer;
-  color: #fff; font-size: 26px; opacity: 0;
+  border: 0; border-radius: var(--radius-sm); background: rgba(10, 11, 14, .35);
+  cursor: pointer; color: #fff; font-size: 26px; opacity: 0;
   transition: opacity var(--ease);
 }
-.rvnav:hover { opacity: .8; }
-.rvnav.prev { left: 0; } .rvnav.next { right: 0; }
-/* Narrower and clear of the controls whenever a video is on the stage. */
-.rvstage.hasvideo .rvnav { width: 12%; bottom: 5rem; }
+.rvstage:hover .rvnav { opacity: .45; }
+.rvstage .rvnav:hover, .rvnav:focus-visible { opacity: .9; }
+.rvnav.prev { left: .5rem; } .rvnav.next { right: .5rem; }
 
 .rvbot {
   display: flex; align-items: center; justify-content: center; gap: .5rem;
@@ -1416,4 +1416,44 @@ button.danger:not(.btn) {
 @media (max-width: 640px) {
   .dupebody { flex-direction: column; }
   .dupeshot, .dupeshot:has(video) { width: 100%; height: auto; aspect-ratio: 1; }
+}
+
+/* ------------------------------------------------------------ Bin page -- */
+
+/* The tick is the whole selection control on a Bin card, so it is a real
+   button with a target a finger can hit on the iPad, drawn as a box. */
+.bingal .mo .tick {
+  top: 0; left: 0; padding: 8px; border: 0; background: none; cursor: pointer;
+  display: grid; place-items: center;
+}
+.bingal .mo .tick span {
+  width: 18px; height: 18px; border-radius: 4px;
+  border: 1.5px solid rgba(242, 244, 247, .85); background: rgba(10, 11, 15, .45);
+  display: grid; place-items: center; color: #fff; font-size: 12px; line-height: 1;
+}
+.bingal .mo .tick[aria-checked="true"] span { border-color: var(--accent); background: var(--accent); }
+.bingal .mo .tick[aria-checked="true"] span::before { content: "\2713"; }
+.bingal .mo .tick:focus-visible span { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* An inset shadow is painted under the photograph, so the selected ring is an
+   outline, which is drawn over it. */
+.bingal .mo.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
+@media (max-width: 720px) { .bingal { margin-bottom: 4rem; } }
+.fbar .selall { display: inline-flex; align-items: center; gap: .4rem; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.fbar .selall input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+
+/* The one question the tool asks before destroying anything. */
+dialog.confirm {
+  width: min(28rem, calc(100vw - 2rem)); padding: 1.3rem 1.4rem 1.1rem;
+  color: var(--text); background: var(--bg-2);
+  border: 1px solid var(--line-2); border-radius: var(--radius);
+}
+dialog.confirm::backdrop { background: rgba(6, 7, 10, .6); }
+dialog.confirm h2 { margin: 0 0 .5rem; font-size: 17px; text-wrap: balance; }
+dialog.confirm p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.2rem; }
+/* A clip in the Bin says so, top right, clear of the tick and the caption. */
+.bingal .video-badge {
+  position: absolute; top: 8px; right: 8px; z-index: 3;
+  padding: 2px 6px; border-radius: 4px;
+  font-size: 10.5px; color: #fff; background: rgba(10, 11, 15, .72);
 }

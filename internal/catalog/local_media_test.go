@@ -571,3 +571,43 @@ func TestLocalMediaReachesShadowedCopiesThroughTheReviewFarm(t *testing.T) {
 		t.Fatalf("farm shadowed a real mount: %q", got.Body.String())
 	}
 }
+
+// An iPhone HEIC is a grid of dozens of HEVC tiles, and by default every tile's
+// decoder starts a thread per core. On Tower that is hundreds of threads for one
+// photograph, past the container's process limit, and every such tile came back
+// blank. One frame gains nothing from threading, so the decoder is held to one.
+func TestFrameExtractorIsHeldToOneThread(t *testing.T) {
+	tools := t.TempDir()
+	extractor := filepath.Join(tools, "frames")
+	// Succeeds only when both the decoder and the filter graph are held to one
+	// thread, and the decoder option comes before the input it applies to.
+	script := `#!/bin/sh
+decoder=0; filters=0; previous=""
+for a in "$@"; do
+  [ "$previous" = "-threads" ] && [ "$a" = "1" ] && decoder=1
+  [ "$previous" = "-filter_threads" ] && [ "$a" = "1" ] && filters=1
+  [ "$a" = "-i" ] && [ "$decoder" = 0 ] && exit 1
+  previous="$a"
+done
+[ "$decoder" = 1 ] && [ "$filters" = 1 ] || exit 1
+printf frame
+`
+	if err := os.WriteFile(extractor, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	media := filepath.Join(tools, "clip.mov")
+	if err := os.WriteFile(media, []byte("container"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Open(media)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	for _, scale := range []bool{true, false} {
+		out, err := runFrameExtractor(context.Background(), extractor, file, "1", scale)
+		if err != nil || string(out) != "frame" {
+			t.Fatalf("scale=%v: %q %v", scale, out, err)
+		}
+	}
+}

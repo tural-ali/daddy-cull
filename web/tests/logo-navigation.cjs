@@ -15,7 +15,7 @@ const assert=require('node:assert/strict');
  });
  const grid=async()=>{await page.getByRole('heading',{name:'Your next 2 memories',exact:true}).waitFor();assert.equal(await page.locator('.comparison,.review,.bin-workspace').count(),0)};
  const logo=async()=>{await page.getByRole('link',{name:/Daddy, Cull!/}).click();await grid()};
- await page.goto('http://127.0.0.1:8840/');await grid();
+ await page.goto('http://127.0.0.1:8840/queue.html');await grid();
  await page.locator('.tile').first().click();await page.locator('.comparison').waitFor();await logo();
  await page.reload();await grid();
  await page.locator('.tile').last().click();await page.locator('.review').waitFor();

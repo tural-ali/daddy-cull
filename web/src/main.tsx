@@ -113,7 +113,7 @@ function App(){
     window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);
   });
   return <div className={review||comparison?"app reviewing":"app"}>
-    <header><a className="brand" href="/?view=grid">Daddy, Cull!<span>Make room for the memories.</span></a><div><button disabled={locked} onClick={()=>{setBinOpen(true);setReview(false)}}>Marked files & Bin</button></div></header>
+    <header><a className="brand" href="/queue.html?view=grid">Daddy, Cull!<span>Make room for the memories.</span></a><div><button disabled={locked} onClick={()=>{setBinOpen(true);setReview(false)}}>Marked files & Bin</button></div></header>
     <div className="prototype">{synthetic?"Sample catalogue":"Your real family archive"} · Review choices save first. Files move only through the Bin workflow.</div>
     <main>
       {recovering?<div className="empty">Recovering any pending choices…</div>:recoveryError?<div className="error" role="alert">{recoveryError} <button onClick={()=>void recover()}>Retry recovery</button></div>:binOpen?<Bin onClose={()=>{setBinOpen(false);setCursor('');setReload(x=>x+1)}}/>:<>

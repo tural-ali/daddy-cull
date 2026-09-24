@@ -198,6 +198,16 @@ func (s *Store) Handler() http.Handler {
 		}
 		writeJSON(w, items)
 	})
+	mux.HandleFunc("GET /api/trash", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		items, err := s.Trash(ctx)
+		if err != nil {
+			http.Error(w, "catalogue unavailable", 503)
+			return
+		}
+		writeJSON(w, items)
+	})
 	mux.HandleFunc("GET /api/screenshot-bin", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
@@ -444,7 +454,13 @@ func (s *Store) Handler() http.Handler {
 		social := countQuery(ctx, s.read, "SELECT count(*) FROM social_items s LEFT JOIN decisions d ON d.asset_id=s.asset_id WHERE s.state='waiting'"+socialPending)
 		upgradesAccepted := countQuery(ctx, s.read, "SELECT count(*) FROM upgrade_history")
 		upgradeCandidates := countQuery(ctx, s.read, "SELECT count(DISTINCT archive_asset_id) FROM upgrade_candidates")
-		json.NewEncoder(w).Encode(map[string]any{"total": n, "synthetic": library != "real", "snapshotAt": snapshot, "candidates": candidates, "calendarDays": calendarDays, "reviewedDays": reviewedDays, "decisions": decisions, "favourites": favourites, "evidence": evidence, "fullHashes": fullHashes, "marked": marked, "legacyBin": legacyBin, "shadowGroups": shadowGroups, "screenshots": screenshots, "social": social, "upgradesAccepted": upgradesAccepted, "upgradeCandidates": upgradeCandidates})
+		// The nav's Bin count is the number of cards the Bin page shows, from
+		// every source, so the two never disagree.
+		bin := 0
+		if items, err := s.Trash(ctx); err == nil {
+			bin = len(items)
+		}
+		json.NewEncoder(w).Encode(map[string]any{"total": n, "synthetic": library != "real", "snapshotAt": snapshot, "candidates": candidates, "calendarDays": calendarDays, "reviewedDays": reviewedDays, "decisions": decisions, "favourites": favourites, "evidence": evidence, "fullHashes": fullHashes, "marked": marked, "legacyBin": legacyBin, "shadowGroups": shadowGroups, "screenshots": screenshots, "social": social, "upgradesAccepted": upgradesAccepted, "upgradeCandidates": upgradeCandidates, "bin": bin})
 	})
 	return mux
 }

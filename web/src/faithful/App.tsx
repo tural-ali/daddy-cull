@@ -51,8 +51,11 @@ export function App(){
     const controller=new AbortController();
     json<Stats>('/api/stats').then(setStats).catch(reason=>{if(!controller.signal.aborted)setError((reason as Error).message)});
     return()=>controller.abort();
-  },[]);
+  },[recovered]);
   useEffect(()=>{
+    // A decision replayed from a closed tab changes what the page should show,
+    // so nothing loads until recovery has finished, and then it loads once.
+    if(!recovered)return;
     let active=true;
     setError('');
     const route=routeFor(path);
@@ -75,7 +78,7 @@ export function App(){
       if(path==='/duplicates')return {route,content:<Duplicates report={await json<DuplicateReport>('/api/duplicate-report?limit=1000')}/>} as PageState;
       if(path==='/upgrades')return {route,content:<Upgrades initial={await json<UpgradePage>('/api/upgrades')}/>} as PageState;
       if(path==='/log')return {route,content:<Log initial={await json<HistoryEvent[]>('/api/log?limit=200')}/>} as PageState;
-      if(path==='/bin')return {route,content:<Bin/>} as PageState;
+      if(path==='/bin')return {route,content:<Bin onCount={count=>setStats(current=>current&&{...current,bin:count})}/>} as PageState;
       if(path==='/settings')return {route,content:<Settings stats={await json<Stats>('/api/stats')}/>} as PageState;
       if(path==='/shadows')return {route,content:<Shadows groups={await json<Parameters<typeof Shadows>[0]['groups']>('/api/shadows')}/>} as PageState;
       if(path==='/social'){
@@ -91,5 +94,5 @@ export function App(){
     load().then(result=>{if(active)setPage(result)}).catch(reason=>{if(active)setError((reason as Error).message)});
     return()=>{active=false};
   },[path,recovered]);
-  return <Layout route={page.route} binFiles={stats?.marked??0}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:page.content}</Layout>;
+  return <Layout route={page.route} binFiles={stats?.bin??stats?.marked??0}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:page.content}</Layout>;
 }

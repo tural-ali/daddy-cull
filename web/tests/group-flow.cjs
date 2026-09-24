@@ -10,7 +10,7 @@ const assert=require('node:assert/strict');
  if(p==='/api/decisions/batch'){const ds=r.request().postDataJSON();saves.push(ds);const out=ds.map(d=>{const a=assets.find(a=>a.id===d.assetId);assert.equal(d.expectedRevision,a.revision);const old={previousStatus:a.status,previousFavourite:a.favourite};a.status=d.status;a.revision++;return {...old,revision:a.revision}});return r.fulfill({json:out})}
  if(p.startsWith('/api/media/'))return r.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#657"/></svg>'});throw Error(p);
  });
- let page=await context.newPage();await page.goto('http://127.0.0.1:8840/');await page.locator('.tile').first().waitFor();assert.equal(await page.locator('.tile').count(),2);
+ let page=await context.newPage();await page.goto('http://127.0.0.1:8840/queue.html');await page.locator('.tile').first().waitFor();assert.equal(await page.locator('.tile').count(),2);
  await page.locator('.tile').first().click();await page.locator('.compare-grid article').nth(1).waitFor();assert.equal(await page.locator('.intro').isVisible(),false);
  await page.keyboard.press('k');await page.getByText('Choice: keep',{exact:true}).waitFor();assert.equal(saves.length,1);assert.equal(saves[0][0].assetId,1);assert.equal(assets[1].status,'unreviewed');
  await page.getByRole('combobox',{name:'Linked preview zoom'}).selectOption('2');assert.equal(await page.locator('.zoom-content').first().evaluate(e=>e.style.transform),'translate(0px, 0px) scale(2)');
@@ -18,6 +18,6 @@ const assert=require('node:assert/strict');
  await page.getByRole('button',{name:/Undo group decision/}).click();await page.waitForFunction(()=>document.querySelector('.comparison').textContent.includes('1 undecided'));assert.equal(assets[1].status,'unreviewed');
  await page.getByRole('button',{name:'Keep both files',exact:true}).click();await page.getByRole('button',{name:'Save these 2 choices',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.comparison').textContent.includes('0 undecided'));
  await page.getByRole('button',{name:/Next memory/}).click();await page.locator('.details h2').filter({hasText:'NEXT.JPG'}).waitFor();
- await page.close();page=await context.newPage();await page.goto('http://127.0.0.1:8840/');await page.locator('.details h2').filter({hasText:'NEXT.JPG'}).waitFor();assert.equal(await page.locator('.comparison').count(),0);
+ await page.close();page=await context.newPage();await page.goto('http://127.0.0.1:8840/queue.html');await page.locator('.details h2').filter({hasText:'NEXT.JPG'}).waitFor();assert.equal(await page.locator('.comparison').count(),0);
  await b.close();console.log(JSON.stringify({oneQueueCardPerGroup:true,focusedKeyboardChoice:true,linkedZoom:true,explicitGroupConfirmation:true,atomicGroupUndo:true,resumeAfterTabClosure:true,scope:'synthetic browser workflow'},null,2));
 })().catch(e=>{console.error(e);process.exit(1)});

@@ -21,10 +21,13 @@ func TestMarkedForBinPutsTheNewestMarkFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Asset 2 was marked first, asset 1 a minute ago. Asset 3 came from the
-	// earlier tool and carries no event at all.
+	// earlier tool and carries no mark, only a later keep in the imported
+	// history's own time format, which must neither count as a mark nor sort
+	// ahead of a real one because a 'T' outranks a space.
 	if _, err := s.write.Exec(`INSERT INTO decision_events(request_id,asset_id,expected_revision,status,favourite,previous_status,previous_favourite,created_at) VALUES
 		('a',2,0,'cull',0,'unreviewed',0,'2026-09-15 10:00:00'),
-		('b',1,0,'cull',0,'unreviewed',0,'2026-09-15 14:28:54')`); err != nil {
+		('b',1,0,'cull',0,'unreviewed',0,'2026-09-15 14:28:54'),
+		('c',3,0,'keep',0,'unreviewed',0,'2026-09-15T14:30:00+00:00')`); err != nil {
 		t.Fatal(err)
 	}
 	marked, err := s.MarkedForBin(context.Background(), 100)

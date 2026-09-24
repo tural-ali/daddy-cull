@@ -51,6 +51,17 @@ func mappedPath(value, hostPrefix, logicalPrefix string) (string, bool) {
 	return logical, logical != logicalPrefix && strings.HasPrefix(logical, logicalPrefix+"/")
 }
 
+// hiddenSegment reports whether a logical path passes through a dot folder or
+// names a dot file, which is where the Bin and other tools keep their own state.
+func hiddenSegment(logical string) bool {
+	for _, part := range strings.Split(logical, "/") {
+		if strings.HasPrefix(part, ".") {
+			return true
+		}
+	}
+	return false
+}
+
 func mediaKind(name string) string {
 	switch strings.ToLower(path.Ext(name)) {
 	case ".mov", ".mp4", ".m4v", ".avi", ".mkv", ".3gp", ".mpg", ".mpeg":

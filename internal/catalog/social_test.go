@@ -96,6 +96,29 @@ func TestImportSocialReportRejectsPosterPathEscape(t *testing.T) {
 	}
 }
 
+// The detector walked the whole share, Bin included, so its report names files
+// the Bin already holds. Offering one would ask for a decision on a file that is
+// already out of the archive, and the Bin would refuse to take it a second time.
+func TestImportSocialReportSkipsWhatTheBinHolds(t *testing.T) {
+	store := testStore(t)
+	report := socialReport(
+		"6\t/host/archive/.culled/2021-12-29/b0426c5a.MOV\thex32 filename\t10\t1080\t1920\t18\t0\t0\t01093.jpg\n",
+		"8\t/host/archive/2021/2021-05/2021-05-15/b.mp4\tportrait\t10\t480\t848\t9\t0\t0\t00002.jpg\n",
+	)
+	count, err := store.ImportSocialReport(context.Background(), strings.NewReader(report), "/host/archive")
+	if err != nil || count != 1 {
+		t.Fatalf("import: %d %v", count, err)
+	}
+	page, err := store.SocialCandidates(context.Background(), "", 0, 50)
+	if err != nil || page.Total != 1 || page.Items[0].Name != "b.mp4" {
+		t.Fatalf("a file in the Bin must not be offered: %+v %v", page, err)
+	}
+	var binAssets int
+	if err = store.read.QueryRow("SELECT count(*) FROM assets WHERE relative_path LIKE '%/.culled/%'").Scan(&binAssets); err != nil || binAssets != 0 {
+		t.Fatalf("a Bin file must not enter the catalogue: %d %v", binAssets, err)
+	}
+}
+
 func TestImportSocialReportReplacesPreviousRows(t *testing.T) {
 	store := testStore(t)
 	first := socialReport("12\t/host/archive/2021/2021-05/2021-05-14/a.mp4\tuuid\t10\t480\t848\t9\t0\t0\t00001.jpg\n")

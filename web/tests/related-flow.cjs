@@ -11,7 +11,7 @@ const assert=require('node:assert/strict');
  if(p==='/api/decisions/batch'){saves.push(...r.request().postDataJSON());return r.fulfill({json:[{revision:1,previousStatus:'unreviewed',previousFavourite:false}]})}
  if(p.startsWith('/api/media/'))return r.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"/>'});throw Error(p);
  });
- await page.goto('http://127.0.0.1:8840/');await page.locator('.tile').first().waitFor();assert.equal(await page.getByText('Possible duplicate / related copy · 2 files',{exact:true}).count(),1);
+ await page.goto('http://127.0.0.1:8840/queue.html');await page.locator('.tile').first().waitFor();assert.equal(await page.getByText('Possible duplicate / related copy · 2 files',{exact:true}).count(),1);
  await page.locator('.tile').first().click();await page.getByRole('heading',{name:'Compare related copies',exact:true}).waitFor();await page.locator('.compare-grid article').nth(1).waitFor();assert.equal(await page.locator('.compare-grid article').count(),2);
  await page.getByRole('button',{name:'Keep this file',exact:true}).first().click();await page.getByText('Choice: keep',{exact:true}).waitFor();assert.equal(saves.length,1);assert.equal(saves[0].assetId,1);assert.equal(await page.getByText('Choice: Not decided',{exact:true}).count(),1);
  await b.close();console.log(JSON.stringify({screenshotFilenames:true,unequalFileSizes:true,visibleCandidateBadges:true,oneClickComparison:true,perFileDecisionIsolation:true,scope:'synthetic browser test; not live deployment'},null,2));

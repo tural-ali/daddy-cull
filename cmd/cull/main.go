@@ -176,8 +176,11 @@ func main() {
 			log.Fatal(e)
 		}
 		defer engine.Close()
+		var legacyEngine *catalog.LegacyBinEngine
+		var screenshotWriter *catalog.ScreenshotWriter
 		if *disksRoot != "" {
-			legacyEngine, legacyErr := catalog.NewLegacyBinEngine(s, *disksRoot)
+			var legacyErr error
+			legacyEngine, legacyErr = catalog.NewLegacyBinEngine(s, *disksRoot)
 			if legacyErr != nil {
 				log.Fatal(legacyErr)
 			}
@@ -185,7 +188,8 @@ func main() {
 			mux.Handle("/legacy-bin/", legacyEngine.Handler(secret))
 		}
 		if *screenshotsRoot != "" {
-			screenshotWriter, screenshotErr := catalog.NewScreenshotWriter(s, *screenshotsRoot, *writerRoot)
+			var screenshotErr error
+			screenshotWriter, screenshotErr = catalog.NewScreenshotWriter(s, *screenshotsRoot, *writerRoot)
 			if screenshotErr != nil {
 				log.Fatal(screenshotErr)
 			}
@@ -200,6 +204,9 @@ func main() {
 			defer upgradeWriter.Close()
 			mux.Handle("/upgrade/", upgradeWriter.Handler(secret))
 		}
+		// The Bin page acts on everything it lists at once, through the same
+		// engines as above; each source is still moved only by its own engine.
+		mux.Handle("/trash/", catalog.NewTrashWriter(s, engine, legacyEngine, screenshotWriter).Handler(secret))
 		mux.Handle("/", engine.Handler(secret))
 	} else {
 		// A local read-only mount is preferred when one is given: it needs no
@@ -221,6 +228,7 @@ func main() {
 			// The Bin's own files live inside the archive share, so they are
 			// previewable wherever the archive is mounted.
 			mux.Handle("/api/bin-media/{id}/{mode}", s.LegacyBinMediaHandler(mediaRoots))
+			mux.Handle("/api/binned-media/{source}/{plan}/{index}/{mode}", s.BinnedMediaHandler(mediaRoots))
 		} else if *upstream != "" {
 			mux.Handle("/api/media/{id}/{mode}", s.MediaHandler(*upstream))
 		}
@@ -233,6 +241,8 @@ func main() {
 		mux.Handle("/api/legacy-bin/", catalog.LegacyBinGateway(*binUpstream, secret))
 		mux.Handle("/api/screenshot-actions/", catalog.ScreenshotGateway(*binUpstream, secret))
 		mux.Handle("/api/upgrade-actions/", catalog.UpgradeGateway(*binUpstream, secret))
+		mux.Handle("GET /api/trash", s.Handler())
+		mux.Handle("/api/trash/", catalog.TrashGateway(*binUpstream, secret))
 		mux.Handle("/api/", s.Handler())
 		serveApp := func(w http.ResponseWriter, r *http.Request) {
 			http.ServeFile(w, r, filepath.Join(*web, "index.html"))

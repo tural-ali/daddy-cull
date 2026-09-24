@@ -22,7 +22,7 @@ const assert=require('node:assert/strict');
   if(url.pathname.startsWith('/api/media/')){await imagesReady;return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"/>'})}
   throw Error(url.pathname);
  });
- let page=await context.newPage();await page.goto('http://127.0.0.1:8840/',{waitUntil:'domcontentloaded'});
+ let page=await context.newPage();await page.goto('http://127.0.0.1:8840/queue.html',{waitUntil:'domcontentloaded'});
  await page.locator('.tile').first().click();await page.locator('.compare-grid article').nth(1).waitFor();
  assert.equal(await page.getByRole('button',{name:'Keep this file',exact:true}).first().isDisabled(),true);
  await page.keyboard.press('k');assert.equal(requests.length,0);releaseImages();
@@ -30,7 +30,7 @@ const assert=require('node:assert/strict');
  await page.getByRole('button',{name:'Keep both files',exact:true}).click();await page.getByRole('button',{name:'Save these 2 choices',exact:true}).click();
  await page.getByRole('button',{name:'Retry same save',exact:true}).waitFor();
  assert.equal(await page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('cull.group.pending.')).length),1);
- await page.close();failReply=false;page=await context.newPage();await page.goto('http://127.0.0.1:8840/');
+ await page.close();failReply=false;page=await context.newPage();await page.goto('http://127.0.0.1:8840/queue.html');
  await page.waitForFunction(()=>Object.keys(localStorage).filter(k=>k.startsWith('cull.group.pending.')).length===0);
  await page.locator('.tile').first().waitFor();assert.equal(await page.locator('.tile').count(),1);assert.match(await page.locator('.tile').innerText(),/NEXT.JPG/);
  assert.equal(requests.length,2);assert.deepEqual(requests[1],requests[0]);assert.deepEqual(assets.slice(0,2).map(a=>a.revision),[1,1]);

@@ -77,7 +77,9 @@ A real mount for the tree always wins over it.
 
 The Bin's own files are served the same way, through `/api/bin-media/{id}`.
 A culled file has not left the archive share, it has moved to a `.culled` folder inside it, so it can still be looked at: deciding whether to restore or permanently delete a photograph from its filename alone is not a real choice.
-The recorded disk-qualified path is rewritten to the path the merged share uses, and the rewrite is refused when another file still in the Bin has that same path on a different disk, since the share exposes only one of the two and nothing here can tell which.
+With `-disks-media` mounted, the recorded disk-qualified path names the exact file and is served as it stands, provided the file is still there.
+Unraid's mover migrates the cache onto the array, so a file recorded on the cache may since have moved to a disk.
+In that case, or without the disk mount, the path is rewritten to the one the merged share uses, and the rewrite is refused when another file still in the Bin has that same path on a different disk, since the share exposes only one of the two and nothing here can tell which.
 
 Previews are generated rather than proxied, into the directory given by `-preview-cache`, keyed by file, size and modification time.
 The catalogue and the imported Bin history each number from one, so the key carries which of the two it counts in and their small integers cannot collide in the one shared cache directory.
@@ -115,7 +117,9 @@ Source checkout: `/mnt/user/appdata/tower-cull-next-repo`.
 Database: `/mnt/cache/appdata/tower-cull-next/library.db` on Tower's local cache filesystem.
 Containers: `tower-cull-next` and private `tower-cull-writer`, running as UID 99, GID 100.
 Preview ports: LAN and Tailscale on 8830.
-The existing `tower-cull` on 8823 serves media previews with read-only media mounts and a guard blocking non-GET/HEAD requests.
+The preview container serves media itself from read-only mounts of the archive, the screenshot holding area, both physical disks and the review hardlink farm, and writes generated tiles to `state/preview-cache`.
+The image carries ffmpeg and exiftool for video frames, HEIC and RAW.
+Social posters live in `state/social-posters`.
 The writer requires its private `CULL_BIN_KEY` in the deployment `.env`.
 The existing state directory and SQLite files must be owned by UID 99, GID 100; back up the stopped catalogue before any ownership or schema migration.
 

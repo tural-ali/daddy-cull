@@ -12,7 +12,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   if(u.pathname.startsWith('/api/media/')){await new Promise(r=>setTimeout(r,300));return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#526c77"/></svg>'})}
   return route.abort();
  });
- await page.goto(process.env.APP_URL||'http://192.168.1.10:8830/');
+ await page.goto(process.env.APP_URL||'http://127.0.0.1:8840/queue.html');
  await page.getByRole('button',{name:'Start reviewing',exact:true}).click();
  await page.waitForTimeout(1200);
  await page.evaluate(()=>{

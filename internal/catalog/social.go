@@ -119,6 +119,12 @@ func (s *Store) ImportSocialReport(ctx context.Context, input io.Reader, archive
 		if !ok {
 			return 0, fmt.Errorf("social candidate outside configured archive: %s", record[1])
 		}
+		// The detector walked the share, the Bin's .culled folder included. A
+		// file there has already left the archive, and the Bin refuses any path
+		// through a hidden folder, so it is not a candidate.
+		if hiddenSegment(logicalPath) {
+			continue
+		}
 		size, _ := strconv.ParseInt(record[3], 10, 64)
 		width, _ := strconv.Atoi(record[4])
 		height, _ := strconv.Atoi(record[5])

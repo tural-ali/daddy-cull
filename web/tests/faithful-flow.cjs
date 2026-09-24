@@ -10,9 +10,12 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
 (async()=>{
   const browser=await chromium.launch({channel:'chrome',headless:true});
   const page=await browser.newPage({viewport:{width:1440,height:900}});
-  const writes=[],individualWrites=[];
+  // "/" opens today's date, and the fixtures are for 7 September.
+  await page.clock.setFixedTime(new Date('2026-09-07T10:00:00'));
+  const writes=[],individualWrites=[],fetched=[];
   await page.route('**/api/**',async route=>{
     const request=route.request(),url=new URL(request.url());
+    fetched.push(url.pathname);
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:61208,synthetic:false,snapshotAt:'2026-09-06 01:49:00',candidates:1,calendarDays:2749,reviewedDays:0,decisions:80,favourites:2,evidence:4277,fullHashes:1357,marked:2}});
     if(url.pathname==='/api/today/09-07')return route.fulfill({json:{md:'09-07',label:'7 September',previous:'09-06',next:'09-08',years:[{day:'2000-09-07',year:2000,files:1,bytes:100,status:'pending',assets:[first]},{day:'2010-09-07',year:2010,files:3,bytes:300,status:'pending',assets:[copy,third,fourth]}],memories:4,bytes:400}});
     if(url.pathname==='/api/duplicates')return route.fulfill({json:[{hash:'abcdef0123456789abcdef0123456789',size:100,reclaimable:100,members:[first,copy]}]});
@@ -24,6 +27,8 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
   });
   await page.goto(process.env.APP_URL||'http://127.0.0.1:8842/');
   await page.getByRole('heading',{name:/7 September/}).waitFor();
+  await page.getByRole('link',{name:/^Bin 2$/}).waitFor();
+  assert.equal(fetched.filter(path=>path==='/api/today/09-07').length,1,'the page loaded its data more than once');
   assert.equal(await page.locator('.xgroup').count(),1);
   assert.match(await page.locator('.xdupes').innerText(),/byte-identical, verified by full hash/);
   await page.getByRole('button',{name:'choose as keeper'}).click();
@@ -48,6 +53,13 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
   await page.locator('.rvpos').filter({hasText:'3 / 4'}).waitFor();
   await page.waitForFunction(()=>Object.keys(localStorage).filter(key=>key.startsWith('cull.pending.')).every(key=>JSON.parse(localStorage[key]).length===0));
   assert.deepEqual(individualWrites.map(item=>item.assetId),[1,2]);
+  // A click on the photograph only hides the chrome; a click beside it leaves.
+  const viewer=page.getByRole('dialog',{name:'Photo review'});
+  await page.locator('.rvstage img').click();
+  assert.equal(await viewer.isVisible(),true,'a click on the photograph closed the review');
+  const stage=await page.locator('.rvstage').boundingBox();
+  await page.mouse.click(stage.x+stage.width-20,stage.y+20);
+  await viewer.waitFor({state:'hidden'});
   await browser.close();
-  console.log(JSON.stringify({faithfulToday:true,verifiedDuplicates:true,keeperChoiceAtomic:true,calendar:true,logoReturnsToday:true,instantKeyboardAdvance:true,durableQueueDrained:true},null,2));
+  console.log(JSON.stringify({faithfulToday:true,binCountShown:true,pageLoadedOnce:true,verifiedDuplicates:true,keeperChoiceAtomic:true,calendar:true,logoReturnsToday:true,instantKeyboardAdvance:true,durableQueueDrained:true,lightboxClosesOutside:true},null,2));
 })().catch(error=>{console.error(error);process.exit(1)});

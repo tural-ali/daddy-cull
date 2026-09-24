@@ -11,7 +11,7 @@ const assert=require('node:assert/strict');
   if(u.pathname==='/api/bin/execute'){const d=route.request().postDataJSON();executions.push(d);plan.state={quarantine:'bin',restore:'restored',purge:'purged'}[d.action];return route.fulfill({json:plan})}
   throw Error('Unexpected API: '+u.pathname);
  });
- await page.goto(process.env.APP_URL||'http://127.0.0.1:8840/');await page.getByRole('button',{name:'Marked files & Bin',exact:true}).click();
+ await page.goto(process.env.APP_URL||'http://127.0.0.1:8840/queue.html');await page.getByRole('button',{name:'Marked files & Bin',exact:true}).click();
  async function move(){await page.locator('.marked-list input').check();await page.getByRole('button',{name:'Review 1 selected',exact:true}).click();await page.getByRole('button',{name:'Move 2 files to Bin',exact:true}).click();await page.getByRole('button',{name:'Review restore',exact:true}).waitFor()}
  await move();await page.getByRole('button',{name:'Review restore',exact:true}).click();await page.getByRole('button',{name:'Restore 2 files',exact:true}).click();await page.getByText('Files restored. They are back in the undecided queue.',{exact:true}).waitFor();
  await move();await page.getByRole('button',{name:'Review permanent deletion',exact:true}).click();const remove=page.getByRole('button',{name:'Permanently delete 2 files',exact:true});assert.equal(await remove.isDisabled(),true);await page.getByLabel('Permanent deletion confirmation').fill('DELETE 1');assert.equal(await remove.isDisabled(),true);await page.getByLabel('Permanent deletion confirmation').fill('DELETE 2');await remove.click();await page.getByText('Selected Bin files permanently deleted.',{exact:true}).waitFor();

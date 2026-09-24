@@ -18,7 +18,7 @@ const assert=require('node:assert/strict');
   return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"/>'});
  });
  const drained=()=>page.waitForFunction(()=>Object.keys(localStorage).filter(k=>k.startsWith('cull.pending.')).every(k=>JSON.parse(localStorage[k]).length===0));
- await page.goto(process.env.APP_URL||'http://127.0.0.1:8840/');await page.getByRole('button',{name:'Start reviewing',exact:true}).click();
+ await page.goto(process.env.APP_URL||'http://127.0.0.1:8840/queue.html');await page.getByRole('button',{name:'Start reviewing',exact:true}).click();
  await page.waitForFunction(()=>[...document.querySelectorAll('.review-frame img')].every(i=>i.complete&&i.naturalWidth));
  for(let i=0;i<3;i++)await page.keyboard.press('k');
  await page.waitForFunction(()=>document.querySelector('.details .path').textContent.includes('photo-4'));await drained();

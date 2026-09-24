@@ -67,6 +67,45 @@ func TestLegacyBinRefusesAShadowedPair(t *testing.T) {
 	}
 }
 
+// With the physical disks mounted there is nothing to guess: each row names its
+// own disk, so both halves of a shadowed pair are shown as themselves.
+func TestLegacyBinServesEachHalfFromItsOwnDisk(t *testing.T) {
+	s := testStore(t)
+	archive := culledArchive(t, map[string]string{".culled/2022-03-24/B612.mp4": "whichever half the share picked"})
+	disks := culledArchive(t, map[string]string{
+		"cache/.culled/2022-03-24/B612.mp4": "the cache copy",
+		"disk1/.culled/2022-03-24/B612.mp4": "the disk1 copy",
+	})
+	if _, err := s.write.Exec(`INSERT INTO legacy_culled(legacy_id,batch,kind,original_path,culled_path,size_bytes,culled_at) VALUES
+		(1,'b','media','/x','/disks/cache/.culled/2022-03-24/B612.mp4',15,'2026-08-30T00:00:00+00:00'),
+		(2,'b','media','/x','/disks/disk1/.culled/2022-03-24/B612.mp4',15,'2026-08-30T00:00:00+00:00')`); err != nil {
+		t.Fatal(err)
+	}
+	handler := s.LegacyBinMediaHandler(MediaRoots{Archive: archive, Disks: disks})
+	for id, want := range map[string]string{"1": "the cache copy", "2": "the disk1 copy"} {
+		if got := serveMedia(t, handler, id, "original", nil); got.Code != 200 || got.Body.String() != want {
+			t.Fatalf("row %s served %d %q, wanted %q", id, got.Code, got.Body.String(), want)
+		}
+	}
+}
+
+// Unraid's mover migrates the cache onto the array, so a file the history
+// recorded on the cache can since have moved to a disk. The recorded disk is
+// tried first, and when the file is no longer there the share still finds it.
+func TestLegacyBinFindsAFileTheMoverMoved(t *testing.T) {
+	s := testStore(t)
+	archive := culledArchive(t, map[string]string{".culled/2022-03-06/B612.mp4": "moved to disk1 overnight"})
+	disks := culledArchive(t, map[string]string{"disk1/.culled/2022-03-06/B612.mp4": "moved to disk1 overnight"})
+	if _, err := s.write.Exec(`INSERT INTO legacy_culled(legacy_id,batch,kind,original_path,culled_path,size_bytes,culled_at) VALUES
+		(1,'b','media','/x','/disks/cache/.culled/2022-03-06/B612.mp4',24,'2026-08-30T00:00:00+00:00')`); err != nil {
+		t.Fatal(err)
+	}
+	handler := s.LegacyBinMediaHandler(MediaRoots{Archive: archive, Disks: disks})
+	if got := serveMedia(t, handler, "1", "original", nil); got.Code != 200 || got.Body.String() != "moved to disk1 overnight" {
+		t.Fatalf("a file the mover moved went missing: %d %q", got.Code, got.Body.String())
+	}
+}
+
 // A restored or purged row names a path its file has left, so the route must not
 // serve whatever happens to sit there now.
 func TestLegacyBinServesOnlyWhatItStillHolds(t *testing.T) {
