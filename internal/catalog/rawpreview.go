@@ -28,23 +28,23 @@ var rawTags = []string{"PreviewImage", "JpgFromRaw", "ThumbnailImage"}
 //
 // As with video frames, the extractor is handed the already-validated descriptor
 // rather than a path, so no second lookup can resolve anywhere else.
-func rawPreview(ctx context.Context, tool string, file *os.File, cacheDir, subject string, size, mtime int64) ([]byte, error) {
+func rawPreview(ctx context.Context, tool string, file *os.File, cacheDir, subject string, size, mtime int64, pixels int) ([]byte, error) {
 	if tool == "" {
 		return nil, fmt.Errorf("no raw extractor configured")
 	}
-	return cachedBytes(cacheDir, "raw", subject, size, mtime, func() ([]byte, error) {
+	return cachedBytes(cacheDir, previewKind("raw", pixels), subject, size, mtime, func() ([]byte, error) {
 		return withWorker(ctx, func() ([]byte, error) {
 			for _, tag := range rawTags {
 				embedded, err := runRawExtractor(ctx, tool, file, tag)
 				if err == nil && len(embedded) > 0 {
-					return shrinkToTile(bytes.NewReader(embedded))
+					return shrinkTo(bytes.NewReader(embedded), pixels)
 				}
 			}
 			// Some files carry a RAW extension but hold an ordinary JPEG, which
 			// has no embedded preview because it is the picture. Decoding the
 			// file directly is both how that is detected and how it is served.
 			if _, err := file.Seek(0, 0); err == nil {
-				if tile, err := shrinkToTile(file); err == nil {
+				if tile, err := shrinkTo(file, pixels); err == nil {
 					return tile, nil
 				}
 			}

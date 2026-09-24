@@ -197,17 +197,22 @@ func (s *Store) serveMedia(w http.ResponseWriter, r *http.Request, roots MediaRo
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
 	if rawPreviewWanted || stillPreviewWanted {
+		// The viewer asks for the large size; a grid asks for a tile.
+		pixels := gridPixels
+		if r.URL.Query().Get("size") == "large" {
+			pixels = viewerPixels
+		}
 		var tile []byte
 		var rawErr error
 		if rawPreviewWanted {
-			tile, rawErr = rawPreview(r.Context(), roots.RawTool, file, roots.Cache, source.subject, info.Size(), info.ModTime().Unix())
+			tile, rawErr = rawPreview(r.Context(), roots.RawTool, file, roots.Cache, source.subject, info.Size(), info.ModTime().Unix(), pixels)
 			if rawErr != nil && roots.FFmpeg != "" {
 				// Whatever the file really is, the frame extractor reads far
 				// more formats than the name suggested.
-				tile, rawErr = stillFrame(r.Context(), roots.FFmpeg, file, roots.Cache, source.subject, info.Size(), info.ModTime().Unix())
+				tile, rawErr = stillFrame(r.Context(), roots.FFmpeg, file, roots.Cache, source.subject, info.Size(), info.ModTime().Unix(), pixels)
 			}
 		} else {
-			tile, rawErr = stillFrame(r.Context(), roots.FFmpeg, file, roots.Cache, source.subject, info.Size(), info.ModTime().Unix())
+			tile, rawErr = stillFrame(r.Context(), roots.FFmpeg, file, roots.Cache, source.subject, info.Size(), info.ModTime().Unix(), pixels)
 		}
 		if rawErr != nil {
 			// No embedded preview is an honest miss: the page keeps its own

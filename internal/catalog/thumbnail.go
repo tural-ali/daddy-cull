@@ -6,6 +6,7 @@ import (
 	_ "image/png"
 	"io"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -14,6 +15,21 @@ import (
 // routinely 4000 pixels wide and 13 MB, and a grid of 120 of those is tens of
 // gigabytes of transfer for images displayed at a couple of hundred pixels.
 const gridPixels = 512
+
+// viewerPixels is the longest edge the full-screen viewer draws a photograph at.
+// A HEIC or RAW original cannot be handed to the browser, so the viewer gets a
+// decode this large rather than the grid tile, which it would draw postage-stamp
+// small or blow up into a blur.
+const viewerPixels = 2560
+
+// previewKind names a decoded preview in the cache, so a tile and a viewer-sized
+// picture of the same file never collide.
+func previewKind(kind string, pixels int) string {
+	if pixels == gridPixels {
+		return kind
+	}
+	return kind + "-" + strconv.Itoa(pixels)
+}
 
 // thumbnail returns a downscaled JPEG of an image a browser could have decoded
 // itself, cached on disk so the decode happens once per file rather than once

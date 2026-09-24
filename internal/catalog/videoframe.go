@@ -48,17 +48,17 @@ func videoFrame(ctx context.Context, tool string, file *os.File, cacheDir, subje
 }
 
 // stillFrame decodes a single-image format the browser cannot read, such as
-// HEIC, into a gallery tile.
+// HEIC, into a JPEG whose longest edge is at most pixels.
 //
 // It cannot ask the decoder to scale on the way out: a HEIF image is assembled
 // from tiles through a complex filtergraph, and the decoder refuses a scale
 // filter on a stream fed from one. So the frame comes back at full resolution
 // and is reduced here, through the same path as every other tile.
-func stillFrame(ctx context.Context, tool string, file *os.File, cacheDir, subject string, size, mtime int64) ([]byte, error) {
+func stillFrame(ctx context.Context, tool string, file *os.File, cacheDir, subject string, size, mtime int64, pixels int) ([]byte, error) {
 	if tool == "" {
 		return nil, fmt.Errorf("no frame extractor configured")
 	}
-	return cachedBytes(cacheDir, "still", subject, size, mtime, func() ([]byte, error) {
+	return cachedBytes(cacheDir, previewKind("still", pixels), subject, size, mtime, func() ([]byte, error) {
 		return withWorker(ctx, func() ([]byte, error) {
 			full, err := runFrameExtractor(ctx, tool, file, "", false)
 			if err != nil {
@@ -67,7 +67,7 @@ func stillFrame(ctx context.Context, tool string, file *os.File, cacheDir, subje
 			if len(full) == 0 {
 				return nil, fmt.Errorf("no image decoded")
 			}
-			return shrinkToTile(bytes.NewReader(full))
+			return shrinkTo(bytes.NewReader(full), pixels)
 		})
 	})
 }

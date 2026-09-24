@@ -19,7 +19,17 @@ import (
 // what the handler reads rather than the raw path.
 func serveMedia(t *testing.T, handler http.Handler, id, mode string, header http.Header) *httptest.ResponseRecorder {
 	t.Helper()
-	request := httptest.NewRequest("GET", "/api/media/"+id+"/"+mode, nil)
+	return serveMediaAt(t, handler, id, mode, "", header)
+}
+
+// serveMediaAt asks for a preview at a size, as the viewer does with "large".
+func serveMediaAt(t *testing.T, handler http.Handler, id, mode, size string, header http.Header) *httptest.ResponseRecorder {
+	t.Helper()
+	target := "/api/media/" + id + "/" + mode
+	if size != "" {
+		target += "?size=" + size
+	}
+	request := httptest.NewRequest("GET", target, nil)
 	request.SetPathValue("id", id)
 	request.SetPathValue("mode", mode)
 	for key, values := range header {
@@ -377,6 +387,15 @@ func TestLocalMediaBuildsRawTilesFromTheEmbeddedPreview(t *testing.T) {
 	if again := serveMedia(t, handler, "1", "preview", nil); !bytes.Equal(again.Body.Bytes(), tile.Body.Bytes()) {
 		t.Fatal("cached raw tile differs from the generated one")
 	}
+	// The viewer gets the embedded preview at its own size, not the tile.
+	large := serveMediaAt(t, handler, "1", "preview", "large", nil)
+	big, _, err := image.Decode(bytes.NewReader(large.Body.Bytes()))
+	if err != nil {
+		t.Fatalf("raw large preview did not decode: %v", err)
+	}
+	if big.Bounds().Dx() != 1616 {
+		t.Fatalf("raw large preview is %d wide, wanted the embedded preview's 1616", big.Bounds().Dx())
+	}
 	// The original is still refused: nothing here transcodes sensor data.
 	if got := serveMedia(t, handler, "1", "original", nil); got.Code != http.StatusUnsupportedMediaType {
 		t.Fatalf("raw original returned %d", got.Code)
@@ -444,6 +463,25 @@ func TestLocalMediaDecodesHeicIntoATile(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(cache); len(entries) != 1 {
 		t.Fatalf("expected one cached heic tile, got %d", len(entries))
+	}
+	// The viewer draws a photograph full screen, so it gets a picture of that
+	// size. Handing it the grid tile made every iPhone photo postage-stamp small.
+	large := serveMediaAt(t, handler, "1", "preview", "large", nil)
+	if large.Code != 200 || large.Header().Get("Content-Type") != "image/jpeg" {
+		t.Fatalf("heic large preview returned %d %q", large.Code, large.Header().Get("Content-Type"))
+	}
+	big, _, err := image.Decode(bytes.NewReader(large.Body.Bytes()))
+	if err != nil {
+		t.Fatalf("heic large preview did not decode: %v", err)
+	}
+	if big.Bounds().Dy() != viewerPixels {
+		t.Fatalf("heic large preview is %d tall, wanted %d", big.Bounds().Dy(), viewerPixels)
+	}
+	if entries, _ := os.ReadDir(cache); len(entries) != 2 {
+		t.Fatalf("expected the tile and the large preview cached apart, got %d entries", len(entries))
+	}
+	if again := serveMedia(t, handler, "1", "preview", nil); !bytes.Equal(again.Body.Bytes(), tile.Body.Bytes()) {
+		t.Fatal("the grid tile changed after the large preview was made")
 	}
 	// Without an extractor the page gets an honest miss rather than a container
 	// the <img> cannot read.

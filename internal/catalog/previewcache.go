@@ -77,13 +77,22 @@ func withWorker(ctx context.Context, produce func() ([]byte, error)) ([]byte, er
 // shrinkToTile reduces a full-size image to the size the gallery draws, as a
 // JPEG. Some decoders cannot scale on the way out, so their output arrives at
 // full resolution and is reduced here instead.
-func shrinkToTile(source io.Reader) ([]byte, error) {
+func shrinkToTile(source io.Reader) ([]byte, error) { return shrinkTo(source, gridPixels) }
+
+// shrinkTo reduces a full-size image so its longest edge is at most pixels, as a
+// JPEG. The viewer's picture is looked at closely, so it is encoded with less
+// loss than a tile that is only ever glanced at.
+func shrinkTo(source io.Reader, pixels int) ([]byte, error) {
 	decoded, _, err := image.Decode(source)
 	if err != nil {
 		return nil, err
 	}
+	quality := 82
+	if pixels > gridPixels {
+		quality = 90
+	}
 	var buffer bytes.Buffer
-	if err = jpeg.Encode(&buffer, downscale(decoded, gridPixels), &jpeg.Options{Quality: 82}); err != nil {
+	if err = jpeg.Encode(&buffer, downscale(decoded, pixels), &jpeg.Options{Quality: quality}); err != nil {
 		return nil, err
 	}
 	return buffer.Bytes(), nil
