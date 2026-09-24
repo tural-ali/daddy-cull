@@ -116,7 +116,7 @@ func instant(value string) time.Time {
 // one interrupted mid-restore or mid-deletion: the engine resumes those when
 // asked again, and hiding them would hide files that are still in the Bin.
 func (s *Store) binPlansHeld(ctx context.Context) ([]BinPlan, error) {
-	rows, err := s.read.QueryContext(ctx, "SELECT body FROM file_plans WHERE json_extract(body,'$.state') IN ('bin','restoring','purging') ORDER BY rowid DESC")
+	rows, err := s.read.QueryContext(ctx, "SELECT body FROM file_plans WHERE json_extract(body,'$.state') IN ('quarantining','bin','restoring','purging') ORDER BY rowid DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +195,13 @@ func binPlanItems(plan BinPlan) []TrashItem {
 			switch {
 			case file.Original == original:
 				item.Size += file.Size
-				item.Preview = "/api/binned-media/bin/" + plan.ID + "/" + strconv.Itoa(index)
+				// A batch interrupted on its way in has files on both sides;
+				// each is shown from wherever it is now.
+				if file.Phase == "bin" {
+					item.Preview = "/api/binned-media/bin/" + plan.ID + "/" + strconv.Itoa(index)
+				} else {
+					item.Preview = "/api/media/" + strconv.FormatInt(asset.ID, 10)
+				}
 			case file.Sidecar && (len(plan.Assets) == 1 || strings.HasPrefix(file.Original, stem)):
 				item.Size += file.Size
 				item.Sidecars++

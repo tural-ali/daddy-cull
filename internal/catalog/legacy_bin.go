@@ -224,6 +224,18 @@ func (b *LegacyBinEngine) Preview(ctx context.Context, ids []int64) (*LegacyBinP
 				rows.Close()
 				return nil, fmt.Errorf("legacy path is outside its guarded disk")
 			}
+			if _, missing := b.regular(stored); errors.Is(missing, os.ErrNotExist) {
+				var moved string
+				if moved, err = b.relocated(ctx, stored); err != nil {
+					rows.Close()
+					return nil, err
+				}
+				// The file moved disks as a whole, so its original folder is on
+				// the new disk too; the merged share shows it at the same path.
+				disk := strings.Split(moved, "/")[0]
+				stored, original = moved, disk+strings.TrimPrefix(original, strings.Split(original, "/")[0])
+				item.Stored, item.Original = "/disks/"+stored, "/disks/"+original
+			}
 			item.Hash, item.Size, item.Mtime, err = b.fingerprint(ctx, stored)
 			if err != nil {
 				rows.Close()
@@ -244,6 +256,51 @@ func (b *LegacyBinEngine) Preview(ctx context.Context, ids []int64) (*LegacyBinP
 		return nil, err
 	}
 	return plan, nil
+}
+
+// relocated finds a Bin file that is no longer on the disk the history
+// recorded. Unraid's mover migrates the cache onto the array, taking the
+// .culled folders with it, so a file recorded on the cache may now be on a
+// disk. It is accepted only when exactly one disk holds it at the same path and
+// no other held row already names that copy, so one row can never claim
+// another row's file.
+func (b *LegacyBinEngine) relocated(ctx context.Context, rel string) (string, error) {
+	recorded, rest, _ := strings.Cut(rel, "/")
+	top, err := b.root.Open(".")
+	if err != nil {
+		return "", err
+	}
+	disks, err := top.ReadDir(-1)
+	top.Close()
+	if err != nil {
+		return "", err
+	}
+	found := make([]string, 0, 1)
+	for _, disk := range disks {
+		if !disk.IsDir() || disk.Name() == recorded {
+			continue
+		}
+		candidate := disk.Name() + "/" + rest
+		if _, err = b.regular(candidate); err == nil {
+			found = append(found, candidate)
+		} else if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, ErrInvalid) {
+			return "", err
+		}
+	}
+	if len(found) == 0 {
+		return "", fmt.Errorf("the Bin file is missing from every disk: /disks/%s: %w", rel, os.ErrNotExist)
+	}
+	if len(found) > 1 {
+		return "", fmt.Errorf("the Bin file was found on more than one disk; nothing was chosen: /disks/%s", rel)
+	}
+	var rival int
+	if err = b.s.read.QueryRowContext(ctx, "SELECT count(*) FROM legacy_culled WHERE culled_path=? AND restored_at IS NULL AND purged_at IS NULL", "/disks/"+found[0]).Scan(&rival); err != nil {
+		return "", err
+	}
+	if rival > 0 {
+		return "", fmt.Errorf("the moved Bin file is also recorded as another entry; nothing was chosen: /disks/%s", found[0])
+	}
+	return found[0], nil
 }
 
 func (b *LegacyBinEngine) syncDir(rel string) error {
@@ -329,6 +386,21 @@ func (b *LegacyBinEngine) Run(ctx context.Context, id, action, confirmation stri
 	}
 	if plan.State != "planned" && plan.State != operationState {
 		return plan, ErrInvalid
+	}
+	for _, file := range plan.Files {
+		if file.Phase == "restored" || file.Phase == "purged" || file.Phase == "absent_after_intent" {
+			continue
+		}
+		stored, _ := legacyRelative(file.Stored)
+		if err = writableFolder(b.root, stored); err != nil {
+			return plan, err
+		}
+		if action == "restore" {
+			original, _ := legacyRelative(file.Original)
+			if err = writableFolder(b.root, original); err != nil {
+				return plan, err
+			}
+		}
 	}
 	if plan.State == "planned" {
 		for _, file := range plan.Files {

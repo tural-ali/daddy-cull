@@ -583,6 +583,17 @@ func (b *BinEngine) Run(ctx context.Context, id, action, confirmation string) (r
 		if p.State != "planned" && p.State != "quarantining" {
 			return p, ErrInvalid
 		}
+		for i, f := range p.Files {
+			if f.Phase == "bin" {
+				continue
+			}
+			if e = writableFolder(b.root, f.Original); e != nil {
+				return p, e
+			}
+			if e = writableFolder(b.root, stored(p, i)); e != nil {
+				return p, e
+			}
+		}
 		if p.State == "planned" {
 			for _, f := range p.Files {
 				if e = b.verify(ctx, f.Original, f); e != nil {
@@ -639,6 +650,14 @@ func (b *BinEngine) Run(ctx context.Context, id, action, confirmation string) (r
 		}
 		// Preflight every file before moving any member of the batch.
 		for i, f := range p.Files {
+			if f.Phase != "restored" {
+				if e = writableFolder(b.root, f.Original); e != nil {
+					return p, e
+				}
+				if e = writableFolder(b.root, stored(p, i)); e != nil {
+					return p, e
+				}
+			}
 			if f.Phase == "restored" {
 				if e = b.verify(ctx, f.Original, f); e != nil {
 					return p, e
@@ -706,6 +725,9 @@ func (b *BinEngine) Run(ctx context.Context, id, action, confirmation string) (r
 		for i, f := range p.Files {
 			if f.Phase == "purged" || f.Phase == "absent_after_intent" {
 				continue
+			}
+			if e = writableFolder(b.root, stored(p, i)); e != nil {
+				return p, e
 			}
 			if e = b.verify(ctx, stored(p, i), f); e != nil {
 				if f.Phase == "purging" && errors.Is(e, os.ErrNotExist) {

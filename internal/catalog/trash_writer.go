@@ -256,6 +256,13 @@ func (t *TrashWriter) binPlan(ctx context.Context, id string, purge bool) error 
 		_, err = t.bin.Run(ctx, id, "restore", "")
 		return err
 	}
+	// A batch interrupted on its way into the Bin is finished first, so what
+	// is deleted is exactly what the batch recorded, moved by its own checks.
+	if plan.State == "quarantining" {
+		if _, err = t.bin.Run(ctx, id, "quarantine", ""); err != nil {
+			return err
+		}
+	}
 	_, err = t.bin.Run(ctx, id, "purge", DeleteConfirmation(len(plan.Files)))
 	return err
 }
