@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 )
@@ -244,15 +243,7 @@ func main() {
 		mux.Handle("GET /api/trash", s.Handler())
 		mux.Handle("/api/trash/", catalog.TrashGateway(*binUpstream, secret))
 		mux.Handle("/api/", s.Handler())
-		serveApp := func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(*web, "index.html"))
-		}
-		mux.HandleFunc("GET /on/{md}", serveApp)
-		mux.HandleFunc("GET /day/{day}", serveApp)
-		for _, route := range []string{"/year", "/duplicates", "/upgrades", "/shadows", "/screenshots", "/social", "/log", "/bin", "/settings"} {
-			mux.HandleFunc("GET "+route, serveApp)
-		}
-		mux.Handle("/", http.FileServer(http.Dir(*web)))
+		mux.Handle("/", webApp(*web, []string{"/year", "/duplicates", "/upgrades", "/shadows", "/screenshots", "/social", "/log", "/bin", "/settings"}))
 	}
 	server := &http.Server{Addr: *addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 0, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}
 	go func() {
