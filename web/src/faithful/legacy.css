@@ -199,6 +199,24 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .iconbtn.on { color: var(--pill-ink); background: var(--pill); }
 .iconbtn.menu { display: grid; }
 
+/* The review streak, in the logo's amber: quiet until today has a review, then
+   lit, so the first choice of the day visibly keeps the run going. */
+.streak {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 10px;
+  color: var(--muted); font-size: 14px; font-weight: 500; white-space: nowrap;
+  border-radius: 999px; transition: background var(--ease), color var(--ease);
+  font-variant-numeric: tabular-nums;
+}
+.streak:hover { color: var(--text); background: var(--hover); text-decoration: none; }
+.streak b { font-weight: 700; }
+.streak .icon, .streak .icon svg { width: 22px; height: 22px; }
+.streak.lit { color: var(--warn); background: color-mix(in oklab, var(--warn) 14%, transparent); }
+.streak.lit:hover { background: color-mix(in oklab, var(--warn) 22%, transparent); }
+@media (max-width: 600px) {
+  .streak { padding: 0 10px 0 8px; gap: 4px; }
+  .streak .unit { display: none; }
+}
+
 /* Sidebar hidden from the menu button: the page takes the width and keeps its
    rounded corner, set in from the edge like the right side. */
 @media (min-width: 1001px) {
@@ -276,6 +294,18 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   .brand svg { height: 20px; }
   .search { height: 44px; padding-right: 10px; }
   .search input { font-size: 15px; }
+}
+/* A phone has no room for a field beside the logo and the streak, so search
+   folds to its icon, as in Google Photos, and opens across the bar when
+   tapped. */
+@media (max-width: 480px) {
+  .search { flex: none; width: 44px; padding: 0 2px; background: none; transition: none; }
+  .search input { width: 0; flex: 0; padding: 0; }
+  .search:focus-within {
+    position: absolute; left: 8px; right: 8px; z-index: 5; width: auto;
+    padding-right: 12px; background: var(--bg-2);
+  }
+  .search:focus-within input { flex: 1; }
 }
 
 .pill {
@@ -1129,8 +1159,11 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   .kv dt { flex: none; }
   .fbar { flex-wrap: wrap; gap: .5rem; }
   .fbar .hint { display: none; }
+  /* Without its keyboard hint, Today's bar has nothing to show once the date
+   * is reviewed. */
+  .fbar.keys:not(:has(.fright > *)) { display: none; }
   /* The bar wraps to two rows here, so the page keeps room for both. */
-  body:has(.fbar) { padding-bottom: 7.5rem; }
+  body:has(.fbar:not(.keys), .fbar.keys .fright > *) { padding-bottom: 7.5rem; }
   .rvbtn kbd { display: none; }
   .rvnav { opacity: 0 !important; }
   .tally { gap: 1.1rem; }
@@ -1532,48 +1565,20 @@ button.danger:not(.btn) {
 }
 .binsec + .hint { margin-top: 0; }
 
-/* Saved-from-social review. These are portrait clips whose evidence is often the
-   letterbox itself, so the still is shown whole rather than cropped square, and the
-   reasons sit under it in normal flow instead of over the picture. */
-.socialgrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 14px;
+/* Saved-from-social review. The same square tiles as every other grid, with
+   one answer on each: likely social, in the logo's coral for what tends to
+   leave, or not sure, on the plain chip. The tick and play button are drawn at
+   all times: a control that appears on hover does not exist on a touch screen. */
+.mo.social { cursor: pointer; }
+.mo.social .media-missing { position: absolute; inset: 0; }
+.bdg .b.social { background: color-mix(in oklab, var(--bad) 80%, #000); }
+.bdg .b.unsure { background: rgba(12, 13, 17, .72); }
+.mo.social .dur {
+  position: absolute; right: 8px; bottom: 7px; z-index: 2;
+  font-size: 11.5px; font-weight: 500; color: #f2f3f6;
+  font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px rgba(0, 0, 0, .7);
+  pointer-events: none;
 }
-@media (min-width: 560px) {
-  .socialgrid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
-}
-.socialcard {
-  margin: 0;
-  display: flex; flex-direction: column;
-  background: var(--bg-3);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-.socialshot {
-  position: relative;
-  aspect-ratio: 3 / 4;
-  background: #0a0b0f;
-}
-.socialshot img { width: 100%; height: 100%; object-fit: contain; display: block; }
-.socialshot .media-missing { position: absolute; inset: 0; }
-.socialcard figcaption {
-  display: flex; flex-direction: column; gap: 3px;
-  padding: .45rem .55rem .55rem;
-  font-size: 11.5px; color: var(--text);
-}
-.socialcard .socialday { display: flex; justify-content: space-between; gap: .5rem; }
-.socialspec { font-variant-numeric: tabular-nums; font-size: 11px; }
-.socialwhy {
-  font-size: 11px; line-height: 1.4; color: var(--muted);
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
-}
-.socialname { font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* Selection. The still is the hit area because that is what the reviewer is
-   judging, and the tick stays drawn at all times: a control that appears on
-   hover does not exist on a touch screen. */
-.socialshot { cursor: pointer; }
 .socialpick {
   position: absolute; top: 5px; right: 5px; z-index: 3;
   display: flex; padding: 4px;
@@ -1581,13 +1586,15 @@ button.danger:not(.btn) {
   border-radius: 6px;
 }
 .socialpick input { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--accent); }
-.socialcard.picked { outline: 2px solid var(--accent); outline-offset: -2px; }
-.socialcard.picked .socialshot img { opacity: .82; }
+.mo.social img { transition: transform var(--ease), border-radius var(--ease); }
+/* Selected as in Google Photos: the picture steps in from the edge of a tinted
+   tile, so a selection reads at a glance across a whole screen of them. */
+.mo.social.picked { background: color-mix(in oklab, var(--accent) 22%, var(--bg-3)); }
+.mo.social.picked img { transform: scale(.88); border-radius: 8px; }
 
 /* Playback. One frame is not enough to judge a clip, so the still swaps for the
-   video in place. The button sits opposite the tick so the two controls cannot
-   be hit by accident, and is drawn at all times for the same reason the tick is. */
-.socialplayer { width: 100%; height: 100%; object-fit: contain; display: block; background: #0a0b0f; }
+   video in place, whole rather than cropped. */
+.socialplayer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; background: #0a0b0f; }
 .socialplay {
   position: absolute; bottom: 5px; left: 5px; z-index: 3;
   display: flex; align-items: center; justify-content: center;
@@ -1603,21 +1610,6 @@ button.danger:not(.btn) {
 .socialplay:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .selbar .selall { display: flex; align-items: center; gap: .35rem; font-size: 12.5px; }
 .selbar .selall input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
-
-/* The evidence score sits on a photograph, so it carries its own opaque ground
-   rather than borrowing the page's. It reads as a word plus a number because a
-   bare number on a picture says nothing about what is being counted; the dot
-   repeats the band for anyone scanning rather than reading. */
-.bdg .b.score {
-  display: inline-flex; align-items: center; gap: .3rem;
-  background: rgba(10, 11, 15, .88);
-  border: 1px solid rgba(255, 255, 255, .2);
-  color: #f2f3f6;
-  font-variant-numeric: tabular-nums;
-}
-.bdg .b.score::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
-.bdg .b.score.likely::before { background: var(--bad); }
-.bdg .b.score.possible::before { background: var(--warn); }
 
 /* ------------------------------------------------- duplicate comparison -- */
 

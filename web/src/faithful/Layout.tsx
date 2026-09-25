@@ -1,4 +1,4 @@
-import {useEffect,useState,type FormEvent,type ReactNode} from 'react';
+import {useEffect,useRef,useState,type FormEvent,type ReactNode} from 'react';
 import {Icon,type IconName} from '../Icon';
 import {Logo} from '../Logo';
 import {pathForDate} from './goto';
@@ -32,16 +32,19 @@ const sections:{title?:string;items:Item[]}[]=[
 function DateSearch(){
   const [value,setValue]=useState('');
   const [problem,setProblem]=useState('');
+  const input=useRef<HTMLInputElement>(null);
   function go(event:FormEvent){
     event.preventDefault();
-    if(!value.trim())return;
+    // On a phone the field is folded to its icon, so the icon opens it.
+    if(!value.trim()){input.current?.focus();return}
     const path=pathForDate(value);
     if(path)location.assign(path);
     else setProblem('Type a date, such as 14 Aug 2019, or 14 Aug for every year.');
   }
   return <form className="search" role="search" onSubmit={go}>
-    <button type="submit" className="searchgo" aria-label="Go to the date"><Icon name="search"/></button>
-    <input type="search" value={value} aria-label="Go to a date" aria-invalid={problem?true:undefined} aria-describedby={problem?'search-problem':undefined}
+    <button type="submit" className="searchgo" aria-label="Go to the date"
+      onPointerDown={event=>{if(!value.trim())event.preventDefault()}}><Icon name="search"/></button>
+    <input ref={input} type="search" value={value} aria-label="Go to a date" aria-invalid={problem?true:undefined} aria-describedby={problem?'search-problem':undefined}
       placeholder="Go to a date, like 14 Aug 2019" autoComplete="off" enterKeyHint="go"
       onChange={event=>{setValue(event.target.value);setProblem('')}}/>
     {problem&&<p id="search-problem" className="searchproblem" role="alert">{problem}</p>}
@@ -55,7 +58,19 @@ const narrowQuery='(max-width: 1000px)';
 const sideKey='cull-side';
 function readSideHidden(){try{return localStorage.getItem(sideKey)==='hidden'}catch{return false}}
 
-export function Layout({route,binFiles,reviewed,flash,children}:{route:LegacyRoute;binFiles:number;reviewed?:{done:number;total:number};flash?:string;children:ReactNode}){
+/** The run of days in a row with a review, kept in view to keep it going. It
+ * is lit once today counts, and asks for today's review until then. */
+function Streak({days,today}:{days:number;today:boolean}){
+  const unit=days===1?'day':'days';
+  const title=today?`${days} ${unit} in a row with a review, today included`
+    :days>0?`${days} ${unit} in a row. Review something today to keep it going`
+    :'Review something today to start a streak';
+  return <a className={`streak${today?' lit':''}`} href="/year" title={title} aria-label={title}>
+    <Icon name="local_fire_department" filled={today}/>{days>0?<span><b>{days.toLocaleString()}</b><span className="unit"> {unit}</span></span>:<span className="unit">Start a streak</span>}
+  </a>;
+}
+
+export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:LegacyRoute;binFiles:number;reviewed?:{done:number;total:number};streak?:{days:number;today:boolean};flash?:string;children:ReactNode}){
   const [drawer,setDrawer]=useState(false);
   // On a wide screen the menu button hides the sidebar, as in Google Photos,
   // and the choice is remembered; on a narrow one it opens the drawer.
@@ -88,6 +103,7 @@ export function Layout({route,binFiles,reviewed,flash,children}:{route:LegacyRou
       <a className="brand" href="/" title="Today"><Logo/></a>
       <DateSearch/>
       <div className="gbaracts">
+        {streak&&<Streak days={streak.days} today={streak.today}/>}
         <a className={`iconbtn${route==='settings'?' on':''}`} href="/settings" aria-label="Settings" title="Settings" aria-current={route==='settings'?'page':undefined}><Icon name="settings" filled={route==='settings'}/></a>
       </div>
     </header>

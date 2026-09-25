@@ -29,6 +29,8 @@ import Close from '@material-symbols/svg-400/outlined/close.svg?raw';
 import CloseFill from '@material-symbols/svg-400/outlined/close-fill.svg?raw';
 import OpenNew from '@material-symbols/svg-400/outlined/open_in_new.svg?raw';
 import OpenNewFill from '@material-symbols/svg-400/outlined/open_in_new-fill.svg?raw';
+import Fire from '@material-symbols/svg-400/outlined/local_fire_department.svg?raw';
+import FireFill from '@material-symbols/svg-400/outlined/local_fire_department-fill.svg?raw';
 import Done from '@material-symbols/svg-400/outlined/task_alt.svg?raw';
 import DoneFill from '@material-symbols/svg-400/outlined/task_alt-fill.svg?raw';
 
@@ -48,6 +50,7 @@ const icons={
   menu:[Menu,MenuFill],
   close:[Close,CloseFill],
   task_alt:[Done,DoneFill],
+  local_fire_department:[Fire,FireFill],
 } as const;
 
 export type IconName=keyof typeof icons;

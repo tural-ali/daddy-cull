@@ -43,7 +43,8 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
   await page.getByRole('link',{name:'Daddy, Cull!'}).click();
   await page.getByRole('heading',{name:/7 September/}).waitFor();
   assert.match(page.url(),/\/on\/09-07$/);
-  await page.getByRole('button',{name:'Start reviewing'}).click();
+  // Review starts from a photograph, as in Google Photos.
+  await page.locator('.yhead ~ .gal .mo').first().click();
   await page.getByRole('dialog',{name:'Photo review'}).waitFor();
   const started=Date.now();
   await page.keyboard.press('k');

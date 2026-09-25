@@ -2,9 +2,10 @@ export type Status = 'unreviewed' | 'keep' | 'later' | 'cull';
 export type Asset = { id:number; path:string; capturedAt:number; kind:string; source:string; size:number; status:Status; favourite:boolean; revision:number;alternativeCount:number;relatedCount?:number };
 export type Page = {assets:Asset[];next:string};
 export type Saved = {revision:number;previousStatus:Status;previousFavourite:boolean};
-/** The header's Bin badge listens for this and reads the count again. Anything
- * that may have put a file into the Bin or taken one out announces it, so the
- * badge never lags behind what the Bin page would show. */
+/** The frame listens for this and reads its counts again: the Bin badge, the
+ * dates reviewed and the review streak. Anything that may have put a file into
+ * the Bin or taken one out, or recorded a review, announces it, so the frame
+ * never lags behind the page. */
 export const BIN_CHANGED='cull:bin-changed';
 export function binChanged(){window.dispatchEvent(new Event(BIN_CHANGED))}
 export async function get<T>(url:string,signal?:AbortSignal):Promise<T> {

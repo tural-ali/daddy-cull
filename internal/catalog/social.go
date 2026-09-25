@@ -53,6 +53,11 @@ type SocialPage struct {
 	Possible    int   `json:"possible"`
 	Watch       int   `json:"watch"`
 	Letterboxed int   `json:"letterboxed"`
+	// The two answers the page gives: likely from a social app (strong
+	// evidence, or a Story letterbox, which ran about nine in ten true), and
+	// not sure (everything else).
+	Social int `json:"social"`
+	Unsure int `json:"unsure"`
 	// What the reviewer has already settled, kept visible so the work shows.
 	Kept   int `json:"kept"`
 	Marked int `json:"marked"`
@@ -186,7 +191,7 @@ func (s *Store) SocialPoster(ctx context.Context, assetID int64) (string, error)
 
 func (s *Store) SocialCandidates(ctx context.Context, band string, from, limit int) (SocialPage, error) {
 	page := SocialPage{Items: make([]SocialItem, 0)}
-	if band != "" && band != "likely" && band != "possible" && band != "watch" && band != "letterboxed" {
+	if band != "" && band != "likely" && band != "possible" && band != "watch" && band != "letterboxed" && band != "social" && band != "unsure" {
 		return page, ErrInvalid
 	}
 	if from < 0 || limit < 1 || limit > 200 {
@@ -202,13 +207,15 @@ func (s *Store) SocialCandidates(ctx context.Context, band string, from, limit i
 		COALESCE(sum(pending),0),COALESCE(sum(CASE WHEN pending THEN size_bytes ELSE 0 END),0),
 		COALESCE(sum(pending AND score>=?),0),COALESCE(sum(pending AND score>=? AND score<?),0),
 		COALESCE(sum(pending AND score<?),0),COALESCE(sum(pending AND letterbox_top>0),0),
-		COALESCE(sum(status='keep'),0),COALESCE(sum(status='cull'),0)
+		COALESCE(sum(status='keep'),0),COALESCE(sum(status='cull'),0),
+		COALESCE(sum(pending AND (score>=? OR letterbox_top>0)),0)
 		FROM candidate`,
-		socialLikely, socialPossible, socialLikely, socialPossible).
+		socialLikely, socialPossible, socialLikely, socialPossible, socialLikely).
 		Scan(&page.Total, &page.Bytes, &page.Likely, &page.Possible, &page.Watch, &page.Letterboxed,
-			&page.Kept, &page.Marked); err != nil {
+			&page.Kept, &page.Marked, &page.Social); err != nil {
 		return page, err
 	}
+	page.Unsure = page.Total - page.Social
 	where, args := socialFilter(band)
 	countArgs := append([]any(nil), args...)
 	if err := s.read.QueryRowContext(ctx,
@@ -253,6 +260,10 @@ func socialFilter(band string) (string, []any) {
 		return " AND social.score<?", []any{socialPossible}
 	case "letterboxed":
 		return " AND social.letterbox_top>0", nil
+	case "social":
+		return " AND (social.score>=? OR social.letterbox_top>0)", []any{socialLikely}
+	case "unsure":
+		return " AND social.score<? AND social.letterbox_top=0", []any{socialLikely}
 	default:
 		return "", nil
 	}

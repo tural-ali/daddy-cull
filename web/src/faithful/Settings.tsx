@@ -3,7 +3,7 @@ import {Busy} from '../Busy';
 import {dayStartsAt,nightStartsAt,readChoice,saveChoice,themeEvent,themeFor,type ThemeChoice} from '../theme';
 import {bytes,longDate,readDeleting,type DeletingReport} from './Bin';
 
-export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number};
+export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number;calendarDates?:number;reviewedDates?:number;streak?:number;reviewedToday?:boolean};
 
 function localDate(value:string){
   if(!value)return 'never';
@@ -129,7 +129,8 @@ export function Settings({stats}:{stats:Stats}){
     <dl className="kv">
       <div><dt>Media files</dt><dd>{stats.total.toLocaleString()}</dd></div>
       <div><dt>Day folders</dt><dd>{stats.calendarDays.toLocaleString()}</dd></div>
-      <div><dt>Calendar days reviewed</dt><dd>{stats.reviewedDays.toLocaleString()} of {stats.calendarDays.toLocaleString()}</dd></div>
+      <div><dt>Day folders reviewed</dt><dd>{stats.reviewedDays.toLocaleString()} of {stats.calendarDays.toLocaleString()}</dd></div>
+      {stats.calendarDates!==undefined&&<div><dt>Calendar dates reviewed</dt><dd>{(stats.reviewedDates??0).toLocaleString()} of {stats.calendarDates.toLocaleString()}</dd></div>}
       <div><dt>Last refreshed</dt><dd>{localDate(stats.snapshotAt)}</dd></div>
     </dl>
     <button className="btn primary" disabled={busy} onClick={()=>void reindex()}>Refresh the catalogue index</button>

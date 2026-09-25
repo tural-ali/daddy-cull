@@ -18,6 +18,9 @@ import {Busy} from '../Busy';
 
 type PageState={route:LegacyRoute;content:ReactNode};
 
+// The server counts a day of review in the viewer's own time zone.
+const zone=encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone||'');
+
 async function json<T>(url:string):Promise<T>{
   const response=await fetch(url);
   if(!response.ok)throw new Error('The catalogue could not load this page.');
@@ -66,14 +69,14 @@ export function App(){
   useEffect(()=>{
     if(!recovered)return;
     const controller=new AbortController();
-    json<Stats>('/api/stats').then(setStats).catch(reason=>{if(!controller.signal.aborted)setError((reason as Error).message)});
+    json<Stats>(`/api/stats?tz=${zone}`).then(setStats).catch(reason=>{if(!controller.signal.aborted)setError((reason as Error).message)});
     // The badge is read again whenever a page says the Bin may have changed.
     // A burst of saves collapses into one read, and a failed read keeps the
     // last count rather than blanking the page.
     let timer=0;
     const reread=()=>{
       clearTimeout(timer);
-      timer=window.setTimeout(()=>{json<Stats>('/api/stats').then(next=>setStats(current=>current&&{...current,bin:next.bin,marked:next.marked})).catch(()=>{})},250);
+      timer=window.setTimeout(()=>{json<Stats>(`/api/stats?tz=${zone}`).then(setStats).catch(()=>{})},250);
     };
     window.addEventListener(BIN_CHANGED,reread);
     return()=>{controller.abort();clearTimeout(timer);window.removeEventListener(BIN_CHANGED,reread)};
@@ -97,7 +100,7 @@ export function App(){
         const oneDay={...data,years,memories:years.reduce((sum,year)=>sum+year.assets.length,0),bytes:years.reduce((sum,year)=>sum+year.bytes,0)};
         return {route:'today',content:<Today initial={oneDay}/>} as PageState;
       }
-      if(path==='/year')return {route,content:<Year {...await json<YearData>('/api/year')}/>} as PageState;
+      if(path==='/year')return {route,content:<Year {...await json<YearData>(`/api/year?tz=${zone}`)}/>} as PageState;
       // Coverage against the files that could possibly be duplicates is what makes
       // an empty result readable: no groups found is a different statement from no
       // groups because nothing was ever hashed.
@@ -106,7 +109,7 @@ export function App(){
       if(path==='/log')return {route,content:<Log initial={await json<HistoryEvent[]>('/api/log?limit=200')}/>} as PageState;
       if(path==='/photos')return {route,content:<Photos/>} as PageState;
       if(path==='/bin')return {route,content:<Bin onCount={count=>setStats(current=>current&&{...current,bin:count})}/>} as PageState;
-      if(path==='/settings')return {route,content:<Settings stats={await json<Stats>('/api/stats')}/>} as PageState;
+      if(path==='/settings')return {route,content:<Settings stats={await json<Stats>(`/api/stats?tz=${zone}`)}/>} as PageState;
       if(path==='/shadows')return {route,content:<Shadows groups={await json<Parameters<typeof Shadows>[0]['groups']>('/api/shadows')}/>} as PageState;
       if(path==='/social'){
         const params=new URLSearchParams(location.search),band=params.get('band')||'',from=Math.max(0,Number.parseInt(params.get('from')||'0',10)||0);
@@ -121,5 +124,5 @@ export function App(){
     load().then(result=>{if(active)setPage(result)}).catch(reason=>{if(active)setError((reason as Error).message)});
     return()=>{active=false};
   },[path,recovered]);
-  return <Layout route={page.route} binFiles={stats?.bin??stats?.marked??0} reviewed={stats?{done:stats.reviewedDays,total:stats.calendarDays}:undefined}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:page.content}</Layout>;
+  return <Layout route={page.route} binFiles={stats?.bin??stats?.marked??0} reviewed={stats?.calendarDates?{done:stats.reviewedDates??0,total:stats.calendarDates}:undefined} streak={stats?.streak!==undefined?{days:stats.streak,today:!!stats.reviewedToday}:undefined}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:page.content}</Layout>;
 }

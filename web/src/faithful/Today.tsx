@@ -35,8 +35,11 @@ export function Today({initial}:{initial:TodayData}){
   const [keepers,setKeepers]=useState<Record<string,number>>({});
   const [viewer,setViewer]=useState<number|null>(null);
   const assets=useMemo(()=>years.flatMap(year=>year.assets),[years]);
-  const reviewed=assets.filter(asset=>asset.status!=='unreviewed').length;
+  // A photograph counts as reviewed once it has a decision or its year on this
+  // date is marked reviewed, so marking a date fills the bar.
+  const reviewed=years.reduce((sum,year)=>sum+(year.status==='done'?year.assets.length:year.assets.filter(asset=>asset.status!=='unreviewed').length),0);
   const doneYears=years.filter(year=>year.status==='done').length;
+  const dateDone=years.length>0&&doneYears===years.length;
 
   function patchAsset(id:number,change:Partial<Asset>){
     setYears(current=>current.map(year=>({...year,assets:year.assets.map(asset=>asset.id===id?{...asset,...change}:asset)})));
@@ -80,6 +83,7 @@ export function Today({initial}:{initial:TodayData}){
     try{
       await setProgress(day,'done');
       setYears(current=>current.map(year=>year.day===day?{...year,status:'done'}:year));
+      binChanged();
       setMessage(`${day.slice(0,4)} marked reviewed.`);
     }catch(error){setMessage((error as Error).message)}finally{setSaving(false)}
   }
@@ -90,6 +94,7 @@ export function Today({initial}:{initial:TodayData}){
     try{
       await Promise.all(years.filter(year=>year.status!=='done').map(year=>setProgress(year.day,'done')));
       setYears(current=>current.map(year=>({...year,status:'done'})));
+      binChanged();
       setMessage(`${initial.label} marked reviewed.`);
     }catch(error){setMessage((error as Error).message)}finally{setSaving(false)}
   }
@@ -129,7 +134,7 @@ export function Today({initial}:{initial:TodayData}){
   return <>
     <div className="dhead">
       <a className="step" data-nav="prev" href={`/on/${initial.previous}`}>← {calendarLabel(initial.previous)}</a>
-      <h1>{initial.label}{initial.md===currentMD()&&<span className="tag today">today</span>}</h1>
+      <h1>{initial.label}{initial.md===currentMD()&&<span className="tag today">today</span>}{dateDone&&<span className="tag done">reviewed</span>}</h1>
       <a className="step" data-nav="next" href={`/on/${initial.next}`}>{calendarLabel(initial.next)} →</a>
     </div>
     <div className="dline">
@@ -137,7 +142,7 @@ export function Today({initial}:{initial:TodayData}){
       <span className="sep">·</span><span>{years.length} {years.length===1?'year':'years'}</span>
       <span className="sep">·</span><span className="dim">{bytes(initial.bytes)}</span>
     </div>
-    {assets.length>0&&<div className="dprog"><div className="pbar"><span style={{width:`${reviewed/assets.length*100}%`}}/></div><span className="ofn">{reviewed} / {assets.length}</span></div>}
+    {assets.length>0&&<div className="dprog"><div className="pbar" role="progressbar" aria-label="Memories reviewed on this date" aria-valuemin={0} aria-valuemax={assets.length} aria-valuenow={reviewed}><span style={{width:`${reviewed/assets.length*100}%`}}/></div><span className="ofn">{reviewed.toLocaleString()} of {assets.length.toLocaleString()} reviewed</span></div>}
     {message&&<p className="flash" role="status">{saving||(message==='Saving…'&&queue.pending>0&&!queue.error)?<Busy label={message} state="working"/>:message}</p>}
     {queue.error&&<p className="note warn" role="alert">{queue.error} <button className="btn small" onClick={queue.retry}>Retry the same save</button></p>}
     {years.length===0&&<p className="note">Nothing in the archive is filed under {initial.label}, so there is nothing to review.</p>}
@@ -164,7 +169,7 @@ export function Today({initial}:{initial:TodayData}){
       </figure>)}</div>}
       {year.status!=='done'&&year.assets.length>0&&<p className="yact"><button className="btn small" disabled={saving} onClick={()=>void markYear(year.day)}>Mark {year.year} reviewed</button><a className="dim" href={`/day/${year.day}`}>Open {year.day} on its own</a></p>}
     </section>)}
-    {assets.length>0&&<footer className="fbar"><span className="fleft"><button type="button" className="btn primary" onClick={()=>setViewer(assets.find(asset=>asset.status==='unreviewed')?.id??assets[0].id)}>Start reviewing</button><span className="hint">or click any photo. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>?</b> for the rest</span></span><span className="fright">{doneYears<years.length&&<button className="btn" disabled={saving} onClick={()=>void markDate()}>Mark {initial.label} reviewed</button>}</span></footer>}
+    {assets.length>0&&<footer className="fbar keys"><span className="fleft"><span className="hint">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>?</b> for the rest</span></span><span className="fright">{doneYears<years.length&&<button className="btn" disabled={saving} onClick={()=>void markDate()}>Mark {initial.label} reviewed</button>}</span></footer>}
     {viewer!==null&&<Viewer assets={assets} initialID={viewer} onClose={()=>setViewer(null)} onSave={save} onPatch={patchAsset}/>} 
   </>;
 }

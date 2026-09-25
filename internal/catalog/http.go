@@ -13,6 +13,17 @@ import (
 	"time"
 )
 
+// viewerLocation is the time zone the page says it is in, so a day of review
+// ends at the viewer's midnight rather than the server's.
+func viewerLocation(r *http.Request) *time.Location {
+	if name := r.URL.Query().Get("tz"); name != "" && len(name) < 64 {
+		if loc, err := time.LoadLocation(name); err == nil {
+			return loc
+		}
+	}
+	return time.Local
+}
+
 func (s *Store) Handler() http.Handler {
 	mux := http.NewServeMux()
 	writeJSON := func(w http.ResponseWriter, value any) {
@@ -23,11 +34,19 @@ func (s *Store) Handler() http.Handler {
 	mux.HandleFunc("GET /api/year", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
-		data, err := s.Calendar(ctx, time.Now())
+		now := time.Now()
+		data, err := s.Calendar(ctx, now)
 		if err != nil {
 			http.Error(w, "catalogue unavailable", 503)
 			return
 		}
+		activity, err := s.Activity(ctx, viewerLocation(r), now)
+		if err != nil {
+			http.Error(w, "catalogue unavailable", 503)
+			return
+		}
+		data.Streak = activity.Streak
+		data.Week = CalendarWeek{Days: activity.WeekDays, Seconds: activity.WeekSeconds}
 		writeJSON(w, data)
 	})
 	mux.HandleFunc("GET /api/today/{md}", func(w http.ResponseWriter, r *http.Request) {
@@ -504,7 +523,14 @@ func (s *Store) Handler() http.Handler {
 			bin = len(items)
 		}
 		immichSynced, immichPending, immichFailed := s.ImmichQueueCounts(ctx)
-		json.NewEncoder(w).Encode(map[string]any{"total": n, "synthetic": library != "real", "snapshotAt": snapshot, "candidates": candidates, "calendarDays": calendarDays, "reviewedDays": reviewedDays, "decisions": decisions, "favourites": favourites, "evidence": evidence, "fullHashes": fullHashes, "marked": marked, "legacyBin": legacyBin, "shadowGroups": shadowGroups, "screenshots": screenshots, "social": social, "upgradesAccepted": upgradesAccepted, "upgradeCandidates": upgradeCandidates, "bin": bin, "immichSynced": immichSynced, "immichPending": immichPending, "immichFailed": immichFailed})
+		// Progress is counted in calendar dates, as on the Year page: a date is
+		// reviewed when every year filed under it is.
+		var dates CalendarProgress
+		if calendar, err := s.Calendar(ctx, time.Now()); err == nil {
+			dates = calendar.Progress
+		}
+		activity, _ := s.Activity(ctx, viewerLocation(r), time.Now())
+		json.NewEncoder(w).Encode(map[string]any{"total": n, "synthetic": library != "real", "snapshotAt": snapshot, "candidates": candidates, "calendarDays": calendarDays, "reviewedDays": reviewedDays, "decisions": decisions, "favourites": favourites, "evidence": evidence, "fullHashes": fullHashes, "marked": marked, "legacyBin": legacyBin, "shadowGroups": shadowGroups, "screenshots": screenshots, "social": social, "upgradesAccepted": upgradesAccepted, "upgradeCandidates": upgradeCandidates, "bin": bin, "immichSynced": immichSynced, "immichPending": immichPending, "immichFailed": immichFailed, "calendarDates": dates.Dates, "reviewedDates": dates.Done, "streak": activity.Streak, "reviewedToday": activity.Today})
 	})
 	return mux
 }

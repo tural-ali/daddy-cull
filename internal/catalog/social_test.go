@@ -50,13 +50,13 @@ func TestImportSocialReportBandsAndFilters(t *testing.T) {
 	report := socialReport(
 		"14\t/host/archive/2021/2021-05/2021-05-14/a.mp4\tuuid filename\t10\t480\t848\t9\t20\t20\t00001.jpg\n",
 		"7\t/host/archive/2021/2021-05/2021-05-15/b.mp4\tportrait\t10\t720\t1280\t9\t0\t0\t00002.jpg\n",
-		"3\t/host/archive/2021/2021-05/2021-05-16/c.mp4\tlow bpp\t10\t720\t1280\t9\t0\t0\t\n",
+		"3\t/host/archive/2021/2021-05/2021-05-16/c.mp4\tlow bpp\t10\t720\t1280\t9\t30\t30\t\n",
 	)
 	if _, err := store.ImportSocialReport(context.Background(), strings.NewReader(report), "/host/archive"); err != nil {
 		t.Fatal(err)
 	}
 	page, err := store.SocialCandidates(context.Background(), "", 0, 50)
-	if err != nil || page.Total != 3 || page.Likely != 1 || page.Possible != 1 || page.Watch != 1 || page.Letterboxed != 1 {
+	if err != nil || page.Total != 3 || page.Likely != 1 || page.Possible != 1 || page.Watch != 1 || page.Letterboxed != 2 {
 		t.Fatalf("unexpected totals: %+v %v", page, err)
 	}
 	if page.Shown != 3 {
@@ -66,7 +66,12 @@ func TestImportSocialReportBandsAndFilters(t *testing.T) {
 		t.Fatalf("candidates should be ranked by score, got %d first", page.Items[0].Score)
 	}
 	// Shown has to follow the filter, or the pager offers a next page that is not there.
-	for band, want := range map[string]int{"likely": 1, "possible": 1, "watch": 1, "letterboxed": 1} {
+	// Likely social is strong evidence or a letterbox: a (14) and c (weak, but
+	// letterboxed). b has some evidence and no letterbox, so it is a maybe.
+	if page.Social != 2 || page.Unsure != 1 {
+		t.Fatalf("likely social %d, not sure %d, want 2 and 1", page.Social, page.Unsure)
+	}
+	for band, want := range map[string]int{"likely": 1, "possible": 1, "watch": 1, "letterboxed": 2, "social": 2, "unsure": 1} {
 		filtered, filterErr := store.SocialCandidates(context.Background(), band, 0, 50)
 		if filterErr != nil || len(filtered.Items) != want {
 			t.Fatalf("band %q returned %d items: %v", band, len(filtered.Items), filterErr)

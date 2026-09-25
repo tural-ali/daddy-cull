@@ -6,7 +6,7 @@ type SocialItem=Asset&{
   day:string;name:string;score:number;band:'likely'|'possible'|'watch';
   evidence:string;width:number;height:number;duration:number;letterbox:boolean;poster:boolean;
 };
-export type SocialPage={items:SocialItem[];total:number;shown:number;bytes:number;likely:number;possible:number;watch:number;letterboxed:number;kept:number;marked:number};
+export type SocialPage={items:SocialItem[];total:number;shown:number;bytes:number;likely:number;possible:number;watch:number;letterboxed:number;social:number;unsure:number;kept:number;marked:number};
 
 function bytes(value:number){return value<1024**2?`${(value/1024).toFixed(1)} KB`:value<1024**3?`${(value/1024**2).toFixed(1)} MB`:`${(value/1024**3).toFixed(1)} GB`}
 function clock(seconds:number){if(!seconds)return '';const s=Math.round(seconds);return s<60?`${s}s`:`${Math.floor(s/60)}m ${String(s%60).padStart(2,'0')}s`}
@@ -14,12 +14,14 @@ function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)
 
 const BANDS:{key:string;label:string;count:(page:SocialPage)=>number}[]=[
   {key:'',label:'Everything',count:page=>page.total},
-  {key:'likely',label:'Strong evidence',count:page=>page.likely},
-  {key:'possible',label:'Some evidence',count:page=>page.possible},
-  {key:'watch',label:'Weak signal',count:page=>page.watch},
-  {key:'letterboxed',label:'Story letterbox',count:page=>page.letterboxed},
+  {key:'social',label:'Likely social',count:page=>page.social},
+  {key:'unsure',label:'Not sure',count:page=>page.unsure},
 ];
-const BAND_WORD:Record<SocialItem['band'],string>={likely:'strong',possible:'some',watch:'weak'};
+
+// Each tile gives one answer. Strong evidence, or a Story letterbox (about
+// nine in ten true on inspection), is likely social; anything less is a
+// maybe that deserves a look before it goes.
+function likelySocial(item:SocialItem){return item.band==='likely'||item.letterbox}
 
 // The server takes twenty decisions per request, so a page of selections goes as
 // several batches in order. A failed batch stops the rest and the message says how
@@ -87,6 +89,8 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
         shown:value.shown-chosen.length,
         bytes:value.bytes-freed,
         likely:value.likely-chosen.filter(item=>item.band==='likely').length,
+        social:value.social-chosen.filter(likelySocial).length,
+        unsure:value.unsure-chosen.filter(item=>!likelySocial(item)).length,
         possible:value.possible-chosen.filter(item=>item.band==='possible').length,
         watch:value.watch-chosen.filter(item=>item.band==='watch').length,
         letterboxed:value.letterboxed-chosen.filter(item=>item.letterbox).length,
@@ -131,18 +135,8 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
         {(current.kept>0||current.marked>0)&&<span className="dim"> · {current.kept.toLocaleString()} kept, {current.marked.toLocaleString()} marked for the Bin</span>}
       </p>
       <p className="pager">{BANDS.map(entry=><a className={`btn small${band===entry.key?' on':''}`} aria-current={band===entry.key||undefined} href={href(entry.key,0)} key={entry.label}>{entry.label} <span className="dim">{entry.count(current).toLocaleString()}</span></a>)}</p>
-      <p className="note">
-        Read from container headers and six greyscale thumbnails per video. No pixels were sent anywhere and no model was used.
-        The chip on each still is the evidence score: how strongly the file's own metadata says it came out of an app rather than a lens.
-        A high score means no camera fingerprint and a download-shaped name. Which app, the headers cannot say.
-        In a 60-file sample of <strong>strong evidence</strong>, about half also showed Story furniture in the still and the rest were plain clips with no capture metadata.
-        <strong> Story letterbox</strong> is the surest visual tell and ran about nine in ten true on inspection.
-      </p>
-      <p className="note">
-        Select with the tick, or click a still; shift-click extends the run.
-        <strong> Keep</strong> takes a video off this list and changes nothing on disk.
-        <strong> Move to Bin</strong> marks it for removal: the file moves only when you run the Bin, and is recoverable after that.
-      </p>
+      <p className="hint">Videos that look saved from an app rather than filmed on a camera, judged from each file's own metadata. <strong>Likely social</strong> means strong evidence; <strong>Not sure</strong> is worth a look before it goes.
+        Click a video to select it, shift-click to select a run. <strong>Keep</strong> takes it off this list; <strong>Move to Bin</strong> marks it for the Bin, where it stays recoverable.</p>
     </section>
     {message&&<p className="flash" role="status">{message} {undo&&<button className="btn small" disabled={busy} onClick={()=>void revert()}>Undo {undo.label}</button>}</p>}
     {error&&<p className="note warn" role="alert">{error}</p>}
@@ -155,12 +149,14 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
     </div>}
     {items.length===0
       ? <p className="note">{total===0?'Every candidate has been decided. Nothing is left to review.':'Nothing matches this filter.'}</p>
-      : <div className="socialgrid">{items.map((item,index)=><figure className={`socialcard${selected.has(item.id)?' picked':''}`} key={item.id}>
-          <div className="socialshot" onClick={event=>toggle(index,event.shiftKey)}>
+      : <div className="gal tight socials">{items.map((item,index)=>{
+          const social=likelySocial(item);
+          const detail=[item.day||'undated',bytes(item.size),item.duration>0?clock(item.duration):''].filter(Boolean).join(' · ');
+          return <figure className={`mo social${selected.has(item.id)?' picked':''}`} key={item.id} title={detail} onClick={event=>toggle(index,event.shiftKey)}>
             {playing===item.id
               // Judging a clip from one frame is guesswork, so the still swaps for
               // the video in place. Clicks inside the player must not reach the
-              // card, or scrubbing would toggle the selection underneath it.
+              // tile, or scrubbing would toggle the selection underneath it.
               ? <video className="socialplayer" controls autoPlay playsInline preload="metadata"
                   poster={item.poster?`/api/social-poster/${item.id}`:undefined}
                   src={`/api/media/${item.id}/original`}
@@ -168,24 +164,16 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
                   onEnded={()=>setPlaying(null)}/>
               : item.poster
                 ? <img src={`/api/social-poster/${item.id}`} alt={item.name} loading="lazy" decoding="async"/>
-                : <div className="media-missing"><span>No still captured</span><small>{item.kind.toUpperCase()} · Original untouched</small></div>}
-            <div className="bdg">
-              <span className={`b score ${item.band}`} title={`Evidence score ${item.score}: ${BAND_WORD[item.band]} evidence this came from an app rather than a camera`}>{BAND_WORD[item.band]} {item.score}</span>
-              {item.letterbox&&<span className="b play">letterbox</span>}
-            </div>
+                : <div className="media-missing"><span>No still captured</span></div>}
+            <div className="bdg"><span className={`b ${social?'social':'unsure'}`}>{social?'Likely social':'Not sure'}</span></div>
+            {playing!==item.id&&item.duration>0&&<span className="dur">{clock(item.duration)}</span>}
             <button type="button" className="socialplay" aria-label={playing===item.id?`Stop ${item.name}`:`Play ${item.name}`}
               onClick={event=>{event.stopPropagation();setPlaying(current=>current===item.id?null:item.id)}}>{playing===item.id?'■':'▶'}</button>
             <label className="socialpick" onClick={event=>event.stopPropagation()}>
-              <input type="checkbox" checked={selected.has(item.id)} onChange={event=>toggle(index,(event.nativeEvent as MouseEvent).shiftKey)} aria-label={`Select ${item.name}`}/>
+              <input type="checkbox" checked={selected.has(item.id)} onChange={event=>toggle(index,(event.nativeEvent as MouseEvent).shiftKey)} aria-label={`Select ${item.name}, ${social?'likely social':'not sure'}, ${detail}`}/>
             </label>
-          </div>
-          <figcaption>
-            <span className="socialday"><span>{item.day||'undated'}</span><span className="dim socialspec">{item.width>0&&`${item.width}×${item.height}`}{item.duration>0&&` · ${clock(item.duration)}`}</span></span>
-            <span className="dim socialspec">{bytes(item.size)}</span>
-            <span className="socialwhy" title={item.evidence}>{item.evidence}</span>
-            <span className="socialname dim" title={item.path}>{item.name}</span>
-          </figcaption>
-        </figure>)}</div>}
+          </figure>;
+        })}</div>}
     {items.length>0&&<p className="pager">{from>0&&<a className="btn small" href={href(band,Math.max(0,from-per))}>← Previous</a>}{to<shown&&<a className="btn small" href={href(band,from+per)}>Next {per} →</a>}</p>}
   </>;
 }
