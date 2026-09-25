@@ -569,6 +569,14 @@ main:has(.gal) .blankstate { max-width: 88ch; }
 .cell.part { background: color-mix(in oklab, var(--warn) 45%, var(--bg-4)); color: #fff; }
 .cell.done { background: color-mix(in oklab, var(--good) 62%, var(--bg-4)); color: #fff; }
 .cell.now  { box-shadow: 0 0 0 2px var(--accent); color: var(--text); }
+/* A date something was removed from carries a small corner mark, whatever its
+   review state, so past culling stays visible after the yearly reset. */
+.cell.cut { position: relative; }
+.cell.cut::after {
+  content: ""; position: absolute; top: 2px; right: 2px;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--bad); box-shadow: 0 0 0 1px var(--bg-2);
+}
 
 .legend { display: flex; flex-wrap: wrap; gap: .9rem; margin: 1rem 0; font-size: 12px; color: var(--muted); }
 .legend .lg { display: inline-flex; align-items: center; white-space: nowrap; }
@@ -578,19 +586,21 @@ main:has(.gal) .blankstate { max-width: 88ch; }
 .legend .key.part { background: color-mix(in oklab, var(--warn) 45%, var(--bg-4)); }
 .legend .key.done { background: color-mix(in oklab, var(--good) 62%, var(--bg-4)); }
 .legend .key.now  { box-shadow: 0 0 0 2px var(--accent); }
+.legend .key.cut  { position: relative; background: var(--bg-4); }
+.legend .key.cut::after { content: ""; position: absolute; top: 1px; right: 1px; width: 4px; height: 4px; border-radius: 50%; background: var(--bad); }
 
 /* ------------------------------------------------------------- completion -- */
 /* The photograph is the largest thing here. The numbers are small, there is no
    confetti, and nothing animates: the reward is the picture, not the ceremony. */
 
-.done { max-width: 40rem; margin: 2rem auto 0; text-align: center; }
-.done .tick {
+.daydone { max-width: 40rem; margin: 2rem auto 0; text-align: center; }
+.daydone .tick {
   width: 2.6rem; height: 2.6rem; margin: 0 auto .8rem;
   display: grid; place-items: center;
   border-radius: 50%; font-size: 20px;
   color: var(--good); background: color-mix(in oklab, var(--good) 16%, var(--bg-2));
 }
-.done h1 { margin: 0 0 1.4rem; font-size: 24px; }
+.daydone h1 { margin: 0 0 1.4rem; font-size: 24px; }
 .keepsake { margin: 0 0 1.6rem; }
 .keepsake img {
   max-width: 100%; max-height: 52vh;
@@ -602,8 +612,8 @@ main:has(.gal) .blankstate { max-width: 88ch; }
 .tally div { text-align: center; }
 .tally dt { font-size: 11.5px; color: var(--faint); letter-spacing: .02em; }
 .tally dd { margin: .1rem 0 0; font-size: 19px; font-weight: 550; font-variant-numeric: tabular-nums; }
-.done .rest, .done .next { color: var(--muted); font-size: 13.5px; }
-.done .next b { color: var(--faint); font-size: 11.5px; letter-spacing: .02em; text-transform: uppercase; }
+.daydone .rest, .daydone .next { color: var(--muted); font-size: 13.5px; }
+.daydone .next b { color: var(--faint); font-size: 11.5px; letter-spacing: .02em; text-transform: uppercase; }
 .dacts { display: flex; justify-content: center; gap: .5rem; flex-wrap: wrap; margin: 1.4rem 0 1rem; }
 
 /* --------------------------------------------------------------- settings -- */
@@ -1120,6 +1130,7 @@ button.danger:not(.btn) {
 /* Denser than the review grid. This is a backlog of 2,400 near-identical
    rectangles of text, and the job is to get through them, not to dwell. */
 .gal.shots { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); }
+.gal.shots .mo { cursor: zoom-in; }
 
 .acts .act.keep { color: var(--good); }
 .mo.kept { opacity: .45; }

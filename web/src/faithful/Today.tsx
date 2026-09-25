@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useState} from 'react';
-import {type Asset,type Status} from '../api';
+import {binChanged,type Asset,type Status} from '../api';
 import {Media} from '../Media';
 import {useDecisionQueue} from '../useDecisionQueue';
 import {calendarLabel} from './Year';
@@ -51,6 +51,7 @@ export function Today({initial}:{initial:TodayData}){
       const response=await fetch('/api/decisions/batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(changes)});
       if(!response.ok)throw new Error(response.status===409?'One of these files changed. Reload before resolving this group.':'The duplicate choices could not be confirmed.');
       const results:{revision:number}[]=await response.json();
+      binChanged();
       group.members.forEach((asset,index)=>patchAsset(asset.id,{status:asset.id===keeperID?'keep':'cull',revision:results[index].revision}));
 	  setDuplicateGroups(current=>current.filter(item=>item.hash!==group.hash||item.size!==group.size));
       setMessage(`${group.members.length-1} verified ${group.members.length===2?'copy':'copies'} marked for the Bin. No original has moved.`);

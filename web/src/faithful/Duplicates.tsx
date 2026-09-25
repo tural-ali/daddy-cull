@@ -1,5 +1,6 @@
 import {useMemo,useState} from 'react';
 import type {DuplicateGroup} from './Today';
+import {binChanged} from '../api';
 
 export type {DuplicateGroup} from './Today';
 export type DuplicateMember=DuplicateGroup['members'][number];
@@ -125,6 +126,7 @@ export function Duplicates({report}:{report:DuplicateReport}){
           :`The choices could not be confirmed. ${saved} decisions were saved; reload to check before continuing.`);
         saved+=batch.length;
       }
+      binChanged();
       const gone=new Set(chosen.map(key));
       const removed=chosen.reduce((total,group)=>total+group.members.length-1,0);
       const reclaimed=chosen.reduce((total,group)=>total+group.reclaimable,0);

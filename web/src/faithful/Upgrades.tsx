@@ -1,6 +1,6 @@
 import {useState} from 'react';
 import {Media} from '../Media';
-import type {Asset} from '../api';
+import {binChanged,type Asset} from '../api';
 
 type UpgradeCopy={asset:Asset;pixels:string;ratio:number;date:string;album:string;available:boolean};
 type UpgradeGroup={archive:Asset;day:string;pixels:string;accepted?:string;acceptedAsset?:Asset;copies:UpgradeCopy[]};
@@ -15,6 +15,7 @@ async function post<T>(url:string,body:unknown):Promise<T>{
   let result:unknown;
   try{result=JSON.parse(text)}catch{throw new Error('The copy result could not be confirmed. Reload before retrying.')}
   if(!response.ok)throw new Error((result as {error?:string}).error||'The higher-resolution copy was not added.');
+  binChanged();
   return result as T;
 }
 

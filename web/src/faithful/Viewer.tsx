@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useState,type MouseEvent} from 'react';
-import type {Asset,Status} from '../api';
+import {binChanged,type Asset,type Status} from '../api';
 
 function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
 function preview(asset:Asset){return `/api/media/${asset.id}/preview?size=large`}
@@ -43,6 +43,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch}:{assets:Asset[]
       const response=await fetch('/api/decisions/batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(jobs)});
       if(!response.ok)throw new Error(response.status===409?'One file changed. Close and reopen the comparison.':'The group choice was retained locally but not confirmed.');
       const results:{revision:number}[]=await response.json();
+      binChanged();
       jobs.forEach((job,index)=>onPatch(job.assetId,{status:job.status as Status,revision:results[index].revision}));
       localStorage.removeItem(journal);setRelated(null);step(1);
     }catch(reason){setError((reason as Error).message)}

@@ -11,6 +11,7 @@ import {Shadows} from './Shadows';
 import {Social,type SocialPage} from './Social';
 import {Upgrades,type UpgradePage} from './Upgrades';
 import {recoverPending} from '../recoverPending';
+import {BIN_CHANGED} from '../api';
 
 type PageState={route:LegacyRoute;content:ReactNode};
 
@@ -50,7 +51,16 @@ export function App(){
     if(!recovered)return;
     const controller=new AbortController();
     json<Stats>('/api/stats').then(setStats).catch(reason=>{if(!controller.signal.aborted)setError((reason as Error).message)});
-    return()=>controller.abort();
+    // The badge is read again whenever a page says the Bin may have changed.
+    // A burst of saves collapses into one read, and a failed read keeps the
+    // last count rather than blanking the page.
+    let timer=0;
+    const reread=()=>{
+      clearTimeout(timer);
+      timer=window.setTimeout(()=>{json<Stats>('/api/stats').then(next=>setStats(current=>current&&{...current,bin:next.bin,marked:next.marked})).catch(()=>{})},250);
+    };
+    window.addEventListener(BIN_CHANGED,reread);
+    return()=>{controller.abort();clearTimeout(timer);window.removeEventListener(BIN_CHANGED,reread)};
   },[recovered]);
   useEffect(()=>{
     // A decision replayed from a closed tab changes what the page should show,

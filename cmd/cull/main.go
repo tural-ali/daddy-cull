@@ -12,6 +12,11 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	// The image carries no zoneinfo, so without this TZ is ignored and the
+	// clock silently runs on UTC: "today" on the calendar then turns over at
+	// 02:00 in Germany in summer, and a review mark near midnight lands on the
+	// wrong side of a year.
+	_ "time/tzdata"
 )
 
 func main() {

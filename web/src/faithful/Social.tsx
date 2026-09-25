@@ -1,4 +1,4 @@
-import type {Asset} from '../api';
+import {binChanged,type Asset} from '../api';
 import {useState} from 'react';
 
 type SocialItem=Asset&{
@@ -38,6 +38,7 @@ async function sendDecisions(changes:Change[]):Promise<{revision:number}[]>{
       :`The decision could not be confirmed. ${saved.length} saved; reload to check before continuing.`);
     saved.push(...await response.json() as {revision:number}[]);
   }
+  binChanged();
   return saved;
 }
 
