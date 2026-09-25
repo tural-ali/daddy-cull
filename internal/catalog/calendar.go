@@ -100,7 +100,7 @@ func archiveDay(path string, capturedAt int64) (string, bool) {
 }
 
 func (s *Store) IndexCalendar(ctx context.Context) error {
-	rows, err := s.read.QueryContext(ctx, "SELECT id,relative_path,captured_at FROM assets WHERE source_id='archive'")
+	rows, err := s.read.QueryContext(ctx, "SELECT id,relative_path,captured_at FROM assets WHERE source_id='archive' AND id NOT IN (SELECT asset_id FROM missing_assets)")
 	if err != nil {
 		return err
 	}

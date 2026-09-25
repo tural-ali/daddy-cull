@@ -38,9 +38,13 @@ type ArchiveScanResult struct {
 	Added       int      `json:"added"`
 	AddedBytes  int64    `json:"addedBytes"`
 	Screenshots []string `json:"screenshots"`
-	// Catalogued archive files no longer on disk. Reported, never removed:
-	// their decisions and history stay.
+	// Catalogued archive files no longer on disk. They are hidden from review,
+	// never removed: their decisions and history stay, and a file that comes
+	// back shows again at the next scan.
 	Missing int `json:"missing"`
+	// How many files went missing, and came back, since the previous scan.
+	NewlyMissing int `json:"newlyMissing"`
+	Returned     int `json:"returned"`
 }
 
 type archiveScanFile struct {
@@ -51,8 +55,10 @@ type archiveScanFile struct {
 
 // ScanArchive adds media under root's YYYY/YYYY-MM/YYYY-MM-DD folders that the
 // catalogue does not hold, as archive assets under "/archive/...". It reads
-// directory entries and stat metadata only, never file content, changes no
-// existing row, and skips hidden files and folders such as .live-photos.
+// directory entries and stat metadata only, never file content, and skips
+// hidden files and folders such as .live-photos. It changes no existing asset:
+// catalogued files it no longer finds are recorded in missing_assets, which
+// keeps them out of the calendar and related groups until they return.
 func (s *Store) ScanArchive(ctx context.Context, root string) (ArchiveScanResult, error) {
 	result := ArchiveScanResult{Screenshots: make([]string, 0)}
 	resolved, err := filepath.EvalSymlinks(filepath.Clean(root))
@@ -61,19 +67,24 @@ func (s *Store) ScanArchive(ctx context.Context, root string) (ArchiveScanResult
 	}
 	// Known paths, and whether each should be on disk: one Cull has moved to
 	// the Bin is expected to be gone.
-	known := map[string]bool{}
-	rows, err := s.read.QueryContext(ctx, "SELECT a.relative_path,fs.asset_id IS NULL FROM assets a LEFT JOIN file_state fs ON fs.asset_id=a.id WHERE a.source_id='archive'")
+	type knownAsset struct {
+		id     int64
+		onDisk bool
+	}
+	known := map[string]knownAsset{}
+	rows, err := s.read.QueryContext(ctx, "SELECT a.id,a.relative_path,fs.asset_id IS NULL FROM assets a LEFT JOIN file_state fs ON fs.asset_id=a.id WHERE a.source_id='archive'")
 	if err != nil {
 		return result, err
 	}
 	for rows.Next() {
+		var id int64
 		var p string
 		var onDisk bool
-		if err = rows.Scan(&p, &onDisk); err != nil {
+		if err = rows.Scan(&id, &p, &onDisk); err != nil {
 			rows.Close()
 			return result, err
 		}
-		known[p] = onDisk
+		known[p] = knownAsset{id: id, onDisk: onDisk}
 	}
 	if err = rows.Close(); err != nil {
 		return result, err
@@ -138,9 +149,37 @@ func (s *Store) ScanArchive(ctx context.Context, root string) (ArchiveScanResult
 	if err != nil {
 		return result, err
 	}
-	for p, onDisk := range known {
-		if onDisk && !seen[p] {
-			result.Missing++
+	missing := map[int64]bool{}
+	for p, asset := range known {
+		if asset.onDisk && !seen[p] {
+			missing[asset.id] = true
+		}
+	}
+	result.Missing = len(missing)
+	wasMissing := map[int64]bool{}
+	rows, err = s.read.QueryContext(ctx, "SELECT asset_id FROM missing_assets")
+	if err != nil {
+		return result, err
+	}
+	for rows.Next() {
+		var id int64
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return result, err
+		}
+		wasMissing[id] = true
+	}
+	if err = rows.Close(); err != nil {
+		return result, err
+	}
+	for id := range missing {
+		if !wasMissing[id] {
+			result.NewlyMissing++
+		}
+	}
+	for id := range wasMissing {
+		if !missing[id] {
+			result.Returned++
 		}
 	}
 	sort.Slice(found, func(i, j int) bool { return found[i].path < found[j].path })
@@ -173,24 +212,50 @@ func (s *Store) ScanArchive(ctx context.Context, root string) (ArchiveScanResult
 			return result, err
 		}
 	}
+	for id := range wasMissing {
+		if !missing[id] {
+			if _, err = tx.ExecContext(ctx, "DELETE FROM missing_assets WHERE asset_id=?", id); err != nil {
+				return result, err
+			}
+		}
+	}
+	for id := range missing {
+		if !wasMissing[id] {
+			if _, err = tx.ExecContext(ctx, "INSERT INTO missing_assets(asset_id,since) VALUES(?,datetime('now'))", id); err != nil {
+				return result, err
+			}
+		}
+	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO settings(key,value) VALUES('archive_scanned_at',datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value"); err != nil {
+		return result, err
+	}
+	// The reindex below runs after this commit. Should it fail, the next scan
+	// finds nothing new and would never retry it, so the need is recorded with
+	// the change and cleared only once both indexes are rebuilt.
+	if result.Added > 0 || result.NewlyMissing > 0 || result.Returned > 0 {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO settings(key,value) VALUES('archive_reindex_pending','1') ON CONFLICT(key) DO UPDATE SET value=excluded.value"); err != nil {
+			return result, err
+		}
+	}
+	var pending int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM settings WHERE key='archive_reindex_pending'").Scan(&pending); err != nil {
 		return result, err
 	}
 	if err = tx.Commit(); err != nil {
 		return result, err
 	}
-	if result.Added == 0 {
+	if pending == 0 {
 		return result, nil
 	}
-	// New files need their days and their related groups, exactly as a
-	// reindex from Settings builds them.
+	// New files need their days and their related groups, and missing ones
+	// leave them, exactly as a reindex from Settings rebuilds them.
 	if err = s.IndexRelated(ctx); err != nil {
 		return result, err
 	}
 	if err = s.IndexCalendar(ctx); err != nil {
 		return result, err
 	}
-	_, err = s.write.ExecContext(ctx, "INSERT INTO settings(key,value) VALUES('snapshot_at',datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+	_, err = s.write.ExecContext(ctx, "INSERT INTO settings(key,value) VALUES('snapshot_at',datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value; DELETE FROM settings WHERE key='archive_reindex_pending'")
 	return result, err
 }
 

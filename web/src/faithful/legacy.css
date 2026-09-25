@@ -919,6 +919,12 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   object-fit: contain; display: block;
   transition: opacity 110ms linear;
 }
+/* In place of a file the server no longer has. */
+.rvgone {
+  display: flex; flex-direction: column; align-items: center; gap: .4rem;
+  max-width: 28rem; text-align: center; color: #a4a8b2; font-size: 14px; line-height: 1.45;
+}
+.rvgone b { color: #eceef2; font-size: 17px; font-weight: 600; text-wrap: balance; }
 /* The format on the photograph's corner, as Apple Photos marks a Live Photo. */
 .rvformat {
   position: absolute; z-index: 2; pointer-events: none;

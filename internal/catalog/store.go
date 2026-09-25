@@ -264,6 +264,13 @@ CREATE TABLE IF NOT EXISTS photos_sync (
  day TEXT NOT NULL DEFAULT '',
  PRIMARY KEY(asset_key,action)
 );
+-- Archive files the last scan did not find on disk, typically moved away by a
+-- host script. They stay catalogued, with their decisions and history, but
+-- leave the calendar and related groups until a scan finds them again.
+CREATE TABLE IF NOT EXISTS missing_assets (
+ asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
+ since TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS stats (id INTEGER PRIMARY KEY CHECK(id=1), total INTEGER NOT NULL);
 INSERT OR IGNORE INTO stats VALUES(1,0);

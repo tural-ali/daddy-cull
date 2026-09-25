@@ -32,6 +32,9 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove}:{a
   const [related,setRelated]=useState<Asset[]|null>(null);
   const [focus,setFocus]=useState(0);
   const [error,setError]=useState('');
+  // Why the current file could not be drawn, keyed by its id so the next file
+  // starts clean. A file moved off the archive between scans answers 404.
+  const [broken,setBroken]=useState<{id:number;gone:boolean}|null>(null);
   const current=assets[Math.min(at,Math.max(0,assets.length-1))];
   const progress=assets.length?Math.round((at+1)/assets.length*100):0;
   const capture=current?.capturedAt?new Date(current.capturedAt*1000):null;
@@ -54,6 +57,9 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove}:{a
     return()=>{observer.disconnect();element.removeEventListener('load',place);element.removeEventListener('loadedmetadata',place)};
   },[current?.id,zoom]);
 
+  function failed(id:number){
+    void fetch(`/api/media/${id}/original`,{method:'HEAD'}).then(response=>response.status===404,()=>false).then(gone=>setBroken({id,gone}));
+  }
   function step(change:number){if(assets.length)setAt(index=>(index+change+assets.length)%assets.length);setZoom(false);setBare(false);setRelated(null)}
   function choose(status:Status,favourite?:boolean,advance=false){if(!current)return;if(onSave(current,status,favourite)&&advance)step(1)}
   async function openCompare(){
@@ -133,7 +139,8 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove}:{a
     <div className="rvtop">{dayOf?<a className="rvday" href={dayOf(current)} target="_blank" rel="noopener" title="Open this day in a new tab">{date}<Icon name="open_in_new"/></a>:<span className="rvday">{date}</span>}<span className="rvwhen">{time}</span><span className="rvpos">{at+1} / {assets.length}</span><button type="button" className="rvpath" aria-label="Copy file path" title={current.path} onClick={()=>void navigator.clipboard.writeText(current.path)}>📋</button><span className="rvbar"><span style={{width:`${progress}%`}}/></span><button type="button" className="rvx" aria-label="Close review" title="Close (Esc)" onClick={onClose}>×</button></div>
     <div className={`rvstage${zoom?' zoom':''}${current.kind==='video'?' hasvideo':''}`} onClick={event=>{if((event.target as HTMLElement).tagName==='IMG')setBare(value=>!value)}}>
       <button type="button" className="rvnav prev" aria-label="Previous" onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
-      {current.kind==='video'?<video ref={media} key={current.id} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`}/>:<img ref={media} key={current.id} src={preview(current)} alt={name}/>}
+      {broken?.id===current.id?<div className="rvgone" role="status"><b>{broken.gone?'This file is no longer in the archive':'This file could not be shown'}</b><span>{broken.gone?'It was moved or removed on the server since the last scan. It leaves review at the next nightly scan.':'Try again in a moment.'}</span></div>
+        :current.kind==='video'?<video ref={media} key={current.id} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onError={()=>failed(current.id)}/>:<img ref={media} key={current.id} src={preview(current)} alt={name} onError={()=>failed(current.id)}/>}
       {corner&&!zoom&&format(current)&&<span className="rvformat" style={{left:corner.left+12,top:corner.top+12}} title={name.split('.').pop()?.toUpperCase()}>{format(current)}</span>}
       <button type="button" className="rvnav next" aria-label="Next" onClick={event=>{event.stopPropagation();step(1)}}>›</button>
     </div>

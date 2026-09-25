@@ -73,7 +73,7 @@ func TestScanArchiveAddsOnlyNewDatedMedia(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Added != 4 || result.Missing != 1 || len(result.Screenshots) != 1 || result.Screenshots[0] != "/archive/2026/2026-08/2026-08-21/IMG_3793.PNG" {
+	if result.Added != 4 || result.Missing != 1 || result.NewlyMissing != 1 || len(result.Screenshots) != 1 || result.Screenshots[0] != "/archive/2026/2026-08/2026-08-21/IMG_3793.PNG" {
 		t.Fatalf("scan result %+v", result)
 	}
 	rows, err := s.read.Query("SELECT a.relative_path,a.kind,a.captured_at,COALESCE(d.day,'') FROM assets a LEFT JOIN asset_days d ON d.asset_id=a.id WHERE a.relative_path LIKE '%2026-08-21%' ORDER BY a.relative_path")
@@ -115,8 +115,45 @@ func TestScanArchiveAddsOnlyNewDatedMedia(t *testing.T) {
 	if err = s.read.QueryRow("SELECT total FROM stats WHERE id=1").Scan(&total); err != nil || total != 6 {
 		t.Fatalf("total %d %v", total, err)
 	}
+	// A file gone from disk leaves its day and its related group, and keeps
+	// its decision.
+	day := func(name string) string {
+		var d string
+		if err := s.read.QueryRow("SELECT COALESCE((SELECT d.day FROM asset_days d WHERE d.asset_id=a.id),'') FROM assets a WHERE a.relative_path LIKE '%/'||?", name).Scan(&d); err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	if day("GONE.HEIC") != "" || day("OLD.HEIC") != "2026-08-20" {
+		t.Fatalf("missing file still on its day: GONE=%q OLD=%q", day("GONE.HEIC"), day("OLD.HEIC"))
+	}
+	var grouped int
+	if err = s.read.QueryRow("SELECT COUNT(*) FROM related_assets m JOIN assets a ON a.id=m.asset_id WHERE a.relative_path LIKE '%GONE.HEIC'").Scan(&grouped); err != nil || grouped != 0 {
+		t.Fatalf("missing file still grouped: %d %v", grouped, err)
+	}
 	again, err := s.ScanArchive(ctx, root)
-	if err != nil || again.Added != 0 || again.Files != 5 {
+	if err != nil || again.Added != 0 || again.Files != 5 || again.Missing != 1 || again.NewlyMissing != 0 || again.Returned != 0 {
 		t.Fatalf("second scan %+v %v", again, err)
+	}
+	// A reindex that failed after the scan committed is retried by the next
+	// scan, though that scan finds nothing new.
+	if _, err = s.write.Exec("DELETE FROM asset_days; INSERT INTO settings(key,value) VALUES('archive_reindex_pending','1')"); err != nil {
+		t.Fatal(err)
+	}
+	if retried, err := s.ScanArchive(ctx, root); err != nil || retried.NewlyMissing != 0 || day("OLD.HEIC") != "2026-08-20" {
+		t.Fatalf("pending reindex not retried: %+v %v", retried, err)
+	}
+	var left int
+	if err = s.read.QueryRow("SELECT COUNT(*) FROM settings WHERE key='archive_reindex_pending'").Scan(&left); err != nil || left != 0 {
+		t.Fatalf("pending flag left behind: %d %v", left, err)
+	}
+	// Once it is back, the next scan shows it again.
+	write("2026/2026-08/2026-08-20/GONE.HEIC", inDay)
+	back, err := s.ScanArchive(ctx, root)
+	if err != nil || back.Added != 0 || back.Missing != 0 || back.Returned != 1 {
+		t.Fatalf("scan after return %+v %v", back, err)
+	}
+	if day("GONE.HEIC") != "2026-08-20" {
+		t.Fatalf("returned file not on its day: %q", day("GONE.HEIC"))
 	}
 }
