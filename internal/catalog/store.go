@@ -249,6 +249,15 @@ CREATE TABLE IF NOT EXISTS immich_favourites (
  updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS immich_favourites_due ON immich_favourites(state,next_attempt_at);
+CREATE TABLE IF NOT EXISTS photos_sync (
+ asset_key TEXT NOT NULL,
+ action TEXT NOT NULL CHECK(action IN ('delete','favourite')),
+ synced_at TEXT NOT NULL,
+ photos_id TEXT NOT NULL DEFAULT '',
+ name TEXT NOT NULL DEFAULT '',
+ day TEXT NOT NULL DEFAULT '',
+ PRIMARY KEY(asset_key,action)
+);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS stats (id INTEGER PRIMARY KEY CHECK(id=1), total INTEGER NOT NULL);
 INSERT OR IGNORE INTO stats VALUES(1,0);
