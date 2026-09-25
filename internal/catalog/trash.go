@@ -201,33 +201,33 @@ func (s *Store) screenshotsHeld(ctx context.Context) ([]ScreenshotPlan, error) {
 	return plans, rows.Err()
 }
 
-// binPlanItems turns one writer batch into a card per photograph. Sidecars are
-// credited to the photograph whose name they extend.
+// binPlanItems turns one writer batch into a card per photograph, with the
+// sidecars Preview recorded after it. A photograph given back on its own is
+// the archive's again and has no card.
 func binPlanItems(plan BinPlan) []TrashItem {
 	items := make([]TrashItem, 0, len(plan.Assets))
 	for _, asset := range plan.Assets {
-		original := strings.TrimPrefix(asset.Path, "/archive/")
+		indexes := assetFiles(&plan, asset)
+		if len(indexes) == 0 || plan.Files[indexes[0]].Phase == "returned" {
+			continue
+		}
 		item := TrashItem{
 			Key: "bin:" + plan.ID + ":" + strconv.FormatInt(asset.ID, 10), Group: "bin:" + plan.ID, Source: "bin",
 			Name: path.Base(asset.Path), Original: asset.Path, Kind: mediaKind(asset.Path),
 			RemovedAt: plan.Created, assetID: asset.ID, planID: plan.ID,
 		}
-		stem := strings.TrimSuffix(original, path.Ext(original))
-		for index, file := range plan.Files {
-			switch {
-			case file.Original == original:
-				item.Size += file.Size
-				// A batch interrupted on its way in has files on both sides;
-				// each is shown from wherever it is now.
-				if file.Phase == "bin" {
-					item.Preview = "/api/binned-media/bin/" + plan.ID + "/" + strconv.Itoa(index)
-				} else {
-					item.Preview = "/api/media/" + strconv.FormatInt(asset.ID, 10)
-				}
-			case file.Sidecar && (len(plan.Assets) == 1 || strings.HasPrefix(file.Original, stem)):
-				item.Size += file.Size
+		for n, index := range indexes {
+			item.Size += plan.Files[index].Size
+			if n > 0 {
 				item.Sidecars++
 			}
+		}
+		// A batch interrupted on its way in has files on both sides; each is
+		// shown from wherever it is now.
+		if plan.Files[indexes[0]].Phase == "bin" {
+			item.Preview = "/api/binned-media/bin/" + plan.ID + "/" + strconv.Itoa(indexes[0])
+		} else {
+			item.Preview = "/api/media/" + strconv.FormatInt(asset.ID, 10)
 		}
 		items = append(items, item)
 	}

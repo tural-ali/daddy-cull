@@ -22,7 +22,7 @@ func TrashGateway(upstream, secret string) http.Handler {
 	client := &http.Client{Timeout: 60 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		route := strings.TrimPrefix(r.URL.Path, "/api/trash")
-		if r.Method != "POST" || (route != "/restore" && route != "/delete" && route != "/empty" && route != "/purge-now") {
+		if r.Method != "POST" || (route != "/restore" && route != "/restore-file" && route != "/delete" && route != "/empty" && route != "/purge-now") {
 			http.NotFound(w, r)
 			return
 		}
@@ -104,6 +104,12 @@ func (t *TrashWriter) Handler(secret string) http.Handler {
 	}
 	mux.HandleFunc("POST /trash/restore", run(func(ctx context.Context, value input) (TrashResult, error) {
 		return t.Restore(ctx, value.Keys)
+	}))
+	mux.HandleFunc("POST /trash/restore-file", run(func(ctx context.Context, value input) (TrashResult, error) {
+		if len(value.Keys) != 1 {
+			return TrashResult{}, fmt.Errorf("choose exactly one file to restore")
+		}
+		return t.RestoreFile(ctx, value.Keys[0])
 	}))
 	mux.HandleFunc("POST /trash/delete", run(func(ctx context.Context, value input) (TrashResult, error) {
 		return t.Delete(ctx, value.Keys, value.Confirmation)

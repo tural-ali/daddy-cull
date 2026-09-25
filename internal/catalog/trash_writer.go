@@ -132,6 +132,55 @@ func (t *TrashWriter) Restore(ctx context.Context, keys []string) (TrashResult, 
 	return result, t.s.unschedule(ctx, setKeys(outcome.done))
 }
 
+// RestoreFile puts back exactly one photograph, sidecars included, leaving the
+// rest of its batch where it is. The writer's own batches can give back a
+// single photograph; a batch from another engine moves only as a whole, so a
+// file in one of those is refused unless it is alone in its batch.
+func (t *TrashWriter) RestoreFile(ctx context.Context, key string) (TrashResult, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	all, err := t.s.held(ctx)
+	if err != nil {
+		return TrashResult{}, err
+	}
+	var item *TrashItem
+	members := 0
+	for i := range all {
+		if all[i].Key == key {
+			item = &all[i]
+		}
+	}
+	if item == nil {
+		return TrashResult{}, fmt.Errorf("the Bin has changed since this page was loaded; refresh and select again")
+	}
+	for _, other := range all {
+		if other.Group == item.Group {
+			members++
+		}
+	}
+	if item.Source != "bin" {
+		if members > 1 {
+			return TrashResult{}, fmt.Errorf("%s was moved with %d other files and can only be restored with them", item.Name, members-1)
+		}
+		result, outcome := t.act(ctx, []TrashItem{*item}, false)
+		return result, t.s.unschedule(ctx, setKeys(outcome.done))
+	}
+	if t.bin == nil {
+		return TrashResult{}, fmt.Errorf("the archive writer is not configured")
+	}
+	result := TrashResult{Failures: []TrashFailure{}}
+	plan, err := t.bin.Return(ctx, item.planID, item.assetID)
+	if err != nil {
+		result.Failures = append(result.Failures, TrashFailure{Name: item.Name, Error: err.Error()})
+		return result, nil
+	}
+	result.Done, result.Bytes = 1, item.Size
+	if plan.State == "restored" {
+		return result, t.s.unschedule(ctx, []string{item.Group})
+	}
+	return result, nil
+}
+
 func (t *TrashWriter) Delete(ctx context.Context, keys []string, confirmation string) (TrashResult, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

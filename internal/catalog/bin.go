@@ -444,11 +444,16 @@ func (b *BinEngine) finish(p *BinPlan, state string) (err error) {
 	if _, e = tx.Exec("UPDATE file_plans SET body=? WHERE id=?", string(raw), p.ID); e != nil {
 		return e
 	}
-	if _, e = tx.Exec("UPDATE file_state SET state=? WHERE plan_id=?", state, p.ID); e != nil {
+	// A photograph given back on its own is the catalogue's again: finishing
+	// the rest of its batch must not claim it back or reset its decision.
+	if _, e = tx.Exec("UPDATE file_state SET state=? WHERE plan_id=? AND state!='restored'", state, p.ID); e != nil {
 		return e
 	}
 	if state == "restored" {
 		for _, a := range p.Assets {
+			if returnedAsset(p, a) {
+				continue
+			}
 			if _, e = tx.Exec("UPDATE decisions SET status='unreviewed',revision=revision+1 WHERE asset_id=?", a.ID); e != nil {
 				return e
 			}
@@ -510,7 +515,7 @@ func (b *BinEngine) checkSidecar(p *BinPlan, f BinFile) error {
 }
 func (b *BinEngine) checkOwnership(p *BinPlan) error {
 	for _, f := range p.Files {
-		if f.Sidecar {
+		if f.Sidecar && f.Phase != "returned" {
 			if e := b.checkSidecar(p, f); e != nil {
 				return e
 			}
@@ -648,8 +653,12 @@ func (b *BinEngine) Run(ctx context.Context, id, action, confirmation string) (r
 		if p.State != "bin" && p.State != "restoring" && p.State != "quarantining" {
 			return p, ErrInvalid
 		}
-		// Preflight every file before moving any member of the batch.
+		// Preflight every file before moving any member of the batch. A file
+		// already given back on its own is the archive's again and is left be.
 		for i, f := range p.Files {
+			if f.Phase == "returned" {
+				continue
+			}
 			if f.Phase != "restored" {
 				if e = writableFolder(b.root, f.Original); e != nil {
 					return p, e
@@ -692,7 +701,7 @@ func (b *BinEngine) Run(ctx context.Context, id, action, confirmation string) (r
 		}
 		for i := range p.Files {
 			f := &p.Files[i]
-			if f.Phase == "restored" {
+			if f.Phase == "restored" || f.Phase == "returned" {
 				continue
 			}
 			f.Phase = "restoring"
@@ -718,12 +727,19 @@ func (b *BinEngine) Run(ctx context.Context, id, action, confirmation string) (r
 		if p.State != "bin" && p.State != "purging" {
 			return p, ErrInvalid
 		}
+		// A single-file restore that stopped part-way has files on both sides;
+		// deleting now could take the sidecar of a photograph already back.
+		for _, f := range p.Files {
+			if f.Phase == "restoring" {
+				return p, fmt.Errorf("restoring %s stopped part-way; restore that file again before deleting the batch", f.Original)
+			}
+		}
 		if e = b.checkOwnership(p); e != nil {
 			return p, e
 		}
 		// Absence without durable deletion intent is always an error.
 		for i, f := range p.Files {
-			if f.Phase == "purged" || f.Phase == "absent_after_intent" {
+			if f.Phase == "purged" || f.Phase == "absent_after_intent" || f.Phase == "returned" {
 				continue
 			}
 			if e = writableFolder(b.root, stored(p, i)); e != nil {
@@ -745,7 +761,7 @@ func (b *BinEngine) Run(ctx context.Context, id, action, confirmation string) (r
 		}
 		for i := range p.Files {
 			f := &p.Files[i]
-			if f.Phase == "purged" || f.Phase == "absent_after_intent" {
+			if f.Phase == "purged" || f.Phase == "absent_after_intent" || f.Phase == "returned" {
 				continue
 			}
 			if f.Sidecar {
@@ -785,6 +801,159 @@ func (b *BinEngine) Run(ctx context.Context, id, action, confirmation string) (r
 		return p, ErrInvalid
 	}
 }
+
+// assetFiles returns where one photograph's files sit in its batch: its media
+// file and the sidecars Preview recorded straight after it.
+func assetFiles(p *BinPlan, a BinAsset) []int {
+	media := strings.TrimPrefix(a.Path, "/archive/")
+	for i, f := range p.Files {
+		if f.Sidecar || f.Original != media {
+			continue
+		}
+		indexes := []int{i}
+		for j := i + 1; j < len(p.Files) && p.Files[j].Sidecar; j++ {
+			indexes = append(indexes, j)
+		}
+		return indexes
+	}
+	return nil
+}
+
+// returnedAsset reports whether a photograph was given back on its own.
+func returnedAsset(p *BinPlan, a BinAsset) bool {
+	indexes := assetFiles(p, a)
+	return len(indexes) > 0 && p.Files[indexes[0]].Phase == "returned"
+}
+
+// Return puts one photograph of a batch back where it came from, sidecars
+// included, and leaves the rest of the batch in the Bin. It moves files with
+// the same checks as a whole restore, and every file is verified before any is
+// moved. Interrupted, it is resumed by asking again; until then the batch's
+// own restore and deletion refuse to guess, because the half-moved files are
+// in neither place they expect.
+func (b *BinEngine) Return(ctx context.Context, id string, assetID int64) (result *BinPlan, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	p, e := b.load(id)
+	if e != nil {
+		return nil, e
+	}
+	defer func() {
+		if err != nil {
+			p.Error = err.Error()
+			_ = b.save(p)
+		}
+		result = p
+	}()
+	var asset *BinAsset
+	for i := range p.Assets {
+		if p.Assets[i].ID == assetID {
+			asset = &p.Assets[i]
+		}
+	}
+	if asset == nil {
+		return p, fmt.Errorf("this file is not part of the batch")
+	}
+	indexes := assetFiles(p, *asset)
+	if len(indexes) == 0 {
+		return p, ErrInvalid
+	}
+	if p.Files[indexes[0]].Phase == "returned" {
+		return p, nil
+	}
+	if p.State != "bin" {
+		return p, fmt.Errorf("this batch is part-way through another action; restore or delete it as a whole")
+	}
+	for _, i := range indexes {
+		f := p.Files[i]
+		if f.Phase != "bin" && f.Phase != "restoring" {
+			return p, fmt.Errorf("file is not in the Bin: %s", f.Original)
+		}
+		if e = writableFolder(b.root, f.Original); e != nil {
+			return p, e
+		}
+		if e = writableFolder(b.root, stored(p, i)); e != nil {
+			return p, e
+		}
+		si, se := b.regular(stored(p, i))
+		di, de := b.regular(f.Original)
+		if f.Phase == "restoring" && errors.Is(se, os.ErrNotExist) && de == nil {
+			if e = b.verify(ctx, f.Original, f); e != nil {
+				return p, e
+			}
+			continue
+		}
+		if se != nil {
+			return p, se
+		}
+		if e = b.verify(ctx, stored(p, i), f); e != nil {
+			return p, e
+		}
+		if de == nil && !os.SameFile(si, di) {
+			return p, fmt.Errorf("restore destination occupied: %s", f.Original)
+		}
+		if de != nil && !errors.Is(de, os.ErrNotExist) {
+			return p, de
+		}
+	}
+	for _, i := range indexes {
+		f := &p.Files[i]
+		f.Phase = "restoring"
+		if e = b.save(p); e != nil {
+			return p, e
+		}
+		if e = b.move(ctx, stored(p, i), f.Original, *f); e != nil {
+			return p, e
+		}
+	}
+	return p, b.returned(p, *asset, indexes)
+}
+
+// returned records a photograph given back, in one transaction with its
+// catalogue state, so it is never back on disk yet still claimed by the Bin.
+// The batch is finished as restored once nothing of it is left in the Bin.
+func (b *BinEngine) returned(p *BinPlan, a BinAsset, indexes []int) (err error) {
+	oldState, oldPhases := p.State, make([]string, len(indexes))
+	for n, i := range indexes {
+		oldPhases[n] = p.Files[i].Phase
+		p.Files[i].Phase = "returned"
+	}
+	defer func() {
+		if err != nil {
+			p.State = oldState
+			for n, i := range indexes {
+				p.Files[i].Phase = oldPhases[n]
+			}
+		}
+	}()
+	left := false
+	for _, f := range p.Files {
+		if f.Phase != "returned" {
+			left = true
+		}
+	}
+	if !left {
+		p.State = "restored"
+	}
+	p.Error = ""
+	tx, e := b.s.write.Begin()
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback()
+	raw, _ := json.Marshal(p)
+	if _, e = tx.Exec("UPDATE file_plans SET body=? WHERE id=?", string(raw), p.ID); e != nil {
+		return e
+	}
+	if _, e = tx.Exec("UPDATE file_state SET state='restored' WHERE asset_id=? AND plan_id=?", a.ID, p.ID); e != nil {
+		return e
+	}
+	if _, e = tx.Exec("UPDATE decisions SET status='unreviewed',revision=revision+1 WHERE asset_id=?", a.ID); e != nil {
+		return e
+	}
+	return tx.Commit()
+}
+
 func (b *BinEngine) List() ([]*BinPlan, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
