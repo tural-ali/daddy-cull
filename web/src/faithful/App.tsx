@@ -12,6 +12,7 @@ import {Social,type SocialPage} from './Social';
 import {Upgrades,type UpgradePage} from './Upgrades';
 import {recoverPending} from '../recoverPending';
 import {BIN_CHANGED} from '../api';
+import {Busy} from '../Busy';
 
 type PageState={route:LegacyRoute;content:ReactNode};
 
@@ -40,7 +41,7 @@ export function App(){
   const initialPath=location.pathname==='/'?`/on/${currentMD}`:location.pathname;
   const [path]=useState(initialPath);
   const [stats,setStats]=useState<Stats|null>(null);
-  const [page,setPage]=useState<PageState>({route:routeFor(initialPath),content:<p className="note">Opening the catalogue…</p>});
+  const [page,setPage]=useState<PageState>({route:routeFor(initialPath),content:<Busy size={64} label="Opening the catalogue…"/>});
   const [error,setError]=useState('');
   const [recovered,setRecovered]=useState(false);
   useEffect(()=>{if(location.pathname==='/')history.replaceState(null,'',initialPath)},[initialPath]);

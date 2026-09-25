@@ -1,6 +1,7 @@
 import {Fragment,useMemo,useState} from 'react';
 import {decide,type Asset,type Status} from '../api';
 import {Media} from '../Media';
+import {Busy} from '../Busy';
 import {Deleting} from './Bin';
 import {Viewer} from './Viewer';
 
@@ -29,7 +30,8 @@ function verb(event:HistoryEvent):[string,string]{
 export function Log({initial}:{initial:HistoryEvent[]}){
   const [events,setEvents]=useState(initial);
   const [undone,setUndone]=useState<Set<string>>(new Set());
-  const [busy,setBusy]=useState(false);
+  // The choice being undone, so only its tile says it is working.
+  const [busy,setBusy]=useState('');
   const [message,setMessage]=useState('');
   const [viewing,setViewing]=useState<number|null>(null);
   // The viewer steps through photographs, not events: a file chosen twice is
@@ -44,13 +46,13 @@ export function Log({initial}:{initial:HistoryEvent[]}){
   }
   async function undo(event:HistoryEvent){
     if(busy)return;
-    setBusy(true);
+    setBusy(event.requestId);
     try{
       const result=await decide(event.asset,event.previousStatus,event.previousFavourite,requestID());
       patch(event.asset.id,{status:event.previousStatus,favourite:event.previousFavourite,revision:result.revision});
       setUndone(current=>new Set(current).add(event.requestId));
       setMessage(`${event.asset.path.split('/').pop()} is back to how it was. The undo is saved as a new choice.`);
-    }catch(error){setMessage((error as Error).message)}finally{setBusy(false)}
+    }catch(error){setMessage((error as Error).message)}finally{setBusy('')}
   }
   // A choice made in the viewer is saved like any other; the grid shows it once
   // the page is next opened, since the Log lists what was saved, in order.
@@ -76,7 +78,7 @@ export function Log({initial}:{initial:HistoryEvent[]}){
         <figure className={`mo logtile${isUndone?' undone':''}${event.asset.favourite?' fav':''}`}>
           <button type="button" className="shot" aria-label={`Look at ${name}`} onClick={()=>setViewing(event.asset.id)}><Media asset={event.asset}/></button>
           <div className="bdg"><span className={`b verb ${isUndone?'':tone}`}>{isUndone?'Undone':label}</span></div>
-          {!isUndone&&<div className="acts"><button type="button" className="act" disabled={busy} onClick={()=>void undo(event)}>Undo</button></div>}
+          {!isUndone&&<div className="acts"><button type="button" className="act" disabled={!!busy} onClick={()=>void undo(event)}>{busy===event.requestId?<Busy label="Undoing…" state="working"/>:'Undo'}</button></div>}
           <figcaption className="cap"><a href={dayOf(event.asset)} title={`Open ${event.asset.path.slice(0,event.asset.path.lastIndexOf('/'))}`}>{name}</a><span className="dim">{at.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</span></figcaption>
         </figure>
       </Fragment>;

@@ -2,6 +2,7 @@ import {useEffect,useRef,useState,type MouseEvent} from 'react';
 import {FilePreview} from '../Media';
 import {binChanged} from '../api';
 import {Lightbox,type LightboxItem} from './Lightbox';
+import {Busy} from '../Busy';
 
 /** One card in the Bin, whichever tool put the file there. */
 export type TrashItem={key:string;group:string;source:'marked'|'bin'|'legacy'|'screenshot';name:string;original:string;kind:string;size:number;sidecars:number;removedAt:string;preview?:string;disk?:string};
@@ -164,7 +165,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
     });
   }
 
-  const summary=items===null?(mode==='bin'?'Reading the Bin…':'Reading deleted files…'):<><b>{list.length.toLocaleString()}</b> file{list.length===1?'':'s'} · <b>{bytes(totalBytes)}</b></>;
+  const summary=items===null?<Busy label={mode==='bin'?'Reading the Bin…':'Reading deleted files…'}/>:<><b>{list.length.toLocaleString()}</b> file{list.length===1?'':'s'} · <b>{bytes(totalBytes)}</b></>;
   const hint=mode==='bin'
     ?(report===null?'':grace>0?<>Removed files wait here until you delete them. Deleted files stay on disk for {grace} more day{grace===1?'':'s'}, restorable from the <a href="/log">Log</a>, then are deleted automatically. <a href="/settings#bin">Change</a></>:<>Deleting from the Bin is immediate and cannot be undone. <a href="/settings#bin">Keep deleted files for a while instead</a></>)
     :(report===null?'':<>Deleted from the Bin, still on disk. Each is deleted automatically {grace} day{grace===1?'':'s'} after it was deleted, checked every {report.checkIntervalMinutes} minutes. <a href="/settings#bin">Change</a></>);
@@ -208,13 +209,13 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
         <button className="btn" disabled={!!busy||chosen.length===0} onClick={()=>restore(chosen.map(item=>item.key))}>Restore selected</button>
         <button className="btn danger" disabled={!!busy||chosen.length===0} onClick={remove}>{mode==='bin'?(grace>0?'Delete selected':'Delete selected for good'):'Delete selected now'}</button>
       </span>
-      <span className="fright hint">{busy||'Shift-click selects a run. A file that cannot be deleted is reported, never counted as gone.'}</span>
+      <span className="fright hint">{busy?<Busy label={busy} state="working"/>:'Shift-click selects a run. A file that cannot be deleted is reported, never counted as gone.'}</span>
     </footer>}
     {viewing&&<Lightbox items={previews} initialKey={viewing} onClose={()=>setViewing(null)} actions={current=>{
       // A batch is restored as a whole, so the button says when that is more than this one file.
       const group=list.find(item=>item.key===current.key)?.group;
       const batch=list.filter(item=>item.group===group).length;
-      return <button type="button" className="rvbtn" disabled={!!busy} onClick={()=>restore([current.key])}>{busy||(batch>1?`Restore with its batch (${batch} files)`:'Restore')}</button>;
+      return <button type="button" className="rvbtn" disabled={!!busy} onClick={()=>restore([current.key])}>{busy?<Busy label={busy} state="working"/>:(batch>1?`Restore with its batch (${batch} files)`:'Restore')}</button>;
     }}/>}
     <dialog ref={dialog} className="confirm" aria-labelledby={`confirm-title-${mode}`} onClose={()=>setPending(null)} onClick={event=>{if(event.target===event.currentTarget)setPending(null)}}>
       {pending&&<form method="dialog" onSubmit={event=>{event.preventDefault();const run=pending.run;setPending(null);void run()}}>

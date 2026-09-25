@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import {Busy} from '../Busy';
 import {bytes,longDate,readDeleting,type DeletingReport} from './Bin';
 
 export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number};
@@ -62,10 +63,11 @@ function BinSettings(){
       <label htmlFor="grace">Keep deleted files for</label>
       <input id="grace" type="number" inputMode="numeric" min={0} max={365} step={1} value={days} disabled={report===null||busy} aria-invalid={!valid} onChange={event=>setDays(event.target.value)}/>
       <span>day{value===1?'':'s'}</span>
-      <button className="btn primary" disabled={busy||!valid||!(changed||report?.graceError)}>{busy?'Saving…':'Save'}</button>
+      <button className="btn primary" disabled={busy||!valid||!(changed||report?.graceError)}>{busy?<Busy label="Saving…" state="working"/>:'Save'}</button>
     </form>
     {!valid&&days!==''&&<p className="note warn">Choose a whole number of days from 0 to 365.</p>}
     {changed&&soon>0&&<p className="note warn">{soon.toLocaleString()} file{soon===1?' has':'s have'} already waited longer than {value} day{value===1?'':'s'} and will be deleted at the next check, within {report?.checkIntervalMinutes??15} minutes.</p>}
+    {report===null&&!error&&<p className="hint"><Busy label="Reading the deletion schedule…"/></p>}
     {report&&<dl className="kv">
       <div><dt>Waiting to be deleted</dt><dd>{items.length===0?'nothing':<><a href="/log">{items.length.toLocaleString()} file{items.length===1?'':'s'}</a> · {bytes(items.reduce((sum,item)=>sum+item.size,0))}</>}</dd></div>
       <div><dt>Next to go</dt><dd>{next?<>{next.name} on {longDate(next.dueAt)}</>:'nothing is scheduled'}</dd></div>
@@ -91,7 +93,7 @@ export function Settings({stats}:{stats:Stats}){
   }
   return <section className="settings">
     <h1>Settings</h1>
-    {message&&<p className="flash" role="status">{message}</p>}
+    {message&&<p className="flash" role="status">{busy?<Busy label={message} state="solving"/>:message}</p>}
     <h2>Index</h2>
     <p className="hint">The catalogue refresh reads metadata already imported into this service. It does not alter an original file.</p>
     <dl className="kv">

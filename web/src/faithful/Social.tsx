@@ -1,4 +1,5 @@
 import {binChanged,type Asset} from '../api';
+import {Busy} from '../Busy';
 import {useState} from 'react';
 
 type SocialItem=Asset&{
@@ -148,7 +149,7 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
     {items.length>0&&<div className="selbar" role="group" aria-label="Selected videos">
       <label className="selall"><input type="checkbox" checked={allShown} onChange={()=>{setSelected(allShown?new Set():new Set(items.map(item=>item.id)));setAnchor(null)}}/> Select all {items.length} shown</label>
       <span className="dim">{selected.size.toLocaleString()} selected</span>
-      <button type="button" className="btn small" disabled={busy||selected.size===0} onClick={()=>void apply('keep')}>{busy?'Saving…':'Keep'}</button>
+      <button type="button" className="btn small" disabled={busy||selected.size===0} onClick={()=>void apply('keep')}>{busy?<Busy label="Saving…" state="working"/>:'Keep'}</button>
       <button type="button" className="btn small danger ghosty" disabled={busy||selected.size===0} onClick={()=>void apply('cull')}>Move to Bin</button>
       <button type="button" className="btn small" data-sel="clear" disabled={busy||selected.size===0} onClick={()=>{setSelected(new Set());setAnchor(null)}}>Clear</button>
     </div>}
