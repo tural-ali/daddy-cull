@@ -111,6 +111,22 @@ The server binds to loopback by default.
 `-demo-network` permits private-network binding; it is not authentication.
 Do not expose the deployed service publicly.
 
+## Immich favourites
+
+Hearting an archive photo also marks it as a favourite in Immich, one way only.
+Removing the heart clears Immich's favourite only when Cull set it; a photo already favourited in Immich keeps its favourite.
+Only the favourite flag is sent, through `POST /api/search/metadata` to find the asset and `PUT /api/assets` to set the flag, with a key that needs `asset.update`.
+Hearts are queued in the `immich_favourites` table in the same transaction as the decision, so a save never waits on Immich.
+The preview drains the queue in the background, retrying from 30 seconds up to hourly while Immich is down, and queues existing favourites at start-up.
+A path Immich has no single exact match for is recorded as failed and retried daily and at restart.
+Settings shows how many favourites are synced, waiting and failed.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `IMMICH_URL` | `http://192.168.1.10:2283` in compose | Immich base URL; empty disables the mirror |
+| `IMMICH_KEY` | *(unset)* | Immich API key, read from the environment only and never logged; empty disables the mirror |
+| `IMMICH_PATH_PREFIX` | `/mnt/family-archive` | the archive path as Immich's external library recorded it |
+
 ## Tower deployment
 
 Source checkout: `/mnt/user/appdata/tower-cull-next-repo`.
@@ -121,6 +137,7 @@ The preview container serves media itself from read-only mounts of the archive, 
 The image carries ffmpeg and exiftool for video frames, HEIC and RAW.
 Social posters live in `state/social-posters`.
 The writer requires its private `CULL_BIN_KEY` in the deployment `.env`.
+The preview mirrors archive favourites to Immich when `IMMICH_KEY` is in the same `.env`; without it the mirror is off and the service still starts.
 The existing state directory and SQLite files must be owned by UID 99, GID 100; back up the stopped catalogue before any ownership or schema migration.
 
 ```sh

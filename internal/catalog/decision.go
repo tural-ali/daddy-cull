@@ -54,7 +54,16 @@ func (s *Store) DecideBatch(ctx context.Context, ds []Decision) ([]Saved, error)
 		}
 		results = append(results, r)
 	}
-	return results, tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	for i, d := range ds {
+		if d.Favourite != results[i].PreviousFavourite {
+			s.wakeImmich()
+			break
+		}
+	}
+	return results, nil
 }
 
 func decideTx(ctx context.Context, tx *sql.Tx, d Decision) (Saved, error) {
@@ -104,6 +113,15 @@ func decideTx(ctx context.Context, tx *sql.Tx, d Decision) (Saved, error) {
 	_, err = tx.ExecContext(ctx, "INSERT INTO decision_events(request_id,asset_id,expected_revision,status,favourite,previous_status,previous_favourite) VALUES(?,?,?,?,?,?,?)", d.RequestID, d.AssetID, d.ExpectedRevision, d.Status, d.Favourite, result.PreviousStatus, result.PreviousFavourite)
 	if err != nil {
 		return result, err
+	}
+	if d.Favourite != result.PreviousFavourite {
+		// The heart is mirrored to Immich by a background worker, never from
+		// here: this only records what Immich should end up showing, in the same
+		// transaction as the decision, so the two can never disagree and a slow
+		// or absent Immich cannot slow or fail a save.
+		if err = queueImmichFavourite(ctx, tx, d.AssetID, d.Favourite); err != nil {
+			return result, err
+		}
 	}
 	return result, nil
 }

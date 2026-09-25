@@ -13,7 +13,13 @@ import (
 // This application ID keeps the prototype from migrating a legacy catalogue.
 const applicationID = 1129663538
 
-type Store struct{ read, write *sql.DB }
+// immichWake is how a saved favourite reaches the Immich worker at once instead
+// of at its next poll. It holds at most one pending signal, so a burst of hearts
+// costs one extra pass, and a process that runs no worker simply never reads it.
+type Store struct {
+	read, write *sql.DB
+	immichWake  chan struct{}
+}
 
 func Open(path string) (*Store, error) {
 	abs, err := filepath.Abs(path)
@@ -231,6 +237,18 @@ CREATE TABLE IF NOT EXISTS screenshot_plans (
  body TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS screenshot_plans_asset ON screenshot_plans(asset_id);
+CREATE TABLE IF NOT EXISTS immich_favourites (
+ asset_id INTEGER PRIMARY KEY REFERENCES assets(id),
+ desired INTEGER NOT NULL CHECK(desired IN (0,1)),
+ immich_id TEXT NOT NULL DEFAULT '',
+ set_by_cull INTEGER NOT NULL DEFAULT 0 CHECK(set_by_cull IN (0,1)),
+ state TEXT NOT NULL CHECK(state IN ('pending','done','failed')),
+ attempts INTEGER NOT NULL DEFAULT 0,
+ last_error TEXT NOT NULL DEFAULT '',
+ next_attempt_at INTEGER NOT NULL DEFAULT 0,
+ updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS immich_favourites_due ON immich_favourites(state,next_attempt_at);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS stats (id INTEGER PRIMARY KEY CHECK(id=1), total INTEGER NOT NULL);
 INSERT OR IGNORE INTO stats VALUES(1,0);
@@ -247,7 +265,7 @@ COMMIT;`, applicationID)); err != nil {
 		r.Close()
 		return fail(err)
 	}
-	return &Store{read: r, write: w}, nil
+	return &Store{read: r, write: w, immichWake: make(chan struct{}, 1)}, nil
 }
 
 func (s *Store) Close() error {
