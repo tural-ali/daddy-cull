@@ -36,7 +36,7 @@ const fixture=()=>[
   await page.locator('.bingal figure').nth(4).waitFor();
   assert.equal(await page.locator('.bingal figure').count(),5,'both tools\' files are in one gallery');
   assert.match(await page.locator('.binhead .ysum').innerText(),/5 files · 5\.0 MB/);
-  await page.getByRole('link',{name:/^Bin 5$/}).waitFor();
+  await page.getByRole('link',{name:/^Bin 5 files$/}).waitFor();
   const images=await page.locator('.bingal img').evaluateAll(list=>list.map(image=>image.getAttribute('src')));
   assert.ok(images.includes('/api/bin-media/7/preview?size=grid')&&images.includes('/api/binned-media/shot/bb/0/preview?size=grid'),'every card shows its picture');
 
@@ -52,7 +52,7 @@ const fixture=()=>[
   await page.getByText('4 files put back where they came from.').waitFor();
   assert.deepEqual(posts[0],{path:'/api/trash/restore',body:{keys:['marked:11','bin:aa:12','bin:aa:13','legacy:7']}});
   assert.equal(await page.locator('.bingal figure').count(),1);
-  await page.getByRole('link',{name:/^Bin 1$/}).waitFor();
+  await page.getByRole('link',{name:/^Bin 1 file$/}).waitFor();
 
   // Deletion always asks first, and Cancel sends nothing.
   bin=fixture();

@@ -24,8 +24,11 @@
 
   /* Neutrals biased very slightly cool, so they read as chosen rather than
      inherited, and so a warm photograph sits forward of its surroundings. */
-  --bg:        #101116;
-  --bg-2:      #17181e;
+  /* The frame (top bar and sidebar) sits a step lighter than the panel the
+     page is on, as in Google Photos, so photographs sit on the deepest ground. */
+  --shell:     #1b1c21;
+  --bg:        #121317;
+  --bg-2:      #18191e;
   --bg-3:      #1e2027;
   --bg-4:      #262932;
   --line:      #282b34;
@@ -60,6 +63,15 @@
   --heat-high:    #f397a2;
   --heat-high-ink:#5a1017;
 
+  /* Where you are: a filled pill in the accent's own family. */
+  --pill:      #0f3b2b;
+  --pill-ink:  #b8f0d6;
+  --hover:     rgba(238, 240, 245, .07);
+
+  --head-h:    64px;
+  --side-w:    256px;
+  --font:      "Google Sans Flex Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
   --radius:    8px;
   --radius-sm: 5px;
   --gap:       10px;      /* §15: 8-12 px gallery gaps */
@@ -68,7 +80,11 @@
 
 :root[data-theme="day"] {
   color-scheme: light;
-  --bg:     #fbfbfc;
+  --shell:  #f1f5f3;
+  --pill:   #c4eedb;
+  --pill-ink:#00210f;
+  --hover:  rgba(22, 24, 29, .06);
+  --bg:     #fcfdfc;
   --bg-2:   #ffffff;
   --bg-3:   #f1f2f5;
   --bg-4:   #e7e9ee;
@@ -94,9 +110,10 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--shell);
   color: var(--text);
-  font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 14px/1.5 var(--font);
+  font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
   padding-bottom: 4.5rem;
 }
@@ -104,7 +121,8 @@ body {
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-h1, h2, h3 { font-weight: 600; letter-spacing: -.011em; text-wrap: balance; }
+h1, h2, h3 { font-weight: 500; letter-spacing: -.005em; text-wrap: balance; }
+h1 { font-weight: 400; letter-spacing: -.01em; }
 .dim { color: var(--muted); }
 .hint { color: var(--faint); font-size: 12.5px; }
 
@@ -118,34 +136,146 @@ h1, h2, h3 { font-weight: 600; letter-spacing: -.011em; text-wrap: balance; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 
-/* ---------------------------------------------------------------- top bar -- */
+/* ------------------------------------------------------------- the frame -- */
+/* Google Photos' frame: a top bar with the name, a wide rounded search field
+   and icon buttons; a sidebar whose current item is a filled pill; the page on
+   a rounded panel beside it. The frame is quiet so the photographs are not. */
 
-.bar {
-  position: sticky; top: 0; z-index: 30;
-  display: flex; align-items: center; gap: 1.4rem;
-  padding: .55rem 1.25rem;
-  background: var(--bg-2);
-  border-bottom: 1px solid var(--line);
+.shell {
+  display: grid;
+  grid-template-columns: var(--side-w) minmax(0, 1fr);
+  grid-template-rows: var(--head-h) auto;
+  min-height: 100vh;
 }
-.brand { display: flex; align-items: center; flex: none; border-radius: var(--radius-sm); }
+.gbar {
+  grid-column: 1 / -1;
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 12px;
+  height: var(--head-h); padding: 0 16px 0 8px;
+  background: var(--shell);
+}
+/* The menu button, logo and gap together are the sidebar's width, so the
+   search field starts where the page panel does. */
+.brand { display: flex; align-items: center; flex: none; width: calc(var(--side-w) - 8px - 44px - 24px); padding: 6px 4px; border-radius: 999px; }
 .brand:hover { text-decoration: none; }
-.brand svg { display: block; height: 22px; width: auto; }
+.brand svg { display: block; height: 24px; width: auto; }
 .brand .ink { fill: var(--logo-ink); }
 .brand .mint, .brand .t2 { fill: var(--logo-mint); }
 .brand .t0 { fill: var(--logo-coral); }
 .brand .t1 { fill: var(--logo-amber); }
-.bar nav { display: flex; gap: 1.1rem; }
-.bar nav a, .bar .cog { color: var(--muted); transition: color var(--ease); }
-.bar nav a.on { color: var(--text); }
-.bar nav a:hover, .bar .cog:hover { color: var(--text); text-decoration: none; }
-.bar .cog { margin-left: auto; font-size: 13px; }
-/* Nine destinations do not fit a phone. The bar wraps to a second line rather
-   than dragging the whole document sideways, which is what a nowrap row here
-   was doing to every page. */
-@media (max-width: 720px) {
-  .bar { flex-wrap: wrap; gap: .6rem 1rem; }
-  .bar nav { flex-wrap: wrap; gap: .5rem .9rem; }
-  .bar .cog { margin-left: 0; }
+
+.icon { display: inline-grid; place-items: center; width: 24px; height: 24px; flex: none; }
+.icon svg { width: 24px; height: 24px; fill: currentColor; }
+
+.search {
+  position: relative; flex: 0 1 720px; min-width: 0;
+  display: flex; align-items: center; gap: 4px;
+  height: 48px; padding: 0 16px 0 6px;
+  background: var(--bg-3); border-radius: 999px;
+  transition: background var(--ease), box-shadow var(--ease);
+}
+.search:focus-within { background: var(--bg-2); box-shadow: 0 1px 3px rgba(0,0,0,.25), 0 0 0 1px var(--line-2); }
+.search input {
+  flex: 1; min-width: 0; height: 100%;
+  font: inherit; font-size: 16px; color: var(--text);
+  background: none; border: 0; outline: none;
+}
+.search input::placeholder { color: var(--muted); }
+.search input::-webkit-search-cancel-button { filter: grayscale(1); }
+.searchgo { display: grid; place-items: center; width: 40px; height: 40px; flex: none; color: var(--muted); background: none; border: 0; border-radius: 999px; cursor: pointer; }
+.searchgo:hover { color: var(--text); background: var(--hover); }
+.searchproblem {
+  position: absolute; top: calc(100% + 6px); left: 16px; right: 16px; z-index: 5; margin: 0;
+  padding: .5rem .8rem; font-size: 13px; color: var(--text);
+  background: var(--bg-4); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,.3);
+}
+.gbaracts { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.iconbtn {
+  display: grid; place-items: center; width: 44px; height: 44px; flex: none;
+  color: var(--muted); background: none; border: 0; border-radius: 999px; cursor: pointer;
+  transition: background var(--ease), color var(--ease);
+}
+.iconbtn:hover { color: var(--text); background: var(--hover); text-decoration: none; }
+.iconbtn.on { color: var(--pill-ink); background: var(--pill); }
+.iconbtn.menu { display: grid; }
+
+/* Sidebar hidden from the menu button: the page takes the width and keeps its
+   rounded corner, set in from the edge like the right side. */
+@media (min-width: 1001px) {
+  .side-hidden { grid-template-columns: minmax(0, 1fr); }
+  .side-hidden .side { display: none; }
+  .side-hidden .panel { margin-left: 16px; }
+  .side-hidden .fbar { left: 32px; }
+}
+
+.side {
+  position: sticky; top: var(--head-h); align-self: start;
+  height: calc(100vh - var(--head-h)); overflow-y: auto;
+  display: flex; flex-direction: column;
+  padding: 8px 12px 16px 12px;
+  background: var(--shell);
+  scrollbar-width: thin;
+}
+.sidesec { display: flex; flex-direction: column; gap: 2px; }
+.sidesec + .sidesec { margin-top: 18px; }
+.sidetitle { margin: 0 0 6px; padding: 0 20px; font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--text); }
+.side nav a {
+  display: flex; align-items: center; gap: 18px;
+  height: 48px; padding: 0 20px;
+  color: var(--text); font-size: 14px; font-weight: 450;
+  border-radius: 999px;
+  transition: background var(--ease);
+}
+.side nav a .icon { color: var(--muted); }
+.side nav a:hover { background: var(--hover); text-decoration: none; }
+.side nav a.on { color: var(--pill-ink); background: var(--pill); font-weight: 600; }
+.side nav a.on .icon { color: var(--pill-ink); }
+.side .sidelabel { flex: 1; min-width: 0; }
+.side .count {
+  min-width: 22px; padding: 1px 7px; text-align: center;
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: #fff; background: var(--bad); border-radius: 999px;
+}
+.sideprogress {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: auto; padding: 18px 20px 4px;
+  border-top: 1px solid var(--line); color: var(--text);
+}
+.sideprogress:hover { text-decoration: none; }
+.sideprogresshead { display: flex; align-items: center; gap: 18px; font-size: 14px; }
+.sideprogresshead .icon { color: var(--muted); }
+.sideprogress .meter { display: block; height: 4px; background: var(--bg-4); border-radius: 999px; overflow: hidden; }
+.sideprogress .meter > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.sideprogressnote { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.panel {
+  min-width: 0; min-height: calc(100vh - var(--head-h));
+  margin-right: 16px;
+  background: var(--bg);
+  border-radius: 24px 24px 0 0;
+}
+.scrim { display: none; }
+
+/* Below tablet width the sidebar is a drawer over the page. */
+@media (max-width: 1000px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .gbar { padding: 0 8px; gap: 4px; }
+  .brand { width: auto; margin-right: 8px; }
+  .side {
+    position: fixed; top: var(--head-h); left: 0; bottom: 0; z-index: 40;
+    width: min(var(--side-w), 86vw); height: auto;
+    transform: translateX(-100%); visibility: hidden;
+    transition: transform 200ms cubic-bezier(.2, 0, 0, 1), visibility 0s linear 200ms;
+    box-shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  .drawer-open .side { transform: none; visibility: visible; transition: transform 200ms cubic-bezier(.2, 0, 0, 1); }
+  .drawer-open .scrim { display: block; position: fixed; inset: var(--head-h) 0 0 0; z-index: 35; background: rgba(0,0,0,.45); border: 0; }
+  .panel { margin-right: 0; border-radius: 20px 20px 0 0; }
+}
+@media (max-width: 600px) {
+  .brand svg { height: 20px; }
+  .search { height: 44px; padding-right: 10px; }
+  .search input { font-size: 15px; }
 }
 
 .pill {
@@ -158,11 +288,12 @@ h1, h2, h3 { font-weight: 600; letter-spacing: -.011em; text-wrap: balance; }
 .flash {
   margin: 0; padding: .65rem 1.25rem;
   background: color-mix(in oklab, var(--good) 15%, var(--bg-2));
-  border-bottom: 1px solid var(--line);
+  border-radius: var(--radius);
   font-size: 13.5px;
 }
+.panel > .flash { margin: 16px 16px 0; }
 
-main { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1.25rem 0; }
+main { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1.5rem 0; }
 main.wide { max-width: 1680px; }
 
 /* A page built around a grid of photographs is the one kind that gets better
@@ -239,7 +370,7 @@ main:has(.gal) .blankstate { max-width: 88ch; }
   display: flex; align-items: baseline; gap: 1rem;
   margin: 0 0 .2rem;
 }
-.dhead h1 { margin: 0; font-size: 28px; letter-spacing: -.02em; }
+.dhead h1 { margin: 0; font-size: 32px; font-weight: 400; letter-spacing: -.01em; }
 .dhead .step {
   font-size: 13px; color: var(--muted);
   padding: .2rem .5rem; border-radius: var(--radius-sm);
@@ -575,7 +706,7 @@ main:has(.gal) .blankstate { max-width: 88ch; }
 /* --------------------------------------------------------------- the bin -- */
 
 .binhead, .yearview, .dupehead, .settings { margin-bottom: 1.4rem; }
-.binhead h1, .yearview h1, .dupehead h1, .settings h1 { margin: 0 0 .3rem; font-size: 26px; }
+.binhead h1, .yearview h1, .dupehead h1, .settings h1 { margin: 0 0 .3rem; font-size: 32px; font-weight: 400; }
 .ysum { margin: 0 0 .5rem; color: var(--muted); font-size: 13.5px; }
 .ysum b { color: var(--text); font-variant-numeric: tabular-nums; }
 .ysum .pc { color: var(--accent); margin-left: .3rem; font-variant-numeric: tabular-nums; }
@@ -711,6 +842,17 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 }
 .rvtop .rvwhen { color: #8b8f99; font-variant-numeric: tabular-nums; }
 .rvtop .rvpos { margin-left: auto; font-variant-numeric: tabular-nums; color: #8b8f99; }
+/* The file's own day, opened beside the viewer so its place here is kept. */
+.rvtop a.rvday, .rvtop .rvdaylink {
+  display: inline-flex; align-items: center; gap: .3rem;
+  color: inherit; text-decoration: none;
+  padding: .2rem .55rem; margin: -.2rem -.1rem; border-radius: 999px;
+}
+.rvtop .rvdaylink { color: var(--accent); border: 1px solid #2c3038; }
+.rvtop a.rvday .icon, .rvtop .rvdaylink .icon, .rvtop a.rvday .icon svg, .rvtop .rvdaylink .icon svg { width: 15px; height: 15px; }
+.rvtop a.rvday .icon, .rvtop .rvdaylink .icon { opacity: .75; }
+.rvtop a.rvday:hover, .rvtop .rvdaylink:hover { background: #24262c; }
+.rvtop a.rvday:focus-visible, .rvtop .rvdaylink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .rvtop .rvbar { width: 8rem; height: 3px; background: #24262c; border-radius: 999px; overflow: hidden; }
 .rvtop .rvbar > span { display: block; height: 100%; background: var(--accent); }
 
@@ -1483,7 +1625,7 @@ button.danger:not(.btn) {
    states the consequence in bytes before the button that commits it, and stays
    in view while the groups scroll under it. */
 .dupebulk {
-  position: sticky; top: 0; z-index: 4;
+  position: sticky; top: calc(var(--head-h) + 8px); z-index: 4;
   display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
   margin: 0 0 1.2rem; padding: .7rem .8rem;
   background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
@@ -1663,3 +1805,10 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
 .segmented label.on { color: var(--on-accent); background: var(--accent); }
 .segmented input { position: absolute; opacity: 0; pointer-events: none; }
 .segmented label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The action bar belongs to the page, so beside the sidebar it spans the panel
+   only, and floats as a rounded bar like Google Photos' selection bar. */
+@media (min-width: 1001px) {
+  .fbar { left: calc(var(--side-w) + 16px); right: 32px; bottom: 16px; border: 1px solid var(--line-2); border-radius: 16px; box-shadow: 0 6px 24px rgba(0,0,0,.3); }
+  body:has(.fbar) { padding-bottom: 6rem; }
+}

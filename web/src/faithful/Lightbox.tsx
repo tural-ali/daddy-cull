@@ -1,8 +1,10 @@
 import {useEffect,useState,type MouseEvent,type ReactNode} from 'react';
+import {Icon} from '../Icon';
+import {dayName} from './goto';
 
 /** One file shown full size. `base` is a media route that answers
  * `/preview?size=large` for a still and `/original` for a clip. */
-export type LightboxItem={key:string;base:string;name:string;kind:string;detail?:string};
+export type LightboxItem={key:string;base:string;name:string;kind:string;detail?:string;day?:string};
 
 // Lightbox shows files that are not, or are no longer, catalogue decisions: what
 // sits in the Bin or waits out its grace period after being deleted from it. It
@@ -39,7 +41,7 @@ export function Lightbox({items,initialKey,onClose,actions}:{items:LightboxItem[
   }
   const still=`${current.base}/preview?size=large`;
   return <div className="rv on lb" role="dialog" aria-modal="true" aria-label={`Preview of ${current.name}`} onClick={outside}>
-    <div className="rvtop"><span className="rvday">{current.name}</span>{current.detail&&<span className="rvwhen">{current.detail}</span>}<span className="rvpos">{at+1} / {items.length}</span><button type="button" className="rvx" aria-label="Close preview" title="Close (Esc)" onClick={onClose}>×</button></div>
+    <div className="rvtop"><span className="rvday">{current.name}</span>{current.detail&&<span className="rvwhen">{current.detail}</span>}{current.day&&<a className="rvdaylink" href={current.day} target="_blank" rel="noopener" title="See what else is filed on this day, in a new tab">{dayName(current.day)}<Icon name="open_in_new"/></a>}<span className="rvpos">{at+1} / {items.length}</span><button type="button" className="rvx" aria-label="Close preview" title="Close (Esc)" onClick={onClose}>×</button></div>
     <div className={`rvstage${current.kind==='video'?' hasvideo':''}`}>
       {items.length>1&&<button type="button" className="rvnav prev" aria-label="Previous" onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>}
       {current.kind==='video'?<video key={current.key} controls autoPlay playsInline poster={still} src={`${current.base}/original`}/>:<img key={current.key} src={still} alt={current.name}/>}

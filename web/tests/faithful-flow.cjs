@@ -27,7 +27,7 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
   });
   await page.goto(process.env.APP_URL||'http://127.0.0.1:8842/');
   await page.getByRole('heading',{name:/7 September/}).waitFor();
-  await page.getByRole('link',{name:/^Bin 2$/}).waitFor();
+  await page.getByRole('link',{name:/^Bin 2 files$/}).waitFor();
   assert.equal(fetched.filter(path=>path==='/api/today/09-07').length,1,'the page loaded its data more than once');
   assert.equal(await page.locator('.xgroup').count(),1);
   assert.match(await page.locator('.xdupes').innerText(),/byte-identical, verified by full hash/);

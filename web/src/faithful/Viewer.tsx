@@ -1,10 +1,13 @@
 import {useEffect,useMemo,useState,type MouseEvent} from 'react';
+import {Icon} from '../Icon';
 import {binChanged,type Asset,type Status} from '../api';
 
 function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
 function preview(asset:Asset){return `/api/media/${asset.id}/preview?size=large`}
 
-export function Viewer({assets,initialID,onClose,onSave,onPatch}:{assets:Asset[];initialID:number;onClose:()=>void;onSave:(asset:Asset,status:Status,favourite?:boolean)=>boolean;onPatch:(id:number,change:Partial<Asset>)=>void}){
+/** `dayOf`, when given, turns the date into a link to the file's own day, for
+ * pages that show files from many days. */
+export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf}:{assets:Asset[];initialID:number;onClose:()=>void;onSave:(asset:Asset,status:Status,favourite?:boolean)=>boolean;onPatch:(id:number,change:Partial<Asset>)=>void;dayOf?:(asset:Asset)=>string}){
   const initialIndex=Math.max(0,assets.findIndex(asset=>asset.id===initialID));
   const [at,setAt]=useState(initialIndex);
   const [info,setInfo]=useState(false);
@@ -96,7 +99,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch}:{assets:Asset[]
     onClose();
   }
   return <div className={`rv on${bare?' bare':''}${info?' info':''}${current.favourite?' isfav':''}${related?' cmp':''}`} role="dialog" aria-modal="true" aria-label="Photo review" onClick={outside}>
-    <div className="rvtop"><span className="rvday">{date}</span><span className="rvwhen">{time}</span><span className="rvpos">{at+1} / {assets.length}</span><button type="button" className="rvpath" aria-label="Copy file path" title={current.path} onClick={()=>void navigator.clipboard.writeText(current.path)}>📋</button><span className="rvbar"><span style={{width:`${progress}%`}}/></span><button type="button" className="rvx" aria-label="Close review" title="Close (Esc)" onClick={onClose}>×</button></div>
+    <div className="rvtop">{dayOf?<a className="rvday" href={dayOf(current)} target="_blank" rel="noopener" title="Open this day in a new tab">{date}<Icon name="open_in_new"/></a>:<span className="rvday">{date}</span>}<span className="rvwhen">{time}</span><span className="rvpos">{at+1} / {assets.length}</span><button type="button" className="rvpath" aria-label="Copy file path" title={current.path} onClick={()=>void navigator.clipboard.writeText(current.path)}>📋</button><span className="rvbar"><span style={{width:`${progress}%`}}/></span><button type="button" className="rvx" aria-label="Close review" title="Close (Esc)" onClick={onClose}>×</button></div>
     <div className={`rvstage${zoom?' zoom':''}${current.kind==='video'?' hasvideo':''}`} onClick={event=>{if((event.target as HTMLElement).tagName==='IMG')setBare(value=>!value)}}>
       <button type="button" className="rvnav prev" aria-label="Previous" onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
       {current.kind==='video'?<video key={current.id} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`}/>:<img key={current.id} src={preview(current)} alt={name}/>} 

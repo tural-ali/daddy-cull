@@ -1,5 +1,6 @@
 import {useEffect,useState,type ReactNode} from 'react';
 import {Layout,type LegacyRoute} from './Layout';
+import {dayName} from './goto';
 import {Today,type TodayData} from './Today';
 import {Year,type YearData} from './Year';
 import {Duplicates,type DuplicateGroup,type DuplicateReport} from './Duplicates';
@@ -37,6 +38,17 @@ function routeFor(path:string):LegacyRoute{
   return 'today';
 }
 
+const routeTitles:Record<LegacyRoute,string>={today:'Today',year:'Year',dupes:'Duplicates',upgrades:'Upgrades',shadows:'Shadowed',shots:'Screenshots',social:'Saved from social',photos:'Apple Photos',log:'Log',bin:'Bin',settings:'Settings'};
+
+/** The browser tab names the page, and the date for a day, so several open
+ * tabs can be told apart. */
+function titleFor(path:string){
+  const on=path.match(/^\/on\/(\d{2})-(\d{2})$/);
+  if(on)return new Date(2024,+on[1]-1,+on[2]).toLocaleDateString('en-GB',{day:'numeric',month:'long'});
+  if(/^\/day\/\d{4}-\d{2}-\d{2}$/.test(path))return dayName(path);
+  return routeTitles[routeFor(path)];
+}
+
 export function App(){
   const now=new Date();
   const currentMD=`${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
@@ -47,6 +59,7 @@ export function App(){
   const [error,setError]=useState('');
   const [recovered,setRecovered]=useState(false);
   useEffect(()=>{if(location.pathname==='/')history.replaceState(null,'',initialPath)},[initialPath]);
+  useEffect(()=>{document.title=`${titleFor(path)} · Daddy, Cull!`},[path]);
   useEffect(()=>{
     recoverPending().then(()=>setRecovered(true)).catch(reason=>setError((reason as Error).message));
   },[]);
@@ -108,5 +121,5 @@ export function App(){
     load().then(result=>{if(active)setPage(result)}).catch(reason=>{if(active)setError((reason as Error).message)});
     return()=>{active=false};
   },[path,recovered]);
-  return <Layout route={page.route} binFiles={stats?.bin??stats?.marked??0}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:page.content}</Layout>;
+  return <Layout route={page.route} binFiles={stats?.bin??stats?.marked??0} reviewed={stats?{done:stats.reviewedDays,total:stats.calendarDays}:undefined}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:page.content}</Layout>;
 }

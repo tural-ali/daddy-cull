@@ -2,6 +2,7 @@ import {useEffect,useRef,useState,type MouseEvent} from 'react';
 import {FilePreview} from '../Media';
 import {binChanged} from '../api';
 import {Lightbox,type LightboxItem} from './Lightbox';
+import {dayOfPath} from './goto';
 import {Busy} from '../Busy';
 
 /** One card in the Bin, whichever tool put the file there. */
@@ -99,7 +100,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   const chosenBytes=chosen.reduce((sum,item)=>sum+item.size,0);
   const totalBytes=list.reduce((sum,item)=>sum+item.size,0);
   const allSelected=list.length>0&&chosen.length===list.length;
-  const previews:LightboxItem[]=list.filter(item=>item.preview).map(item=>({key:item.key,base:item.preview!,name:item.name,kind:item.kind,detail:caption(item)}));
+  const previews:LightboxItem[]=list.filter(item=>item.preview).map(item=>({key:item.key,base:item.preview!,name:item.name,kind:item.kind,detail:caption(item),day:dayOfPath(item.original)??undefined}));
 
   function caption(item:TrashItem|DeletingItem){
     if('dueAt' in item)return `Deleted ${longDate(item.deletedAt)} · goes ${countdown(item.dueAt)}`;
@@ -136,6 +137,9 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   }
   function restore(keys:string[],control:Control){
     void act(control,'Restoring…',()=>post('/api/trash/restore',{keys}),result=>`${files(result.done)} put back where they came from.`);
+  }
+  function restoreFile(item:TrashItem){
+    void act('lightbox','Restoring…',()=>post('/api/trash/restore-file',{keys:[item.key]}),result=>result.done?`${item.name} is back where it came from, sidecars included. The rest of its batch stays put.`:'');
   }
   function deleted(result:Result){
     if(result.keptDays){
@@ -224,10 +228,13 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
       <span className="fright hint">Shift-click selects a run. A file that cannot be deleted is reported, never counted as gone.</span>
     </footer>}
     {viewing&&<Lightbox items={previews} initialKey={viewing} onClose={()=>setViewing(null)} actions={current=>{
-      // A batch is restored as a whole, so the button says when that is more than this one file.
-      const group=list.find(item=>item.key===current.key)?.group;
-      const batch=list.filter(item=>item.group===group).length;
-      return <button type="button" className="rvbtn" disabled={!!busy} onClick={()=>restore([current.key],'lightbox')}>{face('lightbox',batch>1?`Restore with its batch (${batch} files)`:'Restore')}</button>;
+      // The writer's own batches give back one photograph at a time; the other
+      // engines move a batch only as a whole, so the button says so.
+      const item=list.find(other=>other.key===current.key);
+      if(!item)return null;
+      const batch=list.filter(other=>other.group===item.group).length;
+      if(item.source==='bin'||batch===1)return <button type="button" className="rvbtn" disabled={!!busy} onClick={()=>restoreFile(item)}>{face('lightbox','Restore this file')}</button>;
+      return <button type="button" className="rvbtn" disabled={!!busy} onClick={()=>restore([current.key],'lightbox')}>{face('lightbox',`Restore with its batch (${batch} files)`)}</button>;
     }}/>}
     <dialog ref={dialog} className="confirm" aria-labelledby={`confirm-title-${mode}`} onClose={()=>setPending(null)} onClick={event=>{if(event.target===event.currentTarget)setPending(null)}}>
       {pending&&<form method="dialog" onSubmit={event=>{event.preventDefault();const run=pending.run;setPending(null);void run()}}>

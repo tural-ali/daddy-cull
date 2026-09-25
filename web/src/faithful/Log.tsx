@@ -4,6 +4,7 @@ import {Media} from '../Media';
 import {Busy} from '../Busy';
 import {Deleting} from './Bin';
 import {Viewer} from './Viewer';
+import {dayOfPath} from './goto';
 
 export type HistoryEvent={requestId:string;asset:Asset;status:string;favourite:boolean;previousStatus:'unreviewed'|'keep'|'later'|'cull';previousFavourite:boolean;createdAt:string};
 // The server sends every time as UTC; the day an action belongs to is the
@@ -14,8 +15,7 @@ function dayHeading(at:Date){return `${at.toLocaleDateString('en-GB',{weekday:'l
 // The day a file belongs to is the folder it is filed in, which is what the day
 // page lists; its capture instant in UTC can fall on the day before or after.
 function dayOf(asset:Asset){
-  const folder=asset.path.match(/\/(\d{4}-\d{2}-\d{2})\//);
-  return folder?`/day/${folder[1]}`:`/on/${new Date(asset.capturedAt*1000).toISOString().slice(5,10)}`;
+  return dayOfPath(asset.path)??`/on/${new Date(asset.capturedAt*1000).toISOString().slice(5,10)}`;
 }
 function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
 function verb(event:HistoryEvent):[string,string]{
@@ -83,6 +83,6 @@ export function Log({initial}:{initial:HistoryEvent[]}){
         </figure>
       </Fragment>;
     })}</div>}
-    {viewing!==null&&<Viewer assets={assets} initialID={viewing} onClose={()=>setViewing(null)} onSave={decideInViewer} onPatch={patch}/>}
+    {viewing!==null&&<Viewer assets={assets} initialID={viewing} onClose={()=>setViewing(null)} onSave={decideInViewer} onPatch={patch} dayOf={dayOf}/>}
   </>;
 }
