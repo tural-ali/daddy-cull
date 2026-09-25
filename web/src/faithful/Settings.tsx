@@ -1,5 +1,6 @@
 import {useEffect,useState} from 'react';
 import {Busy} from '../Busy';
+import {dayStartsAt,nightStartsAt,readChoice,saveChoice,themeEvent,themeFor,type ThemeChoice} from '../theme';
 import {bytes,longDate,readDeleting,type DeletingReport} from './Bin';
 
 export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number};
@@ -78,6 +79,35 @@ function BinSettings(){
   </>;
 }
 
+const themeChoices:{value:ThemeChoice;label:string}[]=[
+  {value:'auto',label:'Automatic'},
+  {value:'day',label:'Day'},
+  {value:'night',label:'Night'},
+];
+const hour=(value:number)=>`${String(value).padStart(2,'0')}:00`;
+
+// Day and night by the reader's clock, or pinned. Kept in this browser only.
+function Appearance(){
+  const [choice,setChoice]=useState<ThemeChoice>(readChoice);
+  const [now,setNow]=useState(()=>themeFor(readChoice()));
+  useEffect(()=>{
+    const sync=()=>{setChoice(readChoice());setNow(themeFor(readChoice()))};
+    window.addEventListener(themeEvent,sync);
+    return()=>window.removeEventListener(themeEvent,sync);
+  },[]);
+  return <>
+    <h2 id="appearance">Appearance</h2>
+    <div className="segmented" role="radiogroup" aria-label="Theme">
+      {themeChoices.map(option=><label key={option.value} className={choice===option.value?'on':undefined}>
+        <input type="radio" name="theme" value={option.value} checked={choice===option.value} onChange={()=>saveChoice(option.value)}/>{option.label}
+      </label>)}
+    </div>
+    <p className="hint">{choice==='auto'
+      ?<>Day from {hour(dayStartsAt)} to {hour(nightStartsAt)} by this device's clock, night otherwise. It is {now} now.</>
+      :<>Always {choice}, on this browser only.</>}</p>
+  </>;
+}
+
 export function Settings({stats}:{stats:Stats}){
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
@@ -116,6 +146,7 @@ export function Settings({stats}:{stats:Stats}){
       <div><dt>Legacy Bin files</dt><dd>{stats.legacyBin.toLocaleString()}</dd></div>
     </dl>
     <BinSettings/>
+    <Appearance/>
     <h2>Google Takeout</h2>
     <p><a href="/upgrades">Review upgrades</a> · {stats.upgradeCandidates.toLocaleString()} archive photos have confirmed higher-resolution Takeout matches. They appear beside the archive original, not as a separate collection.</p>
     <h2>Safety</h2>

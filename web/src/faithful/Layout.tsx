@@ -1,4 +1,5 @@
 import type {ReactNode} from 'react';
+import {Logo} from '../Logo';
 
 export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'log'|'bin'|'settings';
 const navigation: {href:string;route:LegacyRoute;label:string}[]=[
@@ -16,7 +17,7 @@ const navigation: {href:string;route:LegacyRoute;label:string}[]=[
 export function Layout({route,binFiles,flash,children}:{route:LegacyRoute;binFiles:number;flash?:string;children:ReactNode}){
   return <>
     <header className="bar">
-      <a className="brand" href="/">Daddy,&nbsp;Cull!</a>
+      <a className="brand" href="/" title="Today"><Logo/></a>
       <nav aria-label="Main navigation">
         {navigation.map(item=><a key={item.route} href={item.href} className={route===item.route?'on':undefined} aria-current={route===item.route?'page':undefined}>
           {item.label}{item.route==='bin'&&binFiles>0&&<> <span className="pill">{binFiles.toLocaleString()}</span></>}

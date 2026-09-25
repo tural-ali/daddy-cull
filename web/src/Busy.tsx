@@ -1,5 +1,6 @@
 import {useLayoutEffect,useRef,useState} from 'react';
 import {ThinkingOrb} from 'thinking-orbs';
+import {themeEvent} from './theme';
 
 export type OrbState='working'|'searching'|'solving'|'listening'|'connecting'|'weaving'|'composing'|'breathing'|'shaping';
 
@@ -21,7 +22,7 @@ function luminance([r,g,b]:[number,number,number,number]){
   return .2126*linear(r)+.7152*linear(g)+.0722*linear(b);
 }
 // The orb draws light dots for a dark surface and dark dots for a light one.
-// The page follows the system theme, but a waiting state also sits inside
+// The page follows the day or night theme, but a waiting state also sits inside
 // surfaces that do not: a white-on-blue button, or the always-dark controls
 // laid over a photograph. So the choice is made where the orb actually is:
 // words lighter than the first opaque background above them mean a dark surface.
@@ -46,10 +47,9 @@ export function Busy({label,state='searching',size=20}:{label:string;state?:OrbS
     if(!element)return;
     const read=()=>setTheme(themeFor(element));
     read();
-    // The palette follows the system theme, so the surface is read again when it flips.
-    const scheme=matchMedia('(prefers-color-scheme: dark)');
-    scheme.addEventListener('change',read);
-    return()=>scheme.removeEventListener('change',read);
+    // Day and night follow the clock, so the surface is read again when it flips.
+    window.addEventListener(themeEvent,read);
+    return()=>window.removeEventListener(themeEvent,read);
   },[]);
   return <span ref={host} className={size===64?'busy big':'busy'} role="status">
     <ThinkingOrb state={state} size={size} theme={theme??'auto'} aria-hidden="true" role="presentation"/>

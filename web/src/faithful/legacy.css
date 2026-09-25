@@ -18,7 +18,9 @@
 */
 
 :root {
-  color-scheme: dark light;
+  /* Night, the default: the logo was drawn for it. Day is chosen by the
+     reader's clock (see src/theme.ts), not by the operating system. */
+  color-scheme: dark;
 
   /* Neutrals biased very slightly cool, so they read as chosen rather than
      inherited, and so a warm photograph sits forward of its surroundings. */
@@ -28,24 +30,34 @@
   --bg-4:      #262932;
   --line:      #282b34;
   --line-2:    #343845;
-  --text:      #e8e9ee;
+  --text:      #eef0f5;
   --muted:     #9297a3;
   --faint:     #6c717d;
 
-  --accent:    #6d9eff;
-  --good:      #4ec98b;
-  --warn:      #dfa441;
-  --bad:       #e8695f;
+  /* The logo's three day tiles, coral to amber to mint, are the whole palette:
+     mint is the accent (it spells "Cull!"), amber warns, coral is what leaves.
+     Favourites keep their own pink so a heart never reads as a removal. */
+  --accent:    #7ed9b2;
+  --on-accent: #0b2e20;
+  --good:      #7ed9b2;
+  --warn:      #f7c66a;
+  --bad:       #f0827f;
   --fav:       #f2789d;
 
-  /* Calendar heat: how much media still waits on a date, in the pastel,
-     dark-lettered style of a fare calendar. Kept bright in both themes so the
-     three bands read at a glance; only the lettering follows the theme. */
-  --heat-low:     #7fdcab;
+  /* Logo lettering. */
+  --logo-ink:  #f4f6fa;
+  --logo-mint: #7ed9b2;
+  --logo-coral:#f397a2;
+  --logo-amber:#f7c66a;
+
+  /* Calendar heat: how much media still waits on a date, in the logo's own
+     tiles. Kept bright in both themes so the three bands read at a glance;
+     only the lettering follows the theme. */
+  --heat-low:     #7ed9b2;
   --heat-low-ink: #0c3b24;
-  --heat-mid:     #f8c56e;
+  --heat-mid:     #f7c66a;
   --heat-mid-ink: #4a2c02;
-  --heat-high:    #f7a0a5;
+  --heat-high:    #f397a2;
   --heat-high-ink:#5a1017;
 
   --radius:    8px;
@@ -54,23 +66,28 @@
   --ease:      140ms cubic-bezier(.4, 0, .2, 1);
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg:     #fbfbfc;
-    --bg-2:   #ffffff;
-    --bg-3:   #f1f2f5;
-    --bg-4:   #e7e9ee;
-    --line:   #e3e5ea;
-    --line-2: #d2d6de;
-    --text:   #16181d;
-    --muted:  #61656f;
-    --faint:  #8b8f99;
-    --accent: #2f6ad9;
-    --good:   #17864f;
-    --warn:   #8a5d0d;
-    --bad:    #c2402f;
-    --fav:    #cf4a75;
-  }
+:root[data-theme="day"] {
+  color-scheme: light;
+  --bg:     #fbfbfc;
+  --bg-2:   #ffffff;
+  --bg-3:   #f1f2f5;
+  --bg-4:   #e7e9ee;
+  --line:   #e3e5ea;
+  --line-2: #d2d6de;
+  --text:   #16181d;
+  --muted:  #61656f;
+  --faint:  #8b8f99;
+  /* The same three hues, deepened until text on white passes 4.5:1. */
+  --accent:    #0f7a52;
+  --on-accent: #ffffff;
+  --good:      #0f7a52;
+  --warn:      #8a5d0d;
+  --bad:       #c2402f;
+  --fav:       #cf4a75;
+  --logo-ink:  #16181d;
+  --logo-mint: #149163;
+  --logo-coral:#ec7f8c;
+  --logo-amber:#f0b541;
 }
 
 * { box-sizing: border-box; }
@@ -110,8 +127,13 @@ h1, h2, h3 { font-weight: 600; letter-spacing: -.011em; text-wrap: balance; }
   background: var(--bg-2);
   border-bottom: 1px solid var(--line);
 }
-.brand { font-weight: 650; letter-spacing: -.02em; color: var(--text); }
+.brand { display: flex; align-items: center; flex: none; border-radius: var(--radius-sm); }
 .brand:hover { text-decoration: none; }
+.brand svg { display: block; height: 22px; width: auto; }
+.brand .ink { fill: var(--logo-ink); }
+.brand .mint, .brand .t2 { fill: var(--logo-mint); }
+.brand .t0 { fill: var(--logo-coral); }
+.brand .t1 { fill: var(--logo-amber); }
 .bar nav { display: flex; gap: 1.1rem; }
 .bar nav a, .bar .cog { color: var(--muted); transition: color var(--ease); }
 .bar nav a.on { color: var(--text); }
@@ -193,7 +215,7 @@ main:has(.gal) .blankstate { max-width: 88ch; }
 .btn:hover { background: var(--bg-4); text-decoration: none; }
 .btn:disabled { opacity: .4; cursor: default; }
 .btn.small { padding: .28rem .6rem; font-size: 12.5px; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn.primary:hover { background: color-mix(in oklab, var(--accent) 85%, #000); }
 .btn.danger { color: #fff; background: var(--bad); border-color: var(--bad); }
 .btn.danger:hover { background: color-mix(in oklab, var(--bad) 85%, #000); }
@@ -382,7 +404,7 @@ main:has(.gal) .blankstate { max-width: 88ch; }
 }
 .bdg .b.tocmp:hover,
 .bdg .b.tocmp:focus-visible {
-  background: var(--accent, #2f6fed); border-color: transparent; color: #fff;
+  background: var(--accent); border-color: transparent; color: var(--on-accent);
 }
 
 /* Cull and Favourite appear on hover or keyboard focus, per §15. */
@@ -1554,3 +1576,11 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
 .fbar.binbar .fright { flex: 1 1 0; min-width: 0; justify-content: flex-end; text-align: right; }
 @media (max-width: 960px) { .fbar.binbar .fright { display: none; } }
 @media (max-width: 720px) { .fbar.binbar .fleft { flex-wrap: wrap; } }
+
+/* A small segmented control: the theme choice in Settings. */
+.segmented { display: inline-flex; margin: .6rem 0 .2rem; padding: 2px; gap: 2px; background: var(--bg-3); border: 1px solid var(--line-2); border-radius: var(--radius); }
+.segmented label { position: relative; padding: .3rem .85rem; border-radius: var(--radius-sm); color: var(--muted); cursor: pointer; transition: color var(--ease), background var(--ease); }
+.segmented label:hover { color: var(--text); }
+.segmented label.on { color: var(--on-accent); background: var(--accent); }
+.segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
