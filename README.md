@@ -127,6 +127,27 @@ Settings shows how many favourites are synced, waiting and failed.
 | `IMMICH_KEY` | *(unset)* | Immich API key, read from the environment only and never logged; empty disables the mirror |
 | `IMMICH_PATH_PREFIX` | `/mnt/family-archive` | the archive path as Immich's external library recorded it |
 
+## Apple Photos
+
+The Apple Photos page carries removals and favourites over to the Photos library on the Mac.
+The browser never touches Photos: Cull Sync, a menu-bar helper in `mac/CullSync`, does the work through PhotoKit and connects out to the preview.
+Check Photos asks the helper to find each item by normalised name, extension and day, with one day of tolerance only when the name and extension are unique in the library.
+The page shows the archive file beside what the helper found, and nothing changes until Apply in Photos is pressed.
+Favourites are set first, then one deletion request moves the chosen photographs to Recently Deleted after the person confirms on the Mac.
+The helper reads every change back, and only what Photos really made is recorded in the `photos_sync` table.
+A removal is never offered while the archive still holds another live copy of the photograph.
+If something deleted from Photos is later restored in Cull, the page says to recover it from Recently Deleted.
+Job state and preview thumbnails live in the preview's memory and are lost on restart, which only means checking again.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PHOTOS_AGENT_KEY` | *(unset)* | shared key the helper sends in `X-Photos-Agent-Key`; at least 32 characters, never logged; unset switches the helper routes off |
+
+On the Mac, `mac/CullSync/install.sh` builds the app with the Xcode command-line tools, copies it to `~/Applications` and starts it.
+Put the same key after `token =` in `~/.config/daddy-cull/sync.conf`, which also holds the preview's `url`.
+The first launch asks for full access to Photos, and the menu offers Start at Login.
+`mac/CullSync/test.sh` runs the matching tests without touching Photos.
+
 ## Tower deployment
 
 Source checkout: `/mnt/user/appdata/tower-cull-next-repo`.
@@ -138,6 +159,7 @@ The image carries ffmpeg and exiftool for video frames, HEIC and RAW.
 Social posters live in `state/social-posters`.
 The writer requires its private `CULL_BIN_KEY` in the deployment `.env`.
 The preview mirrors archive favourites to Immich when `IMMICH_KEY` is in the same `.env`; without it the mirror is off and the service still starts.
+The Apple Photos helper is accepted only when `PHOTOS_AGENT_KEY` is in the same `.env`.
 The existing state directory and SQLite files must be owned by UID 99, GID 100; back up the stopped catalogue before any ownership or schema migration.
 
 ```sh
