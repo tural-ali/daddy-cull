@@ -17,6 +17,8 @@ const svg=(w,h,fill)=>`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" heig
   await page.route('**/api/duplicate-report**',route=>route.fulfill({json:report}));
   await page.route(/\/api\/media\/9\d\/preview/,route=>{const id=Number(/media\/(\d+)/.exec(route.request().url())[1]);previews.push(id);route.fulfill({contentType:'image/svg+xml',body:id===93?svg(600,800,'#6b8f71'):svg(800,533,'#4d6f94')})});
   await page.route('**/api/decisions/batch',route=>{posted=JSON.parse(route.request().postData());route.fulfill({json:posted.map(change=>({...change,revision:1}))})});
+  // A set of one, which the server should never send, is not offered.
+  report.groups.push({hash:'dddd',size:1000,reclaimable:0,members:[member(97,'/archive/2026/2026-07/2026-07-25/A7401914-2.ARW','2026-07-25','raw')]});
   await page.goto((process.env.APP_URL||'http://127.0.0.1:8850').replace(/\/$/,'')+'/duplicates');
   await page.locator('.dupegroup').first().waitFor();
   await page.waitForFunction(()=>[...document.querySelectorAll('.dupefig')].filter(f=>f.querySelector('img')).every(f=>f.style.aspectRatio));

@@ -36,6 +36,9 @@ func (s *Store) ExactDuplicates(ctx context.Context, md string, limit int) ([]Du
 		  LEFT JOIN decisions key_decisions ON key_decisions.asset_id=assets.id
 		 WHERE evidence.full_hash IS NOT NULL AND evidence.full_hash!='' AND assets.size_bytes>0
 		   AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=assets.id AND fs.state!='restored')
+		   -- Counted only where it can be shown: a copy with no day, such as one
+		   -- the archive scan found gone, would leave a "group" of one.
+		   AND EXISTS(SELECT 1 FROM asset_days key_day WHERE key_day.asset_id=assets.id)
 		 GROUP BY evidence.full_hash,assets.size_bytes
 		HAVING count(*)>1
 		   AND NOT (sum(CASE WHEN key_decisions.status='cull' THEN 1 ELSE 0 END)=count(*)-1 AND sum(CASE WHEN key_decisions.status='keep' THEN 1 ELSE 0 END)=1)
@@ -117,6 +120,7 @@ const liveCandidates = `live AS (
 	SELECT a.id,a.size_bytes FROM assets a
 	 WHERE a.size_bytes>0
 	   AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored')
+	   AND NOT EXISTS(SELECT 1 FROM missing_assets m WHERE m.asset_id=a.id)
 ),
 colliding AS (SELECT size_bytes FROM live GROUP BY size_bytes HAVING count(*)>1)`
 

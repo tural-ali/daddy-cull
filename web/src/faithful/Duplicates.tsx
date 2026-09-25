@@ -109,7 +109,7 @@ function Tile({member,previewID,size,label,keeper,disabled,onKeep}:{member:Dupli
     {/* A cell as wide as the column and never taller: a landscape picture
         sets a shorter cell, so the label sits under it, not under empty space. */}
     <div className="dupecell" style={ratio>1?{aspectRatio:String(ratio)}:undefined}>
-      <figure className="dupefig" style={shape}>
+      <figure className={`dupefig${ratio||playing?' ready':''}`} style={shape}>
         {playing
           ? <video src={`/api/media/${member.id}/original`} controls autoPlay playsInline onEnded={()=>setPlaying(false)} onError={()=>{setPlaying(false);setFailed(true)}}/>
           : failed
@@ -131,7 +131,9 @@ function Tile({member,previewID,size,label,keeper,disabled,onKeep}:{member:Dupli
 }
 
 export function Duplicates({report}:{report:DuplicateReport}){
-  const [groups,setGroups]=useState(report.groups);
+  // A set of one is not a set; the server never sends one, and the page would
+  // offer to merge a file with nothing if it did.
+  const [groups,setGroups]=useState(()=>report.groups.filter(group=>group.members.length>1));
   const [rule,setRule]=useState<Rule>('clean');
   const [overrides,setOverrides]=useState<Record<string,number>>({});
   const [skipped,setSkipped]=useState<Set<string>>(new Set());

@@ -148,3 +148,33 @@ func TestDuplicateCoverageIgnoresRemovedFiles(t *testing.T) {
 		t.Fatalf("removed file still counted: %d %d %v", candidates, hashed, err)
 	}
 }
+
+// A copy the archive scan found gone is not a duplicate of anything: the file
+// left behind is the only one, so it must not show as a group of one, and the
+// gone copy is no longer a candidate for hashing.
+func TestDuplicatesIgnoreMissingFiles(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	for id, path := range map[int]string{1: "/archive/2026/2026-07/2026-07-25/A7401914.ARW", 2: "/archive/2026/2026-07/2026-07-25/A7401914-2.ARW"} {
+		if _, err := s.write.ExecContext(ctx, "INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(?,?,1,'raw',500,'archive')", id, path); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.write.ExecContext(ctx, "INSERT INTO asset_evidence(asset_id,full_hash) VALUES(?,'same')", id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.write.ExecContext(ctx, "INSERT INTO missing_assets(asset_id,since) VALUES(1,datetime('now'))"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.IndexCalendar(ctx); err != nil {
+		t.Fatal(err)
+	}
+	groups, err := s.ExactDuplicates(ctx, "", 100)
+	if err != nil || len(groups) != 0 {
+		t.Fatalf("missing copy still made a group: %+v %v", groups, err)
+	}
+	candidates, _, err := s.DuplicateStatus(ctx)
+	if err != nil || candidates != 0 {
+		t.Fatalf("missing copy still a candidate: %d %v", candidates, err)
+	}
+}
