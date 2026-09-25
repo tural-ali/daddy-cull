@@ -116,7 +116,6 @@ body {
   font: 14px/1.5 var(--font);
   font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
-  padding-bottom: 4.5rem;
 }
 
 a { color: var(--accent); text-decoration: none; }
@@ -322,6 +321,9 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .panel {
   min-width: 0; min-height: calc(100vh - var(--head-h));
   margin-right: 16px;
+  /* Room for the floating action bar, inside the panel so the panel runs to
+     the bottom edge rather than stopping above a strip of shell colour. */
+  padding-bottom: 4.5rem;
   background: var(--bg);
   border-radius: 24px 24px 0 0;
 }
@@ -1622,80 +1624,112 @@ button.danger:not(.btn, .iconbtn) {
 
 /* ------------------------------------------------- duplicate comparison -- */
 
-/* The whole page is one question asked ninety times over, so the decision bar
-   states the consequence in bytes before the button that commits it, and stays
-   in view while the groups scroll under it. */
+/* Laid out as Apple Photos lays out Duplicates: a date heading with its action
+   beside it, a hairline between sets, and each copy in a square cell with its
+   size on the picture. */
+.dupepage { --dupe-cell: clamp(150px, 19vw, 232px); }
+
+/* The one control that acts on everything stays in view while the sets scroll
+   under it, with the consequence stated before the button. */
 .dupebulk {
   position: sticky; top: calc(var(--head-h) + 8px); z-index: 4;
-  display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
-  margin: 0 0 1.2rem; padding: .7rem .8rem;
+  display: flex; align-items: center; gap: .5rem .8rem; flex-wrap: wrap;
+  margin: 0 0 .4rem; padding: .6rem .7rem .6rem .9rem;
   background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
 }
+.dupekeep { display: flex; align-items: center; gap: .45rem; font-size: 13px; color: var(--muted); }
+.dupekeep select {
+  font: inherit; color: var(--text); background: var(--bg-3);
+  border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: .25rem .4rem;
+}
 .dupebulk .dupespace {
-  margin-left: auto; display: flex; align-items: center; gap: .7rem;
-  font-size: 12.5px; color: var(--muted);
+  margin-left: auto; display: flex; align-items: center; gap: .8rem;
+  font-size: 13px; color: var(--muted);
 }
-.dupebulk .dupespace b { color: var(--text); font-variant-numeric: tabular-nums; }
+.dupebulk .dupespace b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 
-.dupegroup.skipped { opacity: .45; }
-/* One frame beside the list, not one per copy: byte-identical files are the
-   same picture, so a second thumbnail would say nothing and cost a second read
-   off the network mount. */
-.dupebody { display: flex; gap: .9rem; align-items: flex-start; }
-.dupeshot {
-  position: relative; flex: none;
-  width: 168px; height: 168px;
-  background: #0a0b0f; border-radius: var(--radius-sm); overflow: hidden;
+.dupegroup { border-top: 1px solid var(--line); padding: 1.1rem 0 1.6rem; }
+.dupegroup.skipped .dupetiles { opacity: .4; }
+.dupegrouphead { display: flex; align-items: baseline; flex-wrap: wrap; gap: .25rem .9rem; margin: 0 0 1rem; }
+.dupegrouphead h2 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.dupelink {
+  padding: 0; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: 15px; font-weight: 500; color: var(--accent);
 }
-/* A playing clip gets more room than a thumbnail, but a portrait video at full
-   column width would push the next group off the screen, so it is capped. */
-.dupeshot:has(video) { width: auto; max-width: 320px; height: 320px; }
-.dupemedia { width: 100%; height: 100%; object-fit: contain; display: block; }
-.dupeshot:has(video) .dupemedia { height: 100%; }
-.dupeshot .media-missing { height: 100%; border-radius: 0; }
+.dupelink:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 3px; }
+.dupelink:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+.dupelink:disabled { color: var(--faint); cursor: default; }
+.dupelink.quiet { color: var(--muted); font-size: 14px; font-weight: 400; }
 
-.dupepick { flex: 1; min-width: 0; }
-.dupewhy { margin: 0 0 .5rem; font-size: 12.5px; color: var(--muted); }
-.dupewhy strong { color: var(--text); font-weight: 600; }
-
-.dupelist { list-style: none; margin: 0; padding: 0; display: grid; gap: .25rem; }
-.dupelist label {
-  display: flex; align-items: baseline; gap: .55rem;
-  padding: .35rem .5rem; border-radius: var(--radius-sm);
-  border: 1px solid transparent; cursor: pointer; min-width: 0;
+.dupetiles {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, var(--dupe-cell)); gap: 1.1rem 1.4rem;
 }
-.dupelist label:hover { background: var(--bg-3); }
-.dupelist input { flex: none; margin: 0; align-self: center; accent-color: var(--good); }
-/* The keeper is the one thing here that must never be misread, so it carries a
-   colour and a ring rather than a subtler cue. */
-.dupelist .keeper label { border-color: var(--good); background: color-mix(in oklab, var(--good) 8%, transparent); }
-.dupelist .doomed label { border-color: color-mix(in oklab, var(--bad) 28%, transparent); }
-
-.dupename {
-  font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.dupetile { min-width: 0; }
+.dupecell { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
+/* Square until the preview reports its shape, then the picture's own shape. */
+.dupefig {
+  position: relative; margin: 0; width: 100%; height: 100%;
+  max-width: 100%; max-height: 100%;
+  border-radius: 6px; overflow: hidden; background: var(--bg-3);
 }
-.dupepath {
-  font-family: ui-monospace, Menlo, monospace; font-size: 11px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+.dupefig img, .dupefig video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.dupefig video { object-fit: contain; background: #000; }
+.dupefig .media-missing { height: 100%; border-radius: 0; }
+/* The tick is what must never be misread, so the keeper also carries a ring. */
+.dupetile.keeper .dupefig { overflow: visible; }
+.dupetile.keeper .dupefig::after {
+  content: ""; position: absolute; inset: -4px; border-radius: 9px;
+  border: 2px solid var(--accent); pointer-events: none;
 }
-.dupeday { font-size: 11.5px; font-variant-numeric: tabular-nums; }
-/* Byte-identical copies are the same picture, so the only thing worth the
-   reader's attention is the handful of fields that are not the same. What
-   matches is stated once in the group header; what differs is marked here. */
-.differs { color: var(--warn); }
+.dupetile.keeper .dupefig > img, .dupetile.keeper .dupefig > .media-missing { border-radius: 6px; }
+.dupechoose {
+  position: absolute; inset: 0; z-index: 1; margin: 0; padding: 0;
+  border: 0; border-radius: 6px; background: transparent; cursor: pointer;
+}
+.dupechoose:disabled { cursor: default; }
+.dupechoose:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.dupetile:not(.keeper) .dupechoose:hover:not(:disabled) { background: rgba(255, 255, 255, .08); }
+.dupemark {
+  position: absolute; top: 8px; right: 8px; z-index: 2; pointer-events: none;
+  width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center;
+}
+.dupemark .icon, .dupemark .icon svg { width: 17px; height: 17px; display: block; }
+.dupemark.keep { background: var(--accent); color: var(--on-accent); box-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
+.dupemark.bin {
+  color: rgba(255, 255, 255, .92); background: rgba(16, 17, 21, .5);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+.dupesize {
+  position: absolute; left: 0; right: 0; bottom: 8px; z-index: 2; pointer-events: none;
+  text-align: center; font-size: 12.5px; font-weight: 600; letter-spacing: .01em;
+  font-variant-numeric: tabular-nums; color: #fff;
+  text-shadow: 0 0 1px rgba(0, 0, 0, .6), 0 1px 5px rgba(0, 0, 0, .55);
+}
+.duplay {
+  position: absolute; left: 50%; top: 50%; z-index: 2; transform: translate(-50%, -50%);
+  width: 52px; height: 52px; padding: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer;
+  color: #fff; background: rgba(10, 11, 15, .45);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.duplay .icon, .duplay .icon svg { width: 36px; height: 36px; display: block; }
+.duplay:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dupelabel {
+  margin: .55rem 0 0; display: flex; align-items: center; justify-content: center; gap: .4rem;
+  font-size: 12px; color: var(--muted); min-width: 0;
+}
+.dupelabel > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dupetile.keeper .dupelabel { color: var(--text); }
 .dupeflag {
-  padding: .05rem .35rem; border-radius: 3px; font-size: 10.5px;
+  flex: none; padding: .05rem .35rem; border-radius: 3px; font-size: 10.5px;
   color: var(--warn); background: color-mix(in oklab, var(--warn) 16%, transparent);
 }
-.dupestate { margin-left: auto; flex: none; font-size: 11.5px; font-weight: 600; }
-.dupestate.keep { color: var(--good); }
-.dupestate.cull { color: var(--bad); }
-.dupepick .xact { margin-top: .6rem; }
 
 @media (max-width: 640px) {
-  .dupebody { flex-direction: column; }
-  .dupeshot, .dupeshot:has(video) { width: 100%; height: auto; aspect-ratio: 1; }
+  .dupetiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem .9rem; }
+  .dupebulk .dupespace { margin-left: 0; width: 100%; justify-content: space-between; }
 }
 
 /* ------------------------------------------------------------ Bin page -- */

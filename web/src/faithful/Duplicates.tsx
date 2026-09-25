@@ -1,7 +1,8 @@
-import {useMemo,useState} from 'react';
+import {useMemo,useState,type CSSProperties} from 'react';
 import type {DuplicateGroup} from './Today';
 import {binChanged} from '../api';
 import {Busy} from '../Busy';
+import {Icon} from '../Icon';
 
 export type {DuplicateGroup} from './Today';
 export type DuplicateMember=DuplicateGroup['members'][number];
@@ -65,31 +66,68 @@ function why(keeper:DuplicateMember,members:DuplicateMember[],size:number,rule:R
   return 'it sorts first, and nothing in these names distinguishes them';
 }
 
-// Byte-identical files differ only in where they sit and what they are called,
-// so those are the only columns worth showing. Anything the copies share is said
-// once in the group header instead of repeated on every row.
-function differing(members:DuplicateMember[]){
-  return {
-    folder:new Set(members.map(member=>folder(member.path))).size>1,
-    day:new Set(members.map(member=>member.day)).size>1,
-  };
+function dayLabel(day:string){
+  const [year,month,date]=day.split('-').map(Number);
+  return new Date(Date.UTC(year,month-1,date)).toLocaleDateString(undefined,{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
 }
 
-// The copies are byte-identical, so they are the same picture by definition and
-// one frame answers for the whole group. It is also the only affordable choice:
-// the archive is a network mount, and a video element per copy turned two tiles
-// into five hundred range requests.
-function Frame({member}:{member:DuplicateMember}){
+// The group's heading is its dates, as Apple Photos heads a duplicate set.
+function datesOf(members:DuplicateMember[]){
+  const labels=[...new Set(members.map(member=>member.day))].sort().map(dayLabel);
+  if(labels.length<=1)return labels[0]??'Date unknown';
+  if(labels.length<=3)return `${labels.slice(0,-1).join(', ')} & ${labels[labels.length-1]}`;
+  return `${labels[0]} & ${labels.length-1} more dates`;
+}
+
+const latestDay=(group:DuplicateGroup)=>group.members.reduce((latest,member)=>member.day>latest?member.day:latest,'');
+
+// What tells the copies apart under each photo: the names when they differ,
+// otherwise the part of the folder that differs, since byte-identical files
+// differ in nothing else.
+function labelsOf(members:DuplicateMember[]){
+  if(new Set(members.map(member=>name(member.path))).size>1)return new Map(members.map(member=>[member.id,name(member.path)]));
+  const folders=members.map(member=>folder(member.path).split('/'));
+  let shared=0;
+  while(folders.every(parts=>shared<parts.length&&parts[shared]===folders[0][shared]))shared++;
+  return new Map(members.map((member,index)=>{
+    const parts=folders[index];
+    return [member.id,parts.slice(shared).join('/')||parts[parts.length-1]||'/'];
+  }));
+}
+
+// Every tile in a group draws the same preview. The copies are byte-identical,
+// so it is the same picture by definition, and one URL means one read off the
+// network mount however many copies there are.
+function Tile({member,previewID,size,label,keeper,disabled,onKeep}:{member:DuplicateMember;previewID:number;size:number;label:string;keeper:boolean;disabled:boolean;onKeep:()=>void}){
+  const [ratio,setRatio]=useState(0);
   const [playing,setPlaying]=useState(false);
   const [failed,setFailed]=useState(false);
-  if(playing)return <video className="dupemedia" src={`/api/media/${member.id}/original`} controls autoPlay playsInline
-    onEnded={()=>setPlaying(false)} onError={()=>{setPlaying(false);setFailed(true)}}/>;
-  return <>
-    {failed
-      ? <div className="media-missing"><span>No frame</span><small>{member.kind.toUpperCase()}</small></div>
-      : <img className="dupemedia" src={`/api/media/${member.id}/preview`} alt="" loading="lazy" decoding="async" onError={()=>setFailed(true)}/>}
-    {member.kind==='video'&&<button type="button" className="socialplay" aria-label={`Play ${name(member.path)}`} onClick={()=>setPlaying(true)}>▶</button>}
-  </>;
+  // The figure takes the photograph's own shape, so the size caption and the
+  // badge sit on the picture rather than on the cell around it.
+  const shape:CSSProperties|undefined=ratio?(ratio>=1?{width:'100%',height:'auto',aspectRatio:String(ratio)}:{width:'auto',height:'100%',aspectRatio:String(ratio)}):undefined;
+  return <li className={`dupetile${keeper?' keeper':''}`}>
+    {/* A cell as wide as the column and never taller: a landscape picture
+        sets a shorter cell, so the label sits under it, not under empty space. */}
+    <div className="dupecell" style={ratio>1?{aspectRatio:String(ratio)}:undefined}>
+      <figure className="dupefig" style={shape}>
+        {playing
+          ? <video src={`/api/media/${member.id}/original`} controls autoPlay playsInline onEnded={()=>setPlaying(false)} onError={()=>{setPlaying(false);setFailed(true)}}/>
+          : failed
+            ? <div className="media-missing"><span>No preview</span><small>{member.kind.toUpperCase()}</small></div>
+            : <img src={`/api/media/${previewID}/preview`} alt="" loading="lazy" decoding="async"
+                onLoad={event=>{const image=event.currentTarget;if(image.naturalWidth&&image.naturalHeight)setRatio(image.naturalWidth/image.naturalHeight)}}
+                onError={()=>setFailed(true)}/>}
+        {!playing&&<>
+          <button type="button" className="dupechoose" aria-pressed={keeper} disabled={disabled}
+            aria-label={keeper?`Keeping ${label}`:`Keep ${label} instead`} title={keeper?`Keeping ${member.path}`:`Keep ${member.path} instead`} onClick={onKeep}/>
+          <span className={`dupemark ${keeper?'keep':'bin'}`}><Icon name={keeper?'check':'delete'}/></span>
+          <span className="dupesize">{bytes(size)}</span>
+          {member.kind==='video'&&<button type="button" className="duplay" aria-label={`Play ${name(member.path)}`} onClick={()=>setPlaying(true)}><Icon name="play_circle" filled/></button>}
+        </>}
+      </figure>
+    </div>
+    <p className="dupelabel" title={member.path}><span>{label}</span>{member.path.includes('/.culled/')&&!label.includes('.culled')&&<span className="dupeflag">in .culled</span>}</p>
+  </li>;
 }
 
 export function Duplicates({report}:{report:DuplicateReport}){
@@ -102,9 +140,9 @@ export function Duplicates({report}:{report:DuplicateReport}){
   const [error,setError]=useState('');
 
   const key=(group:DuplicateGroup)=>`${group.hash}:${group.size}`;
-  // Biggest win first, which is the order every established duplicate finder
-  // uses because it is the order that makes a long list worth working through.
-  const ordered=useMemo(()=>[...groups].sort((a,b)=>b.reclaimable-a.reclaimable),[groups]);
+  // Newest first under date headings, as Apple Photos lists duplicates: a
+  // date is what a reader recognises a picture by.
+  const ordered=useMemo(()=>[...groups].sort((a,b)=>latestDay(b).localeCompare(latestDay(a))||b.reclaimable-a.reclaimable),[groups]);
   const keeperOf=(group:DuplicateGroup)=>overrides[key(group)]??pick(group.members,group.size,rule).id;
 
   const active=ordered.filter(group=>!skipped.has(key(group)));
@@ -136,19 +174,21 @@ export function Duplicates({report}:{report:DuplicateReport}){
     }catch(reason){setError((reason as Error).message)}finally{setBusy(false)}
   }
 
-  return <section className="dupehead">
-    <h1>Exact duplicates</h1>
-    <p className="ysum"><b>{groups.length.toLocaleString()}</b> verified groups · <b>{bytes(freeing)}</b> reclaimable
-      <span className="dim"> · {report.hashed.toLocaleString()} of {report.candidates.toLocaleString()} possible duplicates hashed</span></p>
-    <p className="hint">Two files can only be byte-identical if they are the same length, so the files that share a size with another file are the whole population that could hold a duplicate, and coverage is measured against that rather than against the archive. Every group below is byte-identical on a full hash, which means the copies are interchangeable and the only real question is which path you want to keep.</p>
+  return <section className="dupehead dupepage">
+    <h1>Duplicates</h1>
+    <p className="ysum"><b>{groups.length.toLocaleString()}</b> {groups.length===1?'group':'groups'} · <b>{bytes(freeing)}</b> can be freed
+      <span className="dim"> · {report.hashed.toLocaleString()} of {report.candidates.toLocaleString()} possible duplicates checked</span></p>
+    <p className="hint">Every group is byte-identical on a full hash, so the copies are the same file. Merging keeps the ticked copy and marks the rest for the Bin, where they stay restorable. Click another copy to keep that one instead.</p>
 
     {groups.length>0&&<div className="dupebulk">
-      <span className="dim">Keep by default:</span>
-      {RULES.map(entry=><button type="button" key={entry.key} className={`btn small${rule===entry.key?' on':''}`} title={entry.hint}
-        onClick={()=>{setRule(entry.key);setOverrides({})}}>{entry.label}</button>)}
+      <label className="dupekeep">Keep
+        <select value={rule} disabled={busy} onChange={event=>{setRule(event.target.value as Rule);setOverrides({})}}>
+          {RULES.map(entry=><option key={entry.key} value={entry.key} title={entry.hint}>{entry.label.toLowerCase()}</option>)}
+        </select>
+      </label>
       <span className="dupespace">
-        <span>Marking <b>{doomed.toLocaleString()}</b> {doomed===1?'copy':'copies'} across <b>{active.length.toLocaleString()}</b> {active.length===1?'group':'groups'} frees <b>{bytes(freeing)}</b></span>
-        <button type="button" className="btn primary" disabled={busy||active.length===0} onClick={()=>void resolve(active)}>{busy?<Busy label="Saving…" state="working"/>:`Mark ${doomed.toLocaleString()} for the Bin`}</button>
+        <span><b>{doomed.toLocaleString()}</b> {doomed===1?'copy':'copies'} in <b>{active.length.toLocaleString()}</b> {active.length===1?'group':'groups'}, <b>{bytes(freeing)}</b></span>
+        <button type="button" className="btn primary" disabled={busy||active.length===0} onClick={()=>void resolve(active)}>{busy?<Busy label="Saving…" state="working"/>:`Merge all ${active.length.toLocaleString()}`}</button>
       </span>
     </div>}
     {message&&<p className="flash" role="status">{message}</p>}
@@ -160,49 +200,25 @@ export function Duplicates({report}:{report:DuplicateReport}){
           : `All ${report.candidates.toLocaleString()} files that share a size with another file have been hashed, and none of them match. There are no byte-identical duplicates.`}</p>
       : <p className="note warn">This page cannot yet tell you whether duplicates exist. {report.hashed.toLocaleString()} of the {report.candidates.toLocaleString()} files that share a size with another file have a cached full hash, so {(report.candidates-report.hashed).toLocaleString()} remain unchecked. An empty result here would mean the evidence is missing, not that the archive is clean.</p>)}
 
-    {ordered.map((group,index)=>{
+    {ordered.map(group=>{
       const groupKey=key(group);
       const keeperID=keeperOf(group);
       const keeper=group.members.find(member=>member.id===keeperID)||group.members[0];
-      const shows=differing(group.members);
+      const labels=labelsOf(group.members);
       const skip=skipped.has(groupKey);
-      return <div className={`xgroup dupegroup${skip?' skipped':''}`} key={groupKey}>
-        <p className="xmeta"><span className="gnum">{index+1}</span>
-          {group.members.length} identical copies · {bytes(group.size)} each · <strong>{bytes(group.reclaimable)}</strong> reclaimable
-          {!shows.folder&&<span className="dim"> · all in {folder(keeper.path)}</span>}
-          {!shows.day&&<span className="dim"> · {keeper.day}</span>}
-          <span className="hash">{group.hash.slice(0,12)}</span>
-        </p>
-        <div className="dupebody">
-          <div className="dupeshot"><Frame member={keeper}/></div>
-          <div className="dupepick">
-            <p className="dupewhy">{overrides[groupKey]
-              ? <>Keeping <strong>{name(keeper.path)}</strong> because you picked it.</>
-              : <>Keeping <strong>{name(keeper.path)}</strong> because {why(keeper,group.members,group.size,rule)}.</>}</p>
-            {/* One of N, and a radio cannot be cleared, only moved. That is what
-                makes the keeper protected: there is no state in which a group
-                has every one of its copies marked. */}
-            <ul className="dupelist">{group.members.map(member=>{
-              const isKeeper=member.id===keeperID;
-              return <li key={member.id} className={isKeeper?'keeper':'doomed'}>
-                <label>
-                  <input type="radio" name={`keeper-${groupKey}`} checked={isKeeper} disabled={busy||skip}
-                    onChange={()=>setOverrides(current=>({...current,[groupKey]:member.id}))}/>
-                  <span className="dupename" title={member.path}>{name(member.path)}</span>
-                  {shows.folder&&<span className="dupepath differs" title={member.path}>{folder(member.path)}</span>}
-                  {shows.day&&<span className="dupeday differs">{member.day}</span>}
-                  {member.path.includes('/.culled/')&&<span className="dupeflag">in .culled</span>}
-                  <span className={`dupestate ${isKeeper?'keep':'cull'}`}>{isKeeper?'Keep':'Bin'}</span>
-                </label>
-              </li>;
-            })}</ul>
-            <p className="xact">
-              <button className="btn small danger" disabled={busy||skip} onClick={()=>void resolve([group])}>Mark the other {group.members.length-1} for the Bin</button>
-              <button className="btn small" disabled={busy} onClick={()=>setSkipped(current=>{const next=new Set(current);next.has(groupKey)?next.delete(groupKey):next.add(groupKey);return next})}>{skip?'Include this group':'Leave this group alone'}</button>
-            </p>
-          </div>
-        </div>
-      </div>;
+      const reason=overrides[groupKey]?'you picked it':why(keeper,group.members,group.size,rule);
+      return <article className={`dupegroup${skip?' skipped':''}`} key={groupKey}>
+        <header className="dupegrouphead">
+          <h2>{datesOf(group.members)}</h2>
+          <button type="button" className="dupelink" disabled={busy||skip} title={`Keeps ${name(keeper.path)} because ${reason}, and marks the other ${group.members.length-1} for the Bin`} onClick={()=>void resolve([group])}>Merge {group.members.length} copies</button>
+          <button type="button" className="dupelink quiet" disabled={busy} onClick={()=>setSkipped(current=>{const next=new Set(current);if(next.has(groupKey))next.delete(groupKey);else next.add(groupKey);return next})}>{skip?'Include':'Skip'}</button>
+        </header>
+        {/* One of N, never none: clicking a copy moves the tick to it, and no
+            click can clear it, so a group can never have every copy marked. */}
+        <ul className="dupetiles">{group.members.map(member=><Tile key={member.id} member={member} previewID={group.members[0].id} size={group.size}
+          label={labels.get(member.id)??name(member.path)} keeper={member.id===keeperID} disabled={busy||skip}
+          onKeep={()=>setOverrides(current=>({...current,[groupKey]:member.id}))}/>)}</ul>
+      </article>;
     })}
 
     {report.unproven.length>0&&<>
