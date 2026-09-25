@@ -256,8 +256,18 @@ func main() {
 		mux.Handle("GET /api/trash", s.Handler())
 		mux.Handle("GET /api/trash/deleting", s.Handler())
 		mux.Handle("/api/trash/", catalog.TrashGateway(*binUpstream, secret))
+		// The Mac helper that carries culling across to Apple Photos talks to
+		// this process, which is also where its jobs live. The key comes from
+		// the environment only, like the Immich key, and is never logged.
+		photos := catalog.NewPhotosHub(s, os.Getenv("PHOTOS_AGENT_KEY"))
+		if !photos.Enabled() {
+			log.Printf("Apple Photos helper disabled: PHOTOS_AGENT_KEY is not set or shorter than %d characters", catalog.PhotosAgentKeyMin)
+		}
+		photosRoutes := photos.Handler()
+		mux.Handle("/api/photos", photosRoutes)
+		mux.Handle("/api/photos/", photosRoutes)
 		mux.Handle("/api/", s.Handler())
-		mux.Handle("/", webApp(*web, []string{"/year", "/duplicates", "/upgrades", "/shadows", "/screenshots", "/social", "/log", "/bin", "/settings"}))
+		mux.Handle("/", webApp(*web, []string{"/year", "/duplicates", "/upgrades", "/shadows", "/screenshots", "/social", "/log", "/bin", "/photos", "/settings"}))
 		// Favourites are saved by this process, so the worker that mirrors them
 		// to Immich runs here too; the private writer has no reason to reach it.
 		startImmichSync(ctx, s, catalog.ImmichConfig{URL: *immichURL, Key: os.Getenv("IMMICH_KEY"), PathPrefix: *immichPrefix})

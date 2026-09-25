@@ -255,6 +255,15 @@ CREATE TABLE IF NOT EXISTS trash_deletions (
  attempts INTEGER NOT NULL DEFAULT 0,
  last_error TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS photos_sync (
+ asset_key TEXT NOT NULL,
+ action TEXT NOT NULL CHECK(action IN ('delete','favourite')),
+ synced_at TEXT NOT NULL,
+ photos_id TEXT NOT NULL DEFAULT '',
+ name TEXT NOT NULL DEFAULT '',
+ day TEXT NOT NULL DEFAULT '',
+ PRIMARY KEY(asset_key,action)
+);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS stats (id INTEGER PRIMARY KEY CHECK(id=1), total INTEGER NOT NULL);
 INSERT OR IGNORE INTO stats VALUES(1,0);

@@ -10,6 +10,7 @@ import {Screenshots,type ScreenshotPage} from './Screenshots';
 import {Shadows} from './Shadows';
 import {Social,type SocialPage} from './Social';
 import {Upgrades,type UpgradePage} from './Upgrades';
+import {Photos} from './Photos';
 import {recoverPending} from '../recoverPending';
 import {BIN_CHANGED} from '../api';
 import {Busy} from '../Busy';
@@ -29,6 +30,7 @@ function routeFor(path:string):LegacyRoute{
   if(path==='/shadows')return 'shadows';
   if(path==='/screenshots')return 'shots';
   if(path==='/social')return 'social';
+  if(path==='/photos')return 'photos';
   if(path==='/log')return 'log';
   if(path==='/bin')return 'bin';
   if(path==='/settings')return 'settings';
@@ -89,6 +91,7 @@ export function App(){
       if(path==='/duplicates')return {route,content:<Duplicates report={await json<DuplicateReport>('/api/duplicate-report?limit=1000')}/>} as PageState;
       if(path==='/upgrades')return {route,content:<Upgrades initial={await json<UpgradePage>('/api/upgrades')}/>} as PageState;
       if(path==='/log')return {route,content:<Log initial={await json<HistoryEvent[]>('/api/log?limit=200')}/>} as PageState;
+      if(path==='/photos')return {route,content:<Photos/>} as PageState;
       if(path==='/bin')return {route,content:<Bin onCount={count=>setStats(current=>current&&{...current,bin:count})}/>} as PageState;
       if(path==='/settings')return {route,content:<Settings stats={await json<Stats>('/api/stats')}/>} as PageState;
       if(path==='/shadows')return {route,content:<Shadows groups={await json<Parameters<typeof Shadows>[0]['groups']>('/api/shadows')}/>} as PageState;
