@@ -275,14 +275,23 @@ func nullInt(value sql.NullInt64) any {
 	return nil
 }
 
-func upsertExternalAsset(ctx context.Context, target *sql.Tx, source, assetPath string, size, captured int64) (int64, error) {
+var videoExtensions = map[string]bool{"mov": true, "mp4": true, "m4v": true, "avi": true, "mkv": true, "3gp": true, "mpg": true, "mpeg": true}
+var rawExtensions = map[string]bool{"arw": true, "dng": true, "cr2": true, "nef": true, "raf": true, "orf": true}
+
+// assetKind is the catalogue's kind for a file, from its extension.
+func assetKind(assetPath string) string {
 	ext := strings.ToLower(strings.TrimPrefix(path.Ext(assetPath), "."))
-	kind := "image"
-	if map[string]bool{"mov": true, "mp4": true, "m4v": true, "avi": true, "mkv": true, "3gp": true, "mpg": true, "mpeg": true}[ext] {
-		kind = "video"
-	} else if map[string]bool{"arw": true, "dng": true, "cr2": true, "nef": true, "raf": true, "orf": true}[ext] {
-		kind = "raw"
+	if videoExtensions[ext] {
+		return "video"
 	}
+	if rawExtensions[ext] {
+		return "raw"
+	}
+	return "image"
+}
+
+func upsertExternalAsset(ctx context.Context, target *sql.Tx, source, assetPath string, size, captured int64) (int64, error) {
+	kind := assetKind(assetPath)
 	if _, err := target.ExecContext(ctx, "INSERT INTO assets(relative_path,captured_at,kind,size_bytes,source_id) VALUES(?,?,?,?,?) ON CONFLICT(source_id,relative_path) DO UPDATE SET captured_at=excluded.captured_at,kind=excluded.kind,size_bytes=excluded.size_bytes", assetPath, captured, kind, size, source); err != nil {
 		return 0, err
 	}

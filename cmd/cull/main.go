@@ -1,16 +1,21 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"daddy-cull/next/internal/catalog"
 	"daddy-cull/next/mac"
+	"encoding/json"
 	"flag"
+	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 	// The image carries no zoneinfo, so without this TZ is ignored and the
@@ -34,6 +39,8 @@ func main() {
 	importLegacy := flag.String("import-legacy-db", "", "import durable state from a read-only legacy database snapshot")
 	importScreenshots := flag.String("import-screenshots", "", "index screenshot holding-area metadata without opening media")
 	importUpgrades := flag.String("import-upgrades", "", "import the confirmed Takeout upgrade TSV")
+	scanArchive := flag.String("scan-archive", "", "add media in this archive directory's day folders that the catalogue does not hold yet, then exit")
+	screenshotFilter := flag.Bool("screenshot-filter", false, "read paths on stdin, print \"<path>\\t<rule>\" for each one that is a screenshot, then exit")
 	importSocial := flag.String("import-social", "", "import the social-video detection report TSV")
 	socialArchivePrefix := flag.String("social-archive-prefix", "/mnt/user/family-archive", "host archive prefix recorded in the social report")
 	socialPosters := flag.String("social-posters", "", "read-only directory of poster frames captured during social detection")
@@ -59,13 +66,23 @@ func main() {
 	immichPrefix := flag.String("immich-path-prefix", envOr("IMMICH_PATH_PREFIX", catalog.DefaultImmichPathPrefix), "archive path as Immich's external library recorded it")
 	flag.Parse()
 	imports := 0
-	for _, value := range []string{*importFile, *importEvidence, *importLegacy, *importScreenshots, *importUpgrades, *importSocial} {
+	for _, value := range []string{*importFile, *importEvidence, *importLegacy, *importScreenshots, *importUpgrades, *importSocial, *scanArchive} {
 		if value != "" {
 			imports++
 		}
 	}
 	if imports > 1 {
 		log.Fatal("choose one import operation")
+	}
+	// The graduation script on the host asks this before it deletes anything,
+	// so it answers from the name alone and needs no catalogue.
+	if *screenshotFilter {
+		matched, filterErr := filterScreenshots(os.Stdin, os.Stdout)
+		if filterErr != nil {
+			log.Fatal(filterErr)
+		}
+		fmt.Fprintf(os.Stderr, "screenshot-filter: %d matched\n", matched)
+		return
 	}
 	if *check || *checkWriter {
 		client := http.Client{Timeout: 2 * time.Second}
@@ -123,6 +140,16 @@ func main() {
 			log.Fatal(err)
 		}
 		log.Print("legacy progress and workflow records imported; newer decisions preserved")
+		return
+	}
+	if *scanArchive != "" {
+		result, scanErr := s.ScanArchive(ctx, *scanArchive)
+		if scanErr != nil {
+			log.Fatal(scanErr)
+		}
+		if encodeErr := json.NewEncoder(os.Stdout).Encode(result); encodeErr != nil {
+			log.Fatal(encodeErr)
+		}
 		return
 	}
 	if *importScreenshots != "" {
@@ -330,4 +357,29 @@ func envOr(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// filterScreenshots reads one path per line and writes "<path>\t<rule>" for
+// each screenshot, and nothing for the rest, so stdout is pure data.
+func filterScreenshots(in io.Reader, out io.Writer) (int, error) {
+	scan := bufio.NewScanner(in)
+	scan.Buffer(make([]byte, 65536), 1048576)
+	w := bufio.NewWriter(out)
+	matched := 0
+	for scan.Scan() {
+		line := strings.TrimRight(scan.Text(), "\r")
+		if line == "" {
+			continue
+		}
+		if rule := catalog.ClassifyScreenshot(line); rule != "" {
+			if _, err := fmt.Fprintf(w, "%s\t%s\n", line, rule); err != nil {
+				return matched, err
+			}
+			matched++
+		}
+	}
+	if err := scan.Err(); err != nil {
+		return matched, err
+	}
+	return matched, w.Flush()
 }
