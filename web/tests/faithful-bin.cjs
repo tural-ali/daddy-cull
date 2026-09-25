@@ -14,18 +14,19 @@ const fixture=()=>[
 (async()=>{
   const browser=await chromium.launch({channel:'chrome',headless:true});
   const page=await browser.newPage({viewport:{width:1440,height:900}});
-  let bin=fixture();
+  let bin=fixture(),grace=0;
   const posts=[];
   await page.route('**/api/**',async route=>{
     const request=route.request(),url=new URL(request.url());
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:10,synthetic:false,snapshotAt:'',candidates:0,calendarDays:0,reviewedDays:0,decisions:0,favourites:0,evidence:0,fullHashes:0,marked:1,bin:bin.length}});
     if(url.pathname==='/api/trash')return route.fulfill({json:bin});
+    if(url.pathname==='/api/trash/deleting')return route.fulfill({json:{graceDays:grace,items:[],lastRun:'',lastDeleted:0,lastError:'',checkIntervalMinutes:15}});
     if(url.pathname.startsWith('/api/trash/')){
       const body=request.postDataJSON();posts.push({path:url.pathname,body});
       const groups=new Set(bin.filter(item=>(body.keys||bin.map(other=>other.key)).includes(item.key)).map(item=>item.group));
       const hit=bin.filter(item=>groups.has(item.group));
       bin=bin.filter(item=>!groups.has(item.group));
-      return route.fulfill({json:{done:hit.length,bytes:hit.reduce((sum,item)=>sum+item.size,0),failures:[]}});
+      return route.fulfill({json:{done:hit.length,bytes:hit.reduce((sum,item)=>sum+item.size,0),failures:[],...(grace&&url.pathname!=='/api/trash/restore'?{keptDays:grace}:{})}});
     }
     if(/^\/api\/(media|bin-media|binned-media)\//.test(url.pathname))return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="#6b5252"/></svg>'});
     throw new Error(`${request.method()} ${url.pathname}`);
@@ -83,7 +84,22 @@ const fixture=()=>[
   assert.deepEqual(posts[2],{path:'/api/trash/empty',body:{confirmation:'DELETE 3'}});
   await page.getByText(/The Bin is empty/).waitFor();
   assert.equal(await page.locator('.fbar').count(),0);
+
+  // With a grace period, deleting only schedules: the wording says the files
+  // stay on disk and can be restored from the Log until they go.
+  bin=fixture();grace=30;
+  await page.goto((process.env.APP_URL||'http://127.0.0.1:8842')+'/bin');
+  await page.locator('.bingal figure').nth(4).waitFor();
+  await page.getByRole('checkbox',{name:'Select MARKED.JPG'}).click();
+  await page.getByRole('button',{name:'Delete selected',exact:true}).click();
+  const kept=page.getByRole('dialog',{name:'Delete 1 file?'});
+  await kept.waitFor();
+  assert.match(await kept.innerText(),/stay on disk for 30 days, restorable from the Log, and are then deleted automatically/);
+  await kept.getByRole('button',{name:'Delete 1 file'}).click();
+  await page.getByText(/1 file deleted from the Bin\. They stay on disk until .+ and can be restored from the Log until then\./).waitFor();
+  assert.deepEqual(posts[3],{path:'/api/trash/delete',body:{keys:['marked:11'],confirmation:'DELETE 1'}});
+  assert.equal(await page.locator('.bingal figure').count(),4);
   await page.screenshot({path:process.env.SHOT||'/tmp/faithful-bin.png'});
   await browser.close();
-  console.log(JSON.stringify({oneGallery:true,previewsForBothTools:true,batchSelectedTogether:true,shiftRange:true,restoreSelected:true,deleteAsksFirst:true,cancelSendsNothing:true,emptyNamesCount:true},null,2));
+  console.log(JSON.stringify({oneGallery:true,previewsForBothTools:true,batchSelectedTogether:true,shiftRange:true,restoreSelected:true,deleteAsksFirst:true,cancelSendsNothing:true,emptyNamesCount:true,graceSchedules:true},null,2));
 })().catch(error=>{console.error(error);process.exit(1)});

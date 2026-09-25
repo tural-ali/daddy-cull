@@ -214,7 +214,11 @@ func main() {
 		}
 		// The Bin page acts on everything it lists at once, through the same
 		// engines as above; each source is still moved only by its own engine.
-		mux.Handle("/trash/", catalog.NewTrashWriter(s, engine, legacyEngine, screenshotWriter).Handler(secret))
+		trash := catalog.NewTrashWriter(s, engine, legacyEngine, screenshotWriter)
+		mux.Handle("/trash/", trash.Handler(secret))
+		// Files deleted from the Bin wait out their grace period on disk; only
+		// this process may delete them, so the reaper runs here.
+		trash.StartReaper(ctx)
 		mux.Handle("/", engine.Handler(secret))
 	} else {
 		// A local read-only mount is preferred when one is given: it needs no
@@ -250,6 +254,7 @@ func main() {
 		mux.Handle("/api/screenshot-actions/", catalog.ScreenshotGateway(*binUpstream, secret))
 		mux.Handle("/api/upgrade-actions/", catalog.UpgradeGateway(*binUpstream, secret))
 		mux.Handle("GET /api/trash", s.Handler())
+		mux.Handle("GET /api/trash/deleting", s.Handler())
 		mux.Handle("/api/trash/", catalog.TrashGateway(*binUpstream, secret))
 		mux.Handle("/api/", s.Handler())
 		mux.Handle("/", webApp(*web, []string{"/year", "/duplicates", "/upgrades", "/shadows", "/screenshots", "/social", "/log", "/bin", "/settings"}))

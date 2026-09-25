@@ -41,7 +41,29 @@ type TrashItem struct {
 }
 
 // Trash lists everything currently in the Bin, most recently removed first.
+// Files deleted from the Bin are still on disk until their grace period ends,
+// but they are no longer the Bin's: they are listed by Deleting instead.
 func (s *Store) Trash(ctx context.Context) ([]TrashItem, error) {
+	items, err := s.held(ctx)
+	if err != nil {
+		return nil, err
+	}
+	scheduled, err := s.scheduledGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+	bin := make([]TrashItem, 0, len(items))
+	for _, item := range items {
+		if _, gone := scheduled[item.Group]; !gone {
+			bin = append(bin, item)
+		}
+	}
+	return bin, nil
+}
+
+// held lists every removed file still on disk, whether it is in the Bin or
+// waiting out its grace period after being deleted from it.
+func (s *Store) held(ctx context.Context) ([]TrashItem, error) {
 	items := make([]TrashItem, 0)
 
 	marked, err := s.markedForBin(ctx, -1)

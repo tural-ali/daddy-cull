@@ -950,6 +950,8 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   .kv dt { flex: none; }
   .fbar { flex-wrap: wrap; gap: .5rem; }
   .fbar .hint { display: none; }
+  /* The bar wraps to two rows here, so the page keeps room for both. */
+  body:has(.fbar) { padding-bottom: 7.5rem; }
   .rvbtn kbd { display: none; }
   .rvnav { opacity: 0 !important; }
   .tally { gap: 1.1rem; }
@@ -1476,3 +1478,64 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
   padding: 2px 6px; border-radius: 4px;
   font-size: 10.5px; color: #fff; background: rgba(10, 11, 15, .72);
 }
+
+/* ------------------------------------------------------------ Log grid -- */
+
+/* A preview in a tile is a button now, so it opens in place; it keeps the look
+   of the link it replaced. */
+.mo button.shot { padding: 0; border: 0; background: none; font: inherit; color: inherit; }
+.mo button.shot:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.deletinghead { margin-top: .4rem; }
+.deletinghead h2, .logtitle { margin: 1.6rem 0 .3rem; font-size: 17px; }
+.deletinghead + .flash, .deletinghead ~ .bingal { margin-bottom: 1.2rem; }
+
+.loggrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  gap: 8px;
+  margin-top: .6rem;
+}
+.loggrid .lday {
+  grid-column: 1 / -1;
+  margin: 1rem 0 0;
+  font-size: 11.5px; font-weight: 500;
+  letter-spacing: .05em; text-transform: uppercase;
+  color: var(--faint);
+}
+.loggrid .lday:first-child { margin-top: 0; }
+.logtile .bdg .b.verb.bad { background: color-mix(in oklab, var(--bad) 80%, #000); }
+.logtile .bdg .b.verb.ok  { background: color-mix(in oklab, var(--good) 78%, #000); }
+.logtile .bdg .b.verb.fav { background: color-mix(in oklab, var(--fav) 80%, #000); }
+/* Undo sits top right, clear of the caption, which is what identifies the file. */
+.logtile .acts {
+  top: 0; bottom: auto; justify-content: flex-end;
+  background: linear-gradient(to bottom, rgba(10, 11, 15, .7), transparent);
+}
+.logtile.fav::before { display: none; }
+.logtile .cap a { color: inherit; }
+.logtile .cap a:hover { text-decoration: underline; }
+.logtile.undone { opacity: .55; }
+.logtile.undone img { filter: grayscale(.6); }
+
+/* The grace period is one sentence with a number in it, read left to right. */
+.graceform { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: .8rem 0 1rem; }
+.graceform label { color: var(--text); }
+.graceform input {
+  width: 5.5rem; padding: .38rem .55rem;
+  font: inherit; font-variant-numeric: tabular-nums;
+  color: var(--text); background: var(--bg-3);
+  border: 1px solid var(--line-2); border-radius: var(--radius-sm);
+}
+.graceform input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.graceform input[aria-invalid="true"] { border-color: var(--bad); }
+.graceform .btn { margin-left: .3rem; }
+.warntext { color: var(--warn); }
+/* On the Log the waiting files sit above the saved choices, at the same size. */
+.bingal.small { grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); }
+
+/* The Bin and Log footer keeps its buttons on one row; the hint gives way first. */
+.fbar.binbar .fleft { flex: none; flex-wrap: nowrap; }
+.fbar.binbar .fright { flex: 1 1 0; min-width: 0; justify-content: flex-end; text-align: right; }
+@media (max-width: 960px) { .fbar.binbar .fright:not(:has(.busy)) { display: none; } }
+@media (max-width: 720px) { .fbar.binbar .fleft { flex-wrap: wrap; } }

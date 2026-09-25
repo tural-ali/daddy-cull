@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -207,6 +208,48 @@ func (s *Store) Handler() http.Handler {
 			return
 		}
 		writeJSON(w, items)
+	})
+	mux.HandleFunc("GET /api/trash/deleting", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		report, err := s.Deleting(ctx)
+		if err != nil {
+			http.Error(w, "catalogue unavailable", 503)
+			return
+		}
+		writeJSON(w, report)
+	})
+	// The grace period is a setting, not a file operation, so this process saves
+	// it; the writer reads it each time its reaper runs.
+	mux.HandleFunc("POST /api/settings/bin", func(w http.ResponseWriter, r *http.Request) {
+		if !sameOriginJSON(w, r) {
+			return
+		}
+		var input struct {
+			GraceDays *int `json:"graceDays"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil || input.GraceDays == nil {
+			http.Error(w, "graceDays required", 400)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		if err := s.SetGraceDays(ctx, *input.GraceDays); err != nil {
+			if errors.Is(err, ErrInvalid) {
+				http.Error(w, fmt.Sprintf("choose a number of days from 0 to %d", MaxGraceDays), 400)
+				return
+			}
+			http.Error(w, "the setting could not be saved", 503)
+			return
+		}
+		report, err := s.Deleting(ctx)
+		if err != nil {
+			http.Error(w, "catalogue unavailable", 503)
+			return
+		}
+		writeJSON(w, report)
 	})
 	mux.HandleFunc("GET /api/screenshot-bin", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)

@@ -249,6 +249,12 @@ CREATE TABLE IF NOT EXISTS immich_favourites (
  updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS immich_favourites_due ON immich_favourites(state,next_attempt_at);
+CREATE TABLE IF NOT EXISTS trash_deletions (
+ grp TEXT PRIMARY KEY,
+ deleted_at TEXT NOT NULL,
+ attempts INTEGER NOT NULL DEFAULT 0,
+ last_error TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS stats (id INTEGER PRIMARY KEY CHECK(id=1), total INTEGER NOT NULL);
 INSERT OR IGNORE INTO stats VALUES(1,0);

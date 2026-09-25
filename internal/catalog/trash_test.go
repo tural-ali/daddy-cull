@@ -90,6 +90,11 @@ func newTrashFixture(t *testing.T) trashFixture {
 	}
 	f.shot = shot.ID
 	f.trash = NewTrashWriter(s, bin, legacy, shots)
+	// These tests are about what the engines do when a file is deleted, so
+	// deletion is immediate here; the grace period has tests of its own.
+	if err = s.SetGraceDays(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
 	return f
 }
 

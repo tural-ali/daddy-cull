@@ -22,7 +22,7 @@ func TrashGateway(upstream, secret string) http.Handler {
 	client := &http.Client{Timeout: 60 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		route := strings.TrimPrefix(r.URL.Path, "/api/trash")
-		if r.Method != "POST" || (route != "/restore" && route != "/delete" && route != "/empty") {
+		if r.Method != "POST" || (route != "/restore" && route != "/delete" && route != "/empty" && route != "/purge-now") {
 			http.NotFound(w, r)
 			return
 		}
@@ -107,6 +107,9 @@ func (t *TrashWriter) Handler(secret string) http.Handler {
 	}))
 	mux.HandleFunc("POST /trash/delete", run(func(ctx context.Context, value input) (TrashResult, error) {
 		return t.Delete(ctx, value.Keys, value.Confirmation)
+	}))
+	mux.HandleFunc("POST /trash/purge-now", run(func(ctx context.Context, value input) (TrashResult, error) {
+		return t.PurgeNow(ctx, value.Keys, value.Confirmation)
 	}))
 	mux.HandleFunc("POST /trash/empty", run(func(ctx context.Context, value input) (TrashResult, error) {
 		return t.Empty(ctx, value.Confirmation)

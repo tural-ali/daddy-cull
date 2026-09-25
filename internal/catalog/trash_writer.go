@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
+	"time"
 )
 
 // TrashWriter carries out the Bin page's three actions, restore, delete and
@@ -37,6 +39,16 @@ type TrashResult struct {
 	Done     int            `json:"done"`
 	Bytes    int64          `json:"bytes"`
 	Failures []TrashFailure `json:"failures"`
+	// KeptDays is set when a deletion was only scheduled: the files stay on
+	// disk this many days, restorable from the Log, then go for good.
+	KeptDays int `json:"keptDays,omitempty"`
+}
+
+// actOutcome records which groups an action finished and why the others did
+// not, so a schedule is only dropped for a group that really was handled.
+type actOutcome struct {
+	done   map[string]bool
+	failed map[string]string
 }
 
 type TrashFailure struct {
@@ -52,13 +64,13 @@ const engineBatch = 20
 // so that nothing else can delete by accident.
 func DeleteConfirmation(items int) string { return fmt.Sprintf("DELETE %d", items) }
 
-// resolve returns the Bin's current items for the given keys, widened to whole
-// groups, in Bin order.
-func (t *TrashWriter) resolve(ctx context.Context, keys []string) ([]TrashItem, error) {
+// resolve returns the current items for the given keys from one list, widened
+// to whole groups, in list order.
+func (t *TrashWriter) resolve(ctx context.Context, keys []string, list func(context.Context) ([]TrashItem, error)) ([]TrashItem, error) {
 	if len(keys) == 0 {
 		return nil, fmt.Errorf("nothing was selected")
 	}
-	all, err := t.s.Trash(ctx)
+	all, err := list(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -86,31 +98,134 @@ func (t *TrashWriter) resolve(ctx context.Context, keys []string) ([]TrashItem, 
 // Selection reports how many cards an action on these keys would affect once
 // widened to whole groups, which is the number the confirmation must name.
 func (t *TrashWriter) Selection(ctx context.Context, keys []string) (int, error) {
-	items, err := t.resolve(ctx, keys)
+	items, err := t.resolve(ctx, keys, t.s.Trash)
 	return len(items), err
 }
 
+// deletingItems lists only the files deleted from the Bin and still waiting.
+func (t *TrashWriter) deletingItems(ctx context.Context) ([]TrashItem, error) {
+	grace, err := t.s.GraceDays(ctx)
+	if err != nil {
+		grace = 0
+	}
+	waiting, err := t.s.deleting(ctx, grace)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]TrashItem, 0, len(waiting))
+	for _, item := range waiting {
+		items = append(items, item.TrashItem)
+	}
+	return items, nil
+}
+
+// Restore puts files back where they came from, whether they are in the Bin or
+// were deleted from it and are still waiting out the grace period.
 func (t *TrashWriter) Restore(ctx context.Context, keys []string) (TrashResult, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	items, err := t.resolve(ctx, keys)
+	items, err := t.resolve(ctx, keys, t.s.held)
 	if err != nil {
 		return TrashResult{}, err
 	}
-	return t.act(ctx, items, false), nil
+	result, outcome := t.act(ctx, items, false)
+	return result, t.s.unschedule(ctx, setKeys(outcome.done))
 }
 
 func (t *TrashWriter) Delete(ctx context.Context, keys []string, confirmation string) (TrashResult, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	items, err := t.resolve(ctx, keys)
+	items, err := t.resolve(ctx, keys, t.s.Trash)
 	if err != nil {
 		return TrashResult{}, err
 	}
 	if confirmation != DeleteConfirmation(len(items)) {
 		return TrashResult{}, fmt.Errorf("deletion was not confirmed for these %d files", len(items))
 	}
-	return t.act(ctx, items, true), nil
+	return t.remove(ctx, items)
+}
+
+// PurgeNow deletes files already deleted from the Bin without waiting for the
+// grace period to end, for a reviewer who is sure and needs the space.
+func (t *TrashWriter) PurgeNow(ctx context.Context, keys []string, confirmation string) (TrashResult, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	items, err := t.resolve(ctx, keys, t.deletingItems)
+	if err != nil {
+		return TrashResult{}, err
+	}
+	if confirmation != DeleteConfirmation(len(items)) {
+		return TrashResult{}, fmt.Errorf("deletion was not confirmed for these %d files", len(items))
+	}
+	result, outcome := t.act(ctx, items, true)
+	return result, t.s.unschedule(ctx, setKeys(outcome.done))
+}
+
+// remove deletes files from the Bin: at once when the grace period is zero,
+// otherwise by scheduling them for the reaper. A file marked but never moved is
+// moved into the Bin first, so every scheduled file waits somewhere the writer
+// owns rather than in the middle of the archive.
+func (t *TrashWriter) remove(ctx context.Context, items []TrashItem) (TrashResult, error) {
+	grace, err := t.s.GraceDays(ctx)
+	if err != nil {
+		return TrashResult{}, err
+	}
+	if grace == 0 {
+		result, _ := t.act(ctx, items, true)
+		return result, nil
+	}
+	result := TrashResult{Failures: []TrashFailure{}, KeptDays: grace}
+	groups := make([]string, 0)
+	var marked []TrashItem
+	for _, item := range items {
+		if item.Source == "marked" {
+			marked = append(marked, item)
+			continue
+		}
+		result.Done++
+		result.Bytes += item.Size
+	}
+	for _, group := range groupsOf(items) {
+		if !strings.HasPrefix(group, "marked:") {
+			groups = append(groups, group)
+		}
+	}
+	for start := 0; start < len(marked); start += engineBatch {
+		chunk := marked[start:min(start+engineBatch, len(marked))]
+		id, err := t.quarantine(ctx, chunk)
+		if err != nil {
+			for _, item := range chunk {
+				result.Failures = append(result.Failures, TrashFailure{Name: item.Name, Error: err.Error()})
+			}
+			continue
+		}
+		groups = append(groups, "bin:"+id)
+		for _, item := range chunk {
+			result.Done++
+			result.Bytes += item.Size
+		}
+	}
+	return result, t.s.scheduleDeletion(ctx, groups, time.Now())
+}
+
+// quarantine moves marked files into the Bin as one writer batch and returns
+// the batch, so it can be scheduled for deletion as a whole.
+func (t *TrashWriter) quarantine(ctx context.Context, chunk []TrashItem) (string, error) {
+	if t.bin == nil {
+		return "", fmt.Errorf("the archive writer is not configured")
+	}
+	ids := make([]int64, 0, len(chunk))
+	for _, item := range chunk {
+		ids = append(ids, item.assetID)
+	}
+	plan, err := t.bin.Preview(ctx, ids)
+	if err != nil {
+		return "", err
+	}
+	if plan, err = t.bin.Run(ctx, plan.ID, "quarantine", ""); err != nil {
+		return "", err
+	}
+	return plan.ID, nil
 }
 
 // Empty deletes everything the Bin holds. The confirmation must name the count
@@ -129,22 +244,25 @@ func (t *TrashWriter) Empty(ctx context.Context, confirmation string) (TrashResu
 	if confirmation != DeleteConfirmation(len(items)) {
 		return TrashResult{}, fmt.Errorf("the Bin now holds %d files; refresh and confirm again", len(items))
 	}
-	return t.act(ctx, items, true), nil
+	return t.remove(ctx, items)
 }
 
 // act runs one action over resolved items, source by source. Each group
 // succeeds or fails on its own, and a failure never stops the rest.
-func (t *TrashWriter) act(ctx context.Context, items []TrashItem, purge bool) TrashResult {
+func (t *TrashWriter) act(ctx context.Context, items []TrashItem, purge bool) (TrashResult, actOutcome) {
 	result := TrashResult{Failures: []TrashFailure{}}
+	outcome := actOutcome{done: map[string]bool{}, failed: map[string]string{}}
 	fail := func(names []TrashItem, err error) {
 		for _, item := range names {
 			result.Failures = append(result.Failures, TrashFailure{Name: item.Name, Error: err.Error()})
+			outcome.failed[item.Group] = err.Error()
 		}
 	}
 	done := func(names []TrashItem) {
 		for _, item := range names {
 			result.Done++
 			result.Bytes += item.Size
+			outcome.done[item.Group] = true
 		}
 	}
 	var marked, legacy []TrashItem
@@ -206,7 +324,7 @@ func (t *TrashWriter) act(ctx context.Context, items []TrashItem, purge bool) Tr
 			done(members)
 		}
 	}
-	return result
+	return result, outcome
 }
 
 // markedChunk handles files that were marked but never moved. Restoring one is
