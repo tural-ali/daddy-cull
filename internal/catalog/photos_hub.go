@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"strings"
 	"sync"
 	"time"
@@ -77,15 +78,33 @@ var (
 
 // PhotosHub holds the current job and what the helper last said.
 type PhotosHub struct {
-	s       *Store
+	s   *Store
+	now func() time.Time
+	// fixedKey is PHOTOS_AGENT_KEY, kept only so a setup command can hand it
+	// out; without it keys are generated and only their hash is held.
+	fixedKey string
+	// started lets the page tell a helper that is gone from one that has not
+	// had time to call in since this process started.
+	started time.Time
+
+	mu sync.Mutex
+	// keyHash is the key the helper must present; enabled says there is one.
+	// Both change when a setup command hands out a new key.
 	keyHash [sha256.Size]byte
 	enabled bool
-	now     func() time.Time
-
-	mu      sync.Mutex
 	job     *photosJob
 	agent   photosAgentSeen
-	changed chan struct{}
+	// agentKeyed is when a request last arrived with the right key.
+	agentKeyed time.Time
+	changed    chan struct{}
+	setups     []*photosSetup
+	helper     fs.FS
+
+	rotating    sync.Mutex
+	payloadOnce sync.Once
+	payload     []byte
+	payloadSum  string
+	payloadErr  error
 }
 
 type photosAgentSeen struct {
@@ -137,22 +156,30 @@ type photosOutcome struct {
 	status, err string
 }
 
-// NewPhotosHub returns a hub; with a key shorter than PhotosAgentKeyMin the
-// helper endpoints refuse everything and the page says the helper is not set
-// up, but the rest of the app is unaffected.
+// NewPhotosHub returns a hub. A valid key (see ValidPhotosAgentKey) is the
+// only one ever accepted. Otherwise the key a setup command last handed out is
+// accepted, if there was one; until then the helper endpoints refuse
+// everything and the page offers to set Cull Sync up, but the rest of the app
+// is unaffected.
 func NewPhotosHub(s *Store, key string) *PhotosHub {
-	h := &PhotosHub{s: s, now: time.Now, changed: make(chan struct{})}
-	if len(key) >= PhotosAgentKeyMin {
-		h.enabled = true
+	h := &PhotosHub{s: s, now: time.Now, started: time.Now(), changed: make(chan struct{})}
+	if validPhotosKey(key) {
+		h.fixedKey, h.enabled = key, true
 		h.keyHash = sha256.Sum256([]byte(key))
+	} else if hash, ok := s.loadPhotosKeyHash(); ok {
+		h.keyHash, h.enabled = hash, true
 	}
 	return h
 }
 
-// Enabled reports whether a helper key is configured.
-func (h *PhotosHub) Enabled() bool { return h.enabled }
+// Enabled reports whether there is a key a helper can connect with.
+func (h *PhotosHub) Enabled() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.enabled
+}
 
-// String keeps the key's hash out of anything that prints the hub.
+// String keeps the key and its hash out of anything that prints the hub.
 func (h *PhotosHub) String() string { return "PhotosHub" }
 
 // GoString does the same for %#v.
@@ -161,11 +188,17 @@ func (h *PhotosHub) GoString() string { return h.String() }
 // authorised compares the presented key in constant time. Both sides are
 // hashed first so the comparison does not even leak the key's length.
 func (h *PhotosHub) authorised(presented string) bool {
-	if !h.enabled || presented == "" {
+	if presented == "" {
 		return false
 	}
 	got := sha256.Sum256([]byte(presented))
-	return subtle.ConstantTimeCompare(got[:], h.keyHash[:]) == 1
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !h.enabled || subtle.ConstantTimeCompare(got[:], h.keyHash[:]) != 1 {
+		return false
+	}
+	h.agentKeyed = h.now()
+	return true
 }
 
 // bumpLocked wakes every long poll waiting for a change.
@@ -249,7 +282,7 @@ func newPhotosJobID() string {
 // helper. A plan nobody applied is replaced; a job still waiting on the helper
 // or changing Photos is not.
 func (h *PhotosHub) StartCheck(ctx context.Context) (PhotosJobView, error) {
-	if !h.enabled {
+	if !h.Enabled() {
 		return PhotosJobView{}, ErrPhotosDisabled
 	}
 	if view, busy := h.busyView(); busy {
@@ -776,10 +809,14 @@ type PhotosJobSummary struct {
 
 // PhotosStatus is the light status the page polls.
 type PhotosStatus struct {
-	Configured bool              `json:"configured"`
-	Now        string            `json:"now"`
-	Agent      PhotosAgentView   `json:"agent"`
-	Job        *PhotosJobSummary `json:"job"`
+	Configured bool `json:"configured"`
+	// Settling is true while a helper that is running could simply not have
+	// called in yet since this process started, so the page waits before it
+	// offers to set Cull Sync up.
+	Settling bool              `json:"settling,omitempty"`
+	Now      string            `json:"now"`
+	Agent    PhotosAgentView   `json:"agent"`
+	Job      *PhotosJobSummary `json:"job"`
 }
 
 // Status is cheap enough to poll every second or two.
@@ -789,6 +826,7 @@ func (h *PhotosHub) Status() PhotosStatus {
 	h.tickLocked()
 	now := h.now()
 	status := PhotosStatus{Configured: h.enabled, Now: now.UTC().Format(time.RFC3339)}
+	status.Settling = h.enabled && h.agent.at.IsZero() && now.Sub(h.started) < photosOnlineWindow
 	if !h.agent.at.IsZero() {
 		status.Agent = PhotosAgentView{
 			Online:   now.Sub(h.agent.at) <= photosOnlineWindow,

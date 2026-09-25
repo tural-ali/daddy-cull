@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"daddy-cull/next/internal/catalog"
+	"daddy-cull/next/mac"
 	"flag"
 	"log"
 	"net"
@@ -257,11 +258,17 @@ func main() {
 		mux.Handle("GET /api/trash/deleting", s.Handler())
 		mux.Handle("/api/trash/", catalog.TrashGateway(*binUpstream, secret))
 		// The Mac helper that carries culling across to Apple Photos talks to
-		// this process, which is also where its jobs live. The key comes from
-		// the environment only, like the Immich key, and is never logged.
-		photos := catalog.NewPhotosHub(s, os.Getenv("PHOTOS_AGENT_KEY"))
-		if !photos.Enabled() {
-			log.Printf("Apple Photos helper disabled: PHOTOS_AGENT_KEY is not set or shorter than %d characters", catalog.PhotosAgentKeyMin)
+		// this process, which is also where its jobs live. Its key is normally
+		// handed out by the setup command on the Apple Photos page and only its
+		// hash kept; PHOTOS_AGENT_KEY, from the environment only, pins one
+		// instead. Neither is ever logged.
+		agentKey := os.Getenv("PHOTOS_AGENT_KEY")
+		photos := catalog.NewPhotosHub(s, agentKey)
+		photos.SetHelper(mac.CullSync)
+		if agentKey != "" && !catalog.ValidPhotosAgentKey(agentKey) {
+			log.Printf("PHOTOS_AGENT_KEY ignored: it needs %d or more printable characters and no spaces; Cull Sync is set up from the Apple Photos page instead", catalog.PhotosAgentKeyMin)
+		} else if !photos.Enabled() {
+			log.Print("Apple Photos helper not set up yet: the Apple Photos page offers the setup command")
 		}
 		photosRoutes := photos.Handler()
 		mux.Handle("/api/photos", photosRoutes)

@@ -1,11 +1,12 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {FilePreview} from '../Media';
 import {Busy} from '../Busy';
+import {CullSyncSetup} from './CullSyncSetup';
 
 type JobState='queued_check'|'checking'|'planned'|'queued_apply'|'applying'|'done'|'failed'|'cancelled';
 type Agent={online:boolean;lastSeen?:string;version?:string;access?:string};
 type Summary={id:string;state:JobState;rev:number;stage?:string;message?:string;done:number;total:number;error?:string};
-type Status={configured:boolean;now:string;agent:Agent;job:Summary|null};
+type Status={configured:boolean;settling?:boolean;now:string;agent:Agent;job:Summary|null};
 type PhotosAsset={id:string;name:string;created:string;favourite:boolean;thumb?:string};
 type Row={id:string;action:'delete'|'favourite';keys:string[];name:string;day:string;original:string;kind:string;ext:string;state?:'marked'|'bin'|'purged';preview?:string;how:'exact'|'near';photos:PhotosAsset[];outcome?:'deleted'|'not-deleted'|'favourited'|'failed';outcomeError?:string};
 type Held={name:string;day:string;kept:string};
@@ -81,6 +82,16 @@ function access(agent:Agent){
   }
 }
 
+// setupIntro opens the setup dialog with where things stand, so it reads as an
+// answer to what the reviewer is seeing rather than as a generic manual.
+function setupIntro(status:Status){
+  const agent=status.agent;
+  if(!status.configured)return 'Cull Sync is the small app on your Mac that makes the changes in Photos. It is not set up yet. Set it up once, on the Mac that has your Photos library, and it keeps running from then on, starting again whenever you log in.';
+  if(agent.online)return 'Cull Sync is running. Set it up again only to update it or to move it to another Mac: whichever Mac runs this command takes over, and the key the old one has stops working.';
+  if(agent.lastSeen)return `Cull Sync last answered ${ago(agent.lastSeen,status.now)}. If that Mac is asleep, wake it and this page will notice. If Cull Sync was removed or keeps failing, set it up again.`;
+  return 'Cull Sync has not called in since the server started. If it is installed, make sure that Mac is awake and logged in. Otherwise, set it up now.';
+}
+
 function where(row:Row){
   if(row.action==='favourite')return 'Favourite in Cull';
   if(row.state==='purged')return 'Deleted from the archive for good';
@@ -149,6 +160,9 @@ export function Photos(){
   const [posting,setPosting]=useState('');
   const [error,setError]=useState('');
   const [offline,setOffline]=useState('');
+  const [setup,setSetup]=useState<{auto:boolean;intro:string}|null>(null);
+  const [connected,setConnected]=useState(false);
+  const offered=useRef(false);
   const current=useRef<Status|null>(null);
   const selectionFor=useRef('');
   const lastState=useRef<JobState|''>('');
@@ -171,6 +185,17 @@ export function Photos(){
     void poll();loadOverview();
     return()=>window.clearTimeout(timer.current);
   },[poll,loadOverview]);
+
+  // Without a helper this page can do nothing, so the setup dialog opens by
+  // itself, once per visit. Not while the server has only just started: a
+  // helper that is running may simply not have called in yet.
+  useEffect(()=>{
+    if(!status||status.settling||offered.current)return;
+    offered.current=true;
+    if(!status.configured||!status.agent.online)setSetup({auto:true,intro:setupIntro(status)});
+  },[status]);
+  const openSetup=()=>{if(status){setConnected(false);setSetup({auto:false,intro:setupIntro(status)})}};
+  const closeSetup=useCallback((ok:boolean)=>{setSetup(null);setConnected(ok);if(ok)void poll()},[poll]);
 
   // The full job is read only when it has really changed; progress counts ride
   // on the light status instead.
@@ -247,15 +272,19 @@ export function Photos(){
       <p className="hint">What leaves the archive here should leave Photos too, and what is a favourite here should be one there. Cull Sync on the Mac finds each photograph in Photos, shows it to you below, and changes nothing until you apply. Deletions go to Recently Deleted, and Photos asks on the Mac first.</p>
     </section>
 
-    {status&&!status.configured&&<p className="note warn" role="alert">The server has no <span className="mono">PHOTOS_AGENT_KEY</span>, so Cull Sync cannot connect. Set it (32 characters or more) where the service runs, and put the same value after <span className="mono">token =</span> in <span className="mono">~/.config/daddy-cull/sync.conf</span> on the Mac.</p>}
     {offline&&<p className="note warn" role="alert">{offline}</p>}
+    {connected&&agent?.online&&<p className="note ok" role="status">Cull Sync is connected. Photos can be checked now.</p>}
 
-    {status?.configured&&agent&&<div className={`phelper${agent.online?' online':''}`}>
+    {status&&agent&&<div className={`phelper${agent.online?' online':''}`}>
       <span className="pdot" aria-hidden="true"/>
-      <span>{agent.online?<>Cull Sync is running on the Mac{agent.version&&<span className="dim"> · version {agent.version}</span>}</>
+      <span>{!status.configured?<>Cull Sync is not set up yet, so Photos cannot be checked.</>
+        :agent.online?<>Cull Sync is running on the Mac{agent.version&&<span className="dim"> · version {agent.version}</span>}</>
         :agent.lastSeen?<>Cull Sync is not answering. Last seen {ago(agent.lastSeen,status.now)}. Is the Mac awake?</>
-        :<>Cull Sync has not connected yet. Install it on the Mac with <span className="mono">mac/CullSync/install.sh</span>.</>}</span>
+        :status.settling?<>Waiting for Cull Sync to call in…</>
+        :<>Cull Sync has not connected yet.</>}</span>
+      <button type="button" className="btn small" onClick={openSetup}>Set up Cull Sync</button>
     </div>}
+    {setup&&<CullSyncSetup intro={setup.intro} auto={setup.auto} agent={agent} onClose={closeSetup}/>}
     {warning&&<p className="note warn" role="alert">{warning}</p>}
 
     {restored.length>0&&<div className="note warn" role="alert">

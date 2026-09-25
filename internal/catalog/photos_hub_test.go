@@ -456,8 +456,10 @@ func TestPhotosAgentRoutesNeedTheKey(t *testing.T) {
 	res.Body.Close()
 }
 
+// Until a setup command hands out a key, and with a PHOTOS_AGENT_KEY too weak
+// to use, the helper is refused and the page is told nothing can be checked.
 func TestPhotosWithoutAKeyIsSwitchedOff(t *testing.T) {
-	for _, key := range []string{"", strings.Repeat("k", PhotosAgentKeyMin-1)} {
+	for _, key := range []string{"", strings.Repeat("k", PhotosAgentKeyMin-1), strings.Repeat("k", PhotosAgentKeyMin) + " spaced"} {
 		h := NewPhotosHub(testStore(t), key)
 		if h.Enabled() {
 			t.Fatalf("enabled with a %d character key", len(key))
@@ -469,7 +471,7 @@ func TestPhotosWithoutAKeyIsSwitchedOff(t *testing.T) {
 		req, _ := http.NewRequest("GET", server.URL+"/api/photos/agent/work", nil)
 		req.Header.Set(PhotosAgentHeader, key)
 		res, err := http.DefaultClient.Do(req)
-		if err != nil || res.StatusCode != 503 {
+		if err != nil || res.StatusCode != 403 {
 			t.Fatalf("agent without a key: %v %v", res, err)
 		}
 		res.Body.Close()

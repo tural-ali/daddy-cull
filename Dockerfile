@@ -13,6 +13,9 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
+# The Cull Sync sources are compiled into the binary, which serves them to the
+# Mac that runs the setup command.
+COPY mac/ ./mac/
 RUN CGO_ENABLED=1 go test ./... && go build -trimpath -o /out/cull ./cmd/cull && go build -trimpath -o /out/scale ./cmd/scale
 
 FROM alpine:3.24
