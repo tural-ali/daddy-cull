@@ -281,7 +281,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .sideprogress .meter > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
 .sideprogressnote { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sideprogressfoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; }
-.sideprogressfoot .streak { height: 32px; padding: 0 12px 0 9px; margin-right: -8px; font-size: 13.5px; }
+.sideprogressfoot .streak { height: 32px; padding: 0 12px 0 9px; font-size: 13.5px; }
 .sideprogressfoot .streak .icon, .sideprogressfoot .streak .icon svg { width: 20px; height: 20px; }
 .sideprogressfoot .streak .unit { display: inline; }
 /* With no run yet the flame alone asks for one; its title says so. */
