@@ -1843,7 +1843,10 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
    old "Video" chip would only repeat it. */
 .rt .video-badge { display: none; }
 .rt .media-missing { display: grid; place-content: center; gap: 2px; padding: 8px; text-align: center; }
-.rows.bingrid.small { --row: 150px; }
+/* Every file waiting to be deleted shares one countdown most of the time, so
+   the chip only shows on the tile under the pointer; a failure always shows. */
+.rt.gone .bdg .b:not(.warn) { opacity: 0; transition: opacity var(--ease); }
+.rt.gone:is(:hover, :focus-within) .bdg .b { opacity: 1; }
 .rt.gone.due img { opacity: .6; }
 /* A touch screen has no hover to reveal the tick, so it stays in view; on a
    phone's narrow tiles a clip keeps its play mark and drops the length, which
