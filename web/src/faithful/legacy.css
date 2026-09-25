@@ -1804,3 +1804,31 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
   .fbar { left: calc(var(--side-w) + 16px); right: 32px; bottom: 16px; border: 1px solid var(--line-2); border-radius: 16px; box-shadow: 0 6px 24px rgba(0,0,0,.3); }
   body:has(.fbar) { padding-bottom: 6rem; }
 }
+
+/* ------------------------------------------------------- Cull Sync setup --
+ * The one-time command that installs the helper on the Mac. It is wider than
+ * the Bin's question because the command is long, and the command wraps rather
+ * than scrolls, so all of it can be seen and checked before it is pasted.
+ */
+.phelper .btn { margin-left: .3rem; }
+dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
+.psetup .psteps { margin: 1rem 0 0; padding-left: 1.3rem; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.psetup .psteps li { margin: 0 0 .8rem; padding-left: .2rem; }
+.psetup .psteps li::marker { color: var(--text); font-weight: 600; }
+.psetup .psteps b { color: var(--text); font-weight: 600; }
+.psetup .psteps .dim { display: block; margin-top: .3rem; font-size: 12.5px; }
+.psetup .pcommand { display: flex; align-items: flex-start; gap: .5rem; margin-top: .45rem; }
+.psetup .pcommand code {
+  flex: 1 1 auto; min-width: 0; padding: .5rem .65rem;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  color: var(--text); font-size: 12.5px; line-height: 1.45;
+  white-space: pre-wrap; overflow-wrap: anywhere; user-select: all;
+}
+/* Wide enough for Copied, so the button does not jump when the word changes. */
+.psetup .pcommand .btn { flex: none; min-width: 5rem; justify-content: center; margin-top: .2rem; }
+.psetup .psetupstate { min-height: 1.6rem; margin-top: .2rem; font-size: 13.5px; color: var(--muted); }
+.psetup .psetupstate .note { margin: 0; }
+@media (max-width: 520px) {
+  .psetup .pcommand { flex-direction: column; align-items: stretch; }
+  .psetup .pcommand .btn { margin-top: 0; }
+}

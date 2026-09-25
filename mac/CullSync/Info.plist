@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>net.example.cullsync</string>
+	<key>CFBundleName</key>
+	<string>Cull Sync</string>
+	<key>CFBundleDisplayName</key>
+	<string>Cull Sync</string>
+	<key>CFBundleExecutable</key>
+	<string>CullSync</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Cull Sync finds the photographs you removed or favourited in Daddy Cull, shows them to you in the browser, and removes or favourites them in Photos only when you apply.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Daddy Cull is served over plain HTTP on the tailnet, which WireGuard
+		     already encrypts, and sometimes on the LAN or this Mac while testing. -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>example.ts.net</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+</dict>
+</plist>
