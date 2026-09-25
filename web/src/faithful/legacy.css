@@ -641,7 +641,6 @@ main:has(.gal) .blankstate { max-width: 88ch; }
 .mo .cap > :last-child { flex: none; }
 .mo .cap .dim { color: rgba(242, 244, 247, .72); }
 .mo .cap .due { color: var(--warn); }
-.mo .tick { position: absolute; top: 6px; left: 6px; z-index: 4; }
 
 /* A Bin card carries more than a tile does: the size, which disk the stored copy
    sits on, and why it was culled. Side by side that squeezes the filename down
@@ -679,38 +678,6 @@ main:has(.gal) .blankstate { max-width: 88ch; }
    covered - "keep this one" is precisely the label you need to still be able to
    read while deciding what the selection contains. */
 .mo.sel .bdg { padding-left: 22px; }
-/* Where a tile carries a real checkbox, that is already the tick. */
-.mo.sel:has(.tick)::after { display: none; }
-/* Bottom right, because the toast lives bottom left and the tile's own Remove
-   and Keep buttons sit at the bottom of each thumbnail - a centred bar covers
-   exactly the controls a reviewer is reaching for. */
-.selbar {
-  position: fixed; right: 1.1rem; bottom: 1.1rem;
-  z-index: 210;
-  display: flex; align-items: center; flex-wrap: wrap; gap: .45rem;
-  max-width: calc(100vw - 2.2rem);
-  padding: .5rem .6rem;
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, .35);
-}
-.selbar[hidden] { display: none; }
-.selbar .n {
-  padding: 0 .5rem 0 .3rem;
-  color: var(--muted);
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.selbar [hidden] { display: none; }
-.selbar [data-sel="clear"] { color: var(--muted); background: transparent; }
-.selbar kbd { margin-left: .3rem; }
-
-@media (max-width: 560px) {
-  .selbar { left: 1.1rem; right: 1.1rem; justify-content: center; }
-}
-
 /* ------------------------------------------------------ duplicate groups -- */
 
 .xdupes { margin: 0 0 2.2rem; }
@@ -748,8 +715,6 @@ main:has(.gal) .blankstate { max-width: 88ch; }
 .kinds .b { margin-right: .45rem; }
 .kinds b { color: var(--text); font-variant-numeric: tabular-nums; }
 
-.binacts { display: flex; gap: .5rem; flex-wrap: wrap; margin: .9rem 0 0; }
-.binacts form { margin: 0; }
 .sel { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ------------------------------------------------------------- year view -- */
@@ -980,6 +945,8 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   border-color: color-mix(in oklab, var(--fav) 45%, transparent);
 }
 .rvbtn.fav.on .ico { color: var(--fav); }
+/* The viewer is dark in either theme, so Keep uses the dark theme's green. */
+.rvbtn.keep:hover, .rvbtn.keep.on { color: #7ed9b2; border-color: color-mix(in oklab, #7ed9b2 45%, transparent); }
 
 .rv.isfav .rvstage { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--fav) 60%, transparent); }
 
@@ -1012,6 +979,13 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   transform: translateX(100%); transition: transform 160ms cubic-bezier(.4,0,.2,1);
 }
 .rv.info .rvinfo { transform: none; }
+/* With room to spare the panel sits beside the photograph, as in Google
+   Photos, so the arrows, the counter and the close button stay in reach. */
+@media (min-width: 900px) {
+  .rvinfo { width: 23rem; }
+  .rv.info > :not(.rvinfo) { margin-right: 23rem; }
+  .rv > :not(.rvinfo) { transition: margin-right 160ms cubic-bezier(.4,0,.2,1); }
+}
 .rvinfo h3 { margin: 0 0 .7rem; font-size: 13px; color: #cdd0d7; }
 .rvinfo dl { margin: 0; display: grid; gap: .35rem; }
 .rvinfo dl div { display: grid; grid-template-columns: 6.5rem 1fr; gap: .5rem; align-items: baseline; }
@@ -1251,7 +1225,7 @@ button.ghost:not(.btn), .ghost:not(.btn) {
   border: 1px solid var(--line-2); border-radius: var(--radius-sm); cursor: pointer;
 }
 button.ghost:not(.btn):hover { background: var(--bg-4); }
-button.danger:not(.btn) {
+button.danger:not(.btn, .iconbtn) {
   font: inherit; font-size: 12.5px; padding: .3rem .65rem;
   color: #fff; background: var(--bad); border: 1px solid var(--bad);
   border-radius: var(--radius-sm); cursor: pointer;
@@ -1430,8 +1404,6 @@ button.danger:not(.btn) {
 /* ============================================================ screenshots == */
 /* Denser than the review grid. This is a backlog of 2,400 near-identical
    rectangles of text, and the job is to get through them, not to dwell. */
-.gal.shots { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); }
-.gal.shots .mo { cursor: zoom-in; }
 
 .acts .act.keep { color: var(--good); }
 .mo.kept { opacity: .45; }
@@ -1565,36 +1537,11 @@ button.danger:not(.btn) {
 }
 .binsec + .hint { margin-top: 0; }
 
-/* Saved-from-social review. The same square tiles as every other grid, with
-   one answer on each: likely social, in the logo's coral for what tends to
-   leave, or not sure, on the plain chip. The tick and play button are drawn at
-   all times: a control that appears on hover does not exist on a touch screen. */
-.mo.social { cursor: pointer; }
-.mo.social .media-missing { position: absolute; inset: 0; }
+/* Saved from social: one answer per tile, likely social in the logo's coral
+   for what tends to leave, or not sure on the plain chip. */
 .bdg .b.social { background: color-mix(in oklab, var(--bad) 80%, #000); }
 .bdg .b.unsure { background: rgba(12, 13, 17, .72); }
-.mo.social .dur {
-  position: absolute; right: 8px; bottom: 7px; z-index: 2;
-  font-size: 11.5px; font-weight: 500; color: #f2f3f6;
-  font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px rgba(0, 0, 0, .7);
-  pointer-events: none;
-}
-.socialpick {
-  position: absolute; top: 5px; right: 5px; z-index: 3;
-  display: flex; padding: 4px;
-  background: rgba(10, 11, 15, .6);
-  border-radius: 6px;
-}
-.socialpick input { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--accent); }
-.mo.social img { transition: transform var(--ease), border-radius var(--ease); }
-/* Selected as in Google Photos: the picture steps in from the edge of a tinted
-   tile, so a selection reads at a glance across a whole screen of them. */
-.mo.social.picked { background: color-mix(in oklab, var(--accent) 22%, var(--bg-3)); }
-.mo.social.picked img { transform: scale(.88); border-radius: 8px; }
 
-/* Playback. One frame is not enough to judge a clip, so the still swaps for the
-   video in place, whole rather than cropped. */
-.socialplayer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; background: #0a0b0f; }
 .socialplay {
   position: absolute; bottom: 5px; left: 5px; z-index: 3;
   display: flex; align-items: center; justify-content: center;
@@ -1608,8 +1555,6 @@ button.danger:not(.btn) {
 }
 .socialplay:hover { background: rgba(10, 11, 15, .88); border-color: rgba(242, 244, 247, .5); }
 .socialplay:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.selbar .selall { display: flex; align-items: center; gap: .35rem; font-size: 12.5px; }
-.selbar .selall input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
 
 /* ------------------------------------------------- duplicate comparison -- */
 
@@ -1691,26 +1636,6 @@ button.danger:not(.btn) {
 
 /* ------------------------------------------------------------ Bin page -- */
 
-/* The tick is the whole selection control on a Bin card, so it is a real
-   button with a target a finger can hit on the iPad, drawn as a box. */
-.bingal .mo .tick {
-  top: 0; left: 0; padding: 8px; border: 0; background: none; cursor: pointer;
-  display: grid; place-items: center;
-}
-.bingal .mo .tick span {
-  width: 18px; height: 18px; border-radius: 4px;
-  border: 1.5px solid rgba(242, 244, 247, .85); background: rgba(10, 11, 15, .45);
-  display: grid; place-items: center; color: #fff; font-size: 12px; line-height: 1;
-}
-.bingal .mo .tick[aria-checked="true"] span { border-color: var(--accent); background: var(--accent); }
-.bingal .mo .tick[aria-checked="true"] span::before { content: "\2713"; }
-.bingal .mo .tick:focus-visible span { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* An inset shadow is painted under the photograph, so the selected ring is an
-   outline, which is drawn over it. */
-.bingal .mo.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
-@media (max-width: 720px) { .bingal { margin-bottom: 4rem; } }
-.fbar .selall { display: inline-flex; align-items: center; gap: .4rem; font-size: 12.5px; color: var(--muted); cursor: pointer; }
-.fbar .selall input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 
 /* The one question the tool asks before destroying anything. */
 dialog.confirm {
@@ -1832,3 +1757,100 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
   .psetup .pcommand { flex-direction: column; align-items: stretch; }
   .psetup .pcommand .btn { margin-top: 0; }
 }
+
+/* ------------------------------------------------ selection and rows grid --
+ * Google Photos' multi-select. While anything is selected the top bar becomes
+ * the selection bar, with the count on the left and the actions on the right,
+ * so they stay in reach however far the grid is scrolled.
+ */
+.gbar.selecting { gap: 8px; padding-left: 12px; }
+.gbar.selecting .selcount { font-size: 22px; font-weight: 400; color: var(--text); font-variant-numeric: tabular-nums; }
+.gbar.selecting .gbaracts .iconbtn { color: var(--accent); }
+.gbar.selecting .gbaracts .iconbtn.danger { color: var(--bad); }
+.gbar.selecting .gbaracts .iconbtn:disabled { opacity: .4; cursor: default; background: none; }
+
+/* The round tick: hidden until the tile is hovered, shown on every tile once
+   anything is selected, filled for the tiles that are. */
+.pick {
+  position: absolute; top: 6px; left: 6px; z-index: 4;
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0;
+  background: none; border: 0; border-radius: 50%; cursor: pointer;
+  opacity: 0; transition: opacity var(--ease);
+}
+.pick svg { width: 24px; height: 24px; overflow: visible; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+.pick circle { fill: rgba(0,0,0,.12); stroke: #fff; stroke-width: 2; }
+.pick path { fill: none; stroke: transparent; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.pick:hover circle { fill: rgba(255,255,255,.28); }
+.pick[aria-checked="true"] circle { fill: var(--accent); stroke: var(--accent); }
+.pick[aria-checked="true"] path { stroke: var(--on-accent); }
+.pick:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 0; }
+:is(.rt, .mo):hover .pick, main.selecting .pick, .pick[aria-checked="true"] { opacity: 1; }
+/* A dark wash at the top keeps the white tick legible on a bright sky. */
+:is(.rt, .mo):has(.pick)::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 56px; z-index: 3;
+  background: linear-gradient(rgba(0,0,0,.32), transparent);
+  opacity: 0; transition: opacity var(--ease); pointer-events: none;
+}
+:is(.rt, .mo):hover::before, main.selecting :is(.rt, .mo)::before { opacity: 1; }
+
+/* Rows: each tile keeps its picture's shape, and a row's tiles grow in
+   proportion to their width so they end on one shared height, edge to edge.
+   The filler after the last tile soaks up the space the last row does not
+   need, so it keeps the row height instead of stretching. */
+.rows { --row: 232px; display: flex; flex-wrap: wrap; gap: 4px; }
+.rows::after { content: ""; flex: 1000000 1 0; }
+.rt {
+  position: relative; margin: 0; overflow: hidden;
+  flex: calc(var(--r) * 1000) 1 calc(var(--r) * var(--row));
+  aspect-ratio: var(--r);
+  background: var(--bg-3); cursor: pointer;
+}
+.rt > img, .rt > video, .rt > .actual-media { display: block; width: 100%; height: 100%; object-fit: cover; }
+.rt .media-missing { position: absolute; inset: 0; }
+.rt img { transition: transform var(--ease), border-radius var(--ease); }
+.rt.picked { background: color-mix(in oklab, var(--accent) 22%, var(--bg-3)); }
+.rt.picked img, .rt.picked .actual-media { transform: scale(.86); border-radius: 8px; }
+/* A clip's length, top right, as Google Photos marks a video. */
+.rt .dur {
+  position: absolute; top: 9px; right: 10px; z-index: 4;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12.5px; font-weight: 500; color: #fff;
+  font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px rgba(0,0,0,.7);
+  pointer-events: none;
+}
+.rt .dur .icon, .rt .dur .icon svg { width: 18px; height: 18px; }
+.rt .bdg { top: auto; bottom: 8px; left: 8px; }
+@media (max-width: 600px) { .rows { --row: 128px; gap: 3px; } }
+
+/* A page title with its one page-wide action at the far right, as Google
+   Photos puts Empty trash. */
+.headrow { display: flex; align-items: center; gap: 1rem; }
+.headrow > :first-child { margin-bottom: 0; }
+.headrow > :last-child:not(:first-child) { margin-left: auto; }
+.textbtn {
+  display: inline-flex; align-items: center; gap: 8px; flex: none;
+  height: 40px; padding: 0 16px 0 12px;
+  font: inherit; font-size: 14px; font-weight: 500; color: var(--accent);
+  background: none; border: 0; border-radius: 20px; cursor: pointer;
+  transition: background var(--ease);
+}
+.textbtn:hover { background: color-mix(in oklab, var(--accent) 10%, transparent); }
+.textbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.textbtn:disabled { opacity: .5; cursor: default; background: none; }
+.textbtn .icon, .textbtn .icon svg { width: 20px; height: 20px; }
+
+/* Filters in two groups, how reviewed and what kind, with room between. */
+.pager.filters { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; }
+.pager.filters .fgroup { display: inline-flex; flex-wrap: wrap; gap: .4rem; }
+
+/* In a rows grid the round tick and the corner marks say what a file is; the
+   old "Video" chip would only repeat it. */
+.rt .video-badge { display: none; }
+.rt .media-missing { display: grid; place-content: center; gap: 2px; padding: 8px; text-align: center; }
+.rows.bingrid.small { --row: 150px; }
+.rt.gone.due img { opacity: .6; }
+/* A touch screen has no hover to reveal the tick, so it stays in view; on a
+   phone's narrow tiles a clip keeps its play mark and drops the length, which
+   would otherwise run into the tick. */
+@media (hover: none) { .pick { opacity: .9; } :is(.rt, .mo):has(.pick)::before { opacity: 1; } }
+@media (max-width: 600px) { .rt .dur { font-size: 0; gap: 0; top: 10px; right: 8px; } }

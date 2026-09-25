@@ -10,9 +10,11 @@ export type LightboxItem={key:string;base:string;name:string;kind:string;detail?
 // sits in the Bin or waits out its grace period after being deleted from it. It
 // looks and steps like the review viewer, but offers only the actions its page
 // passes in, because deciding keep or remove means nothing for these files.
-export function Lightbox({items,initialKey,onClose,actions}:{items:LightboxItem[];initialKey:string;onClose:()=>void;actions?:(item:LightboxItem)=>ReactNode}){
+export function Lightbox({items,initialKey,onClose,actions,onMove}:{items:LightboxItem[];initialKey:string;onClose:()=>void;actions?:(item:LightboxItem)=>ReactNode;onMove?:(key:string)=>void}){
   const [at,setAt]=useState(()=>Math.max(0,items.findIndex(item=>item.key===initialKey)));
   const current=items[Math.min(at,items.length-1)];
+  const shownKey=current?.key;
+  useEffect(()=>{if(shownKey!==undefined)onMove?.(shownKey)},[shownKey,onMove]);
   function step(change:number){if(items.length)setAt(index=>(index+change+items.length)%items.length)}
   useEffect(()=>{
     document.documentElement.classList.add('rv-open');

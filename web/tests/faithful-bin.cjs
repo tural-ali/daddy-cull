@@ -33,76 +33,97 @@ const fixture=()=>[
   });
   await page.goto((process.env.APP_URL||'http://127.0.0.1:8842')+'/bin');
   await page.getByRole('heading',{name:'Bin',exact:true}).waitFor();
-  await page.locator('.bingal figure').nth(4).waitFor();
-  assert.equal(await page.locator('.bingal figure').count(),5,'both tools\' files are in one gallery');
+  await page.locator('.bingrid figure').nth(4).waitFor();
+  assert.equal(await page.locator('.bingrid figure').count(),5,'both tools\' files are in one gallery');
   assert.match(await page.locator('.binhead .ysum').innerText(),/5 files · 5\.0 MB/);
   await page.getByRole('link',{name:/^Bin 5 files$/}).waitFor();
-  const images=await page.locator('.bingal img').evaluateAll(list=>list.map(image=>image.getAttribute('src')));
+  const images=await page.locator('.bingrid img').evaluateAll(list=>list.map(image=>image.getAttribute('src')));
   assert.ok(images.includes('/api/bin-media/7/preview?size=grid')&&images.includes('/api/binned-media/shot/bb/0/preview?size=grid'),'every card shows its picture');
 
   // Selecting one card of a batch selects the batch; shift-click selects a run.
-  await page.getByRole('checkbox',{name:'Select BATCH-ONE.JPG'}).click();
-  assert.equal(await page.locator('#selcount').innerText(),'2');
-  await page.getByRole('checkbox',{name:'Select MARKED.JPG'}).click();
-  await page.getByRole('checkbox',{name:'Select OLD-TOOL.MOV'}).click({modifiers:['Shift']});
-  assert.equal(await page.locator('#selcount').innerText(),'4');
+  // A click previews, as in Google Photos, and the preview has its own address.
+  await page.locator('.bingrid figure').first().click();
+  await page.getByRole('dialog',{name:'Preview of MARKED.JPG'}).waitFor();
+  assert.equal(new URL(page.url()).pathname,'/bin/photo/marked%3A11');
+  await page.keyboard.press('ArrowRight');
+  await page.getByRole('dialog',{name:'Preview of BATCH-ONE.JPG'}).waitFor();
+  assert.equal(new URL(page.url()).pathname,'/bin/photo/bin%3Aaa%3A12','the address follows the preview');
+  await page.goBack();
+  await page.getByRole('dialog').waitFor({state:'hidden'});
+  assert.equal(new URL(page.url()).pathname,'/bin','Back closes the preview');
+  await page.goto((process.env.APP_URL||'http://127.0.0.1:8842')+'/bin/photo/legacy%3A7');
+  await page.getByRole('dialog',{name:'Preview of OLD-TOOL.MOV'}).waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({state:'hidden'});
+  assert.equal(new URL(page.url()).pathname,'/bin','closing a shared address leaves the page');
+  assert.equal(await page.locator('.gbar.selecting').count(),0,'previewing selected something');
+
+  // Selecting one card of a batch selects the batch; shift-click selects a run.
+  const bar=page.getByRole('toolbar',{name:'Selection'});
+  await page.getByRole('checkbox',{name:/^Select BATCH-ONE\.JPG/}).click();
+  assert.equal(await page.locator('.selcount').innerText(),'2 selected');
+  await page.getByRole('checkbox',{name:/^Select MARKED\.JPG/}).click();
+  await page.getByRole('checkbox',{name:/^Select OLD-TOOL\.MOV/}).click({modifiers:['Shift']});
+  assert.equal(await page.locator('.selcount').innerText(),'4 selected');
 
   // Restore needs no question; it only puts files back.
-  await page.getByRole('button',{name:'Restore selected'}).click();
+  await bar.getByRole('button',{name:'Restore'}).click();
   await page.getByText('4 files put back where they came from.').waitFor();
   assert.deepEqual(posts[0],{path:'/api/trash/restore',body:{keys:['marked:11','bin:aa:12','bin:aa:13','legacy:7']}});
-  assert.equal(await page.locator('.bingal figure').count(),1);
+  assert.equal(await page.locator('.bingrid figure').count(),1);
   await page.getByRole('link',{name:/^Bin 1 file$/}).waitFor();
 
   // Deletion always asks first, and Cancel sends nothing.
   bin=fixture();
   await page.goto((process.env.APP_URL||'http://127.0.0.1:8842')+'/bin');
-  await page.locator('.bingal figure').nth(4).waitFor();
-  await page.getByLabel('Select all').check();
-  assert.equal(await page.locator('#selcount').innerText(),'5');
-  await page.getByLabel('Select all').uncheck();
-  await page.getByRole('checkbox',{name:'Select BATCH-TWO.JPG'}).click();
-  await page.getByRole('button',{name:'Delete selected for good'}).click();
+  await page.locator('.bingrid figure').nth(4).waitFor();
+  await page.getByRole('checkbox',{name:/^Select MARKED\.JPG/}).click();
+  await bar.getByRole('button',{name:'Select all 5'}).click();
+  assert.equal(await page.locator('.selcount').innerText(),'5 selected');
+  await bar.getByRole('button',{name:'Clear the selection'}).first().click();
+  await page.getByRole('checkbox',{name:/^Select BATCH-TWO\.JPG/}).click();
+  await bar.getByRole('button',{name:'Delete for good'}).click();
   const dialog=page.getByRole('dialog',{name:'Delete 2 files for good?'});
   await dialog.waitFor();
   assert.match(await dialog.innerText(),/2 files \(2\.0 MB\) will be permanently deleted/);
   await dialog.getByRole('button',{name:'Cancel'}).click();
   await dialog.waitFor({state:'hidden'});
   assert.equal(posts.length,1,'Cancel sent a deletion');
-  await page.getByRole('button',{name:'Delete selected for good'}).click();
+  await bar.getByRole('button',{name:'Delete for good'}).click();
   await dialog.getByRole('button',{name:'Delete 2 files'}).click();
-  await page.locator('.fbar .btn.danger .busy').waitFor();
+  await page.locator('.flash .busy').waitFor();
   await page.getByText('2 files permanently deleted, freeing 2.0 MB.').waitFor();
   assert.deepEqual(posts[1],{path:'/api/trash/delete',body:{keys:['bin:aa:12','bin:aa:13'],confirmation:'DELETE 2'}});
 
   // Empty the Bin names the count it was shown.
-  await page.getByRole('button',{name:'Empty the Bin'}).click();
+  // Empty Bin is the page's one action, top right.
+  await page.getByRole('button',{name:'Empty Bin',exact:true}).click();
   const empty=page.getByRole('dialog',{name:'Empty the Bin?'});
   await empty.waitFor();
   assert.match(await empty.innerText(),/All 3 files in the Bin/);
   await empty.getByRole('button',{name:'Empty the Bin'}).click();
   // The orb shows in the button that was pressed, even when the answer is instant.
-  await page.locator('.binacts .btn.danger .busy').waitFor();
+  await page.locator('.headrow .textbtn .busy').waitFor();
   await page.getByText(/The Bin was emptied: 3 files permanently deleted/).waitFor();
   assert.deepEqual(posts[2],{path:'/api/trash/empty',body:{confirmation:'DELETE 3'}});
   await page.getByText(/The Bin is empty/).waitFor();
-  assert.equal(await page.locator('.fbar').count(),0);
+  assert.equal(await page.locator('.gbar.selecting').count(),0);
 
   // With a grace period, deleting only schedules: the wording says the files
   // stay on disk and can be restored from the Log until they go.
   bin=fixture();grace=30;
   await page.goto((process.env.APP_URL||'http://127.0.0.1:8842')+'/bin');
-  await page.locator('.bingal figure').nth(4).waitFor();
-  await page.getByRole('checkbox',{name:'Select MARKED.JPG'}).click();
-  await page.getByRole('button',{name:'Delete selected',exact:true}).click();
+  await page.locator('.bingrid figure').nth(4).waitFor();
+  await page.getByRole('checkbox',{name:/^Select MARKED\.JPG/}).click();
+  await bar.getByRole('button',{name:'Delete',exact:true}).click();
   const kept=page.getByRole('dialog',{name:'Delete 1 file?'});
   await kept.waitFor();
   assert.match(await kept.innerText(),/stay on disk for 30 days, restorable from the Log, and are then deleted automatically/);
   await kept.getByRole('button',{name:'Delete 1 file'}).click();
   await page.getByText(/1 file deleted from the Bin\. They stay on disk until .+ and can be restored from the Log until then\./).waitFor();
   assert.deepEqual(posts[3],{path:'/api/trash/delete',body:{keys:['marked:11'],confirmation:'DELETE 1'}});
-  assert.equal(await page.locator('.bingal figure').count(),4);
+  assert.equal(await page.locator('.bingrid figure').count(),4);
   await page.screenshot({path:process.env.SHOT||'/tmp/faithful-bin.png'});
   await browser.close();
-  console.log(JSON.stringify({oneGallery:true,previewsForBothTools:true,batchSelectedTogether:true,shiftRange:true,restoreSelected:true,deleteAsksFirst:true,cancelSendsNothing:true,emptyNamesCount:true,graceSchedules:true},null,2));
+  console.log(JSON.stringify({oneGallery:true,clickPreviews:true,previewAddress:true,backCloses:true,previewsForBothTools:true,batchSelectedTogether:true,shiftRange:true,restoreSelected:true,deleteAsksFirst:true,cancelSendsNothing:true,emptyNamesCount:true,graceSchedules:true},null,2));
 })().catch(error=>{console.error(error);process.exit(1)});

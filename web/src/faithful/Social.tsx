@@ -1,6 +1,10 @@
-import {binChanged,type Asset} from '../api';
-import {Busy} from '../Busy';
+import {type Asset,type Status} from '../api';
 import {useState} from 'react';
+import {Icon} from '../Icon';
+import {Pick,RowTile,Rows,useSelectionBar,usePicks} from './selection';
+import {Viewer} from './Viewer';
+import {usePhotoURL} from './photoURL';
+import {reverting,requestID,sendDecisions,type Change} from './decisions';
 
 type SocialItem=Asset&{
   day:string;name:string;score:number;band:'likely'|'possible'|'watch';
@@ -10,8 +14,6 @@ export type SocialPage={items:SocialItem[];total:number;shown:number;bytes:numbe
 
 function bytes(value:number){return value<1024**2?`${(value/1024).toFixed(1)} KB`:value<1024**3?`${(value/1024**2).toFixed(1)} MB`:`${(value/1024**3).toFixed(1)} GB`}
 function clock(seconds:number){if(!seconds)return '';const s=Math.round(seconds);return s<60?`${s}s`:`${Math.floor(s/60)}m ${String(s%60).padStart(2,'0')}s`}
-function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
-
 const BANDS:{key:string;label:string;count:(page:SocialPage)=>number}[]=[
   {key:'',label:'Everything',count:page=>page.total},
   {key:'social',label:'Likely social',count:page=>page.social},
@@ -23,58 +25,20 @@ const BANDS:{key:string;label:string;count:(page:SocialPage)=>number}[]=[
 // maybe that deserves a look before it goes.
 function likelySocial(item:SocialItem){return item.band==='likely'||item.letterbox}
 
-// The server takes twenty decisions per request, so a page of selections goes as
-// several batches in order. A failed batch stops the rest and the message says how
-// many were already saved, because a half-applied selection the reviewer cannot see
-// is worse than one they can.
-const PER_REQUEST=20;
-function chunk<T>(values:T[],size:number){const out:T[][]=[];for(let i=0;i<values.length;i+=size)out.push(values.slice(i,i+size));return out}
-
-type Change={assetId:number;status:string;favourite:boolean;expectedRevision:number;requestId:string};
-
-async function sendDecisions(changes:Change[]):Promise<{revision:number}[]>{
-  const saved:{revision:number}[]=[];
-  for(const batch of chunk(changes,PER_REQUEST)){
-    const response=await fetch('/api/decisions/batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(batch)});
-    if(!response.ok)throw new Error(response.status===409
-      ?`One of these files changed in another session. ${saved.length} saved; reload before deciding again.`
-      :`The decision could not be confirmed. ${saved.length} saved; reload to check before continuing.`);
-    saved.push(...await response.json() as {revision:number}[]);
-  }
-  binChanged();
-  return saved;
-}
-
 export function Social({page,band,from}:{page:SocialPage;band:string;from:number}){
   const [current,setCurrent]=useState(page);
-  const [selected,setSelected]=useState<Set<number>>(new Set());
-  const [anchor,setAnchor]=useState<number|null>(null);
-  const [playing,setPlaying]=useState<number|null>(null);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
   const [error,setError]=useState('');
   const [undo,setUndo]=useState<{changes:Change[];label:string}|null>(null);
   const {items,total,shown}=current;
+  const picks=usePicks(items,item=>item.id);
+  const photo=usePhotoURL(id=>page.items.some(item=>String(item.id)===id));
+  const selected=picks.picked;
   const per=120,to=Math.min(shown,from+items.length);
   const href=(value:string,offset:number)=>`/social?band=${value}&from=${offset}`;
 
-  function toggle(index:number,extend:boolean){
-    const item=items[index];
-    setSelected(previous=>{
-      const next=new Set(previous);
-      if(extend&&anchor!==null){
-        const start=Math.min(anchor,index),end=Math.max(anchor,index),adding=!next.has(item.id);
-        for(let i=start;i<=end;i++){if(adding)next.add(items[i].id);else next.delete(items[i].id)}
-        return next;
-      }
-      if(next.has(item.id))next.delete(item.id);else next.add(item.id);
-      return next;
-    });
-    setAnchor(index);
-  }
-
-  async function apply(status:'keep'|'cull'){
-    const chosen=items.filter(item=>selected.has(item.id));
+  async function apply(status:'keep'|'cull',chosen=items.filter(item=>selected.has(item.id))){
     if(chosen.length===0||busy)return;
     setBusy(true);setError('');setMessage('');setUndo(null);
     const changes:Change[]=chosen.map(item=>({assetId:item.id,status,favourite:item.favourite,expectedRevision:item.revision,requestId:requestID()}));
@@ -97,7 +61,7 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
         kept:value.kept+(status==='keep'?chosen.length:0),
         marked:value.marked+(status==='cull'?chosen.length:0),
       }));
-      setSelected(new Set());setAnchor(null);
+      picks.setPicked(previous=>new Set([...previous].filter(id=>!gone.has(id))));
       // What was decided has left the list, so reading the same offset again
       // brings the next videos up into view instead of leaving the page empty.
       // Past the last page, the one before it is shown instead.
@@ -109,10 +73,7 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
           setCurrent(next);
         }
       }catch{/* the local list above is already correct, only shorter */}
-      setUndo({
-        changes:chosen.map((item,index)=>({assetId:item.id,status:'unreviewed',favourite:item.favourite,expectedRevision:saved[index].revision,requestId:requestID()})),
-        label:count,
-      });
+      setUndo({changes:reverting(chosen,saved),label:count});
       setMessage(status==='keep'
         ?`Kept ${count}. They have left this list and not moved on disk.`
         :`Marked ${count} for the Bin, ${bytes(freed)} in all. Nothing has moved: open Bin to carry it out, and it stays recoverable after that.`);
@@ -126,7 +87,28 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
     catch(reason){setError((reason as Error).message);setBusy(false)}
   }
 
+  // The viewer's Keep and Remove act on the one video showing, as the
+  // selection bar does on many. It never advances by itself: the video just
+  // decided leaves the list and the next one slides into its place.
+  function decideInViewer(asset:Asset,status:Status,favourite?:boolean){
+    const item=items.find(candidate=>candidate.id===asset.id);
+    if(!item||busy)return false;
+    if(favourite!==undefined){
+      void sendDecisions([{assetId:item.id,status:item.status,favourite,expectedRevision:item.revision,requestId:requestID()}])
+        .then(([saved])=>setCurrent(value=>({...value,items:value.items.map(entry=>entry.id===item.id?{...entry,favourite,revision:saved.revision}:entry)})))
+        .catch(reason=>setError((reason as Error).message));
+    }
+    else if(status==='keep'||status==='cull')void apply(status,[item]);
+    return false;
+  }
+
   const allShown=items.length>0&&items.every(item=>selected.has(item.id));
+  const viewing=photo.open===null?null:Number(photo.open);
+  useSelectionBar({count:selected.size,busy,clear:picks.clear,actions:[
+    {label:allShown?'Deselect all':`Select all ${items.length} shown`,icon:'select_all',onClick:()=>allShown?picks.clear():picks.all()},
+    {label:'Keep',icon:'check',onClick:()=>void apply('keep')},
+    {label:'Move to Bin',icon:'delete',onClick:()=>void apply('cull'),danger:true},
+  ]});
   return <>
     <section className="dupehead">
       <h1>Saved from social</h1>
@@ -136,44 +118,27 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
       </p>
       <p className="pager">{BANDS.map(entry=><a className={`btn small${band===entry.key?' on':''}`} aria-current={band===entry.key||undefined} href={href(entry.key,0)} key={entry.label}>{entry.label} <span className="dim">{entry.count(current).toLocaleString()}</span></a>)}</p>
       <p className="hint">Videos that look saved from an app rather than filmed on a camera, judged from each file's own metadata. <strong>Likely social</strong> means strong evidence; <strong>Not sure</strong> is worth a look before it goes.
-        Click a video to select it, shift-click to select a run. <strong>Keep</strong> takes it off this list; <strong>Move to Bin</strong> marks it for the Bin, where it stays recoverable.</p>
+        Click a video to watch it; <b>k</b> keeps it and <b>x</b> moves it to the Bin. Tick the circle on a tile to select several, and the actions appear at the top. <strong>Keep</strong> takes a video off this list; <strong>Move to Bin</strong> marks it for the Bin, where it stays recoverable.</p>
     </section>
     {message&&<p className="flash" role="status">{message} {undo&&<button className="btn small" disabled={busy} onClick={()=>void revert()}>Undo {undo.label}</button>}</p>}
     {error&&<p className="note warn" role="alert">{error}</p>}
-    {items.length>0&&<div className="selbar" role="group" aria-label="Selected videos">
-      <label className="selall"><input type="checkbox" checked={allShown} onChange={()=>{setSelected(allShown?new Set():new Set(items.map(item=>item.id)));setAnchor(null)}}/> Select all {items.length} shown</label>
-      <span className="dim">{selected.size.toLocaleString()} selected</span>
-      <button type="button" className="btn small" disabled={busy||selected.size===0} onClick={()=>void apply('keep')}>{busy?<Busy label="Saving…" state="working"/>:'Keep'}</button>
-      <button type="button" className="btn small danger ghosty" disabled={busy||selected.size===0} onClick={()=>void apply('cull')}>Move to Bin</button>
-      <button type="button" className="btn small" data-sel="clear" disabled={busy||selected.size===0} onClick={()=>{setSelected(new Set());setAnchor(null)}}>Clear</button>
-    </div>}
     {items.length===0
       ? <p className="note">{total===0?'Every candidate has been decided. Nothing is left to review.':'Nothing matches this filter.'}</p>
-      : <div className="gal tight socials">{items.map((item,index)=>{
+      : <Rows className="socials">{items.map((item,index)=>{
           const social=likelySocial(item);
           const detail=[item.day||'undated',bytes(item.size),item.duration>0?clock(item.duration):''].filter(Boolean).join(' · ');
-          return <figure className={`mo social${selected.has(item.id)?' picked':''}`} key={item.id} title={detail} onClick={event=>toggle(index,event.shiftKey)}>
-            {playing===item.id
-              // Judging a clip from one frame is guesswork, so the still swaps for
-              // the video in place. Clicks inside the player must not reach the
-              // tile, or scrubbing would toggle the selection underneath it.
-              ? <video className="socialplayer" controls autoPlay playsInline preload="metadata"
-                  poster={item.poster?`/api/social-poster/${item.id}`:undefined}
-                  src={`/api/media/${item.id}/original`}
-                  onClick={event=>event.stopPropagation()}
-                  onEnded={()=>setPlaying(null)}/>
-              : item.poster
-                ? <img src={`/api/social-poster/${item.id}`} alt={item.name} loading="lazy" decoding="async"/>
-                : <div className="media-missing"><span>No still captured</span></div>}
+          const picked=selected.has(item.id);
+          return <RowTile className={`social${picked?' picked':''}`} key={item.id} ratio={item.width>0&&item.height>0?item.width/item.height:undefined} title={detail}
+            onClick={event=>{if(event.shiftKey&&selected.size>0)picks.toggle(index,true);else photo.show(item.id)}}>
+            {item.poster
+              ? <img src={`/api/social-poster/${item.id}`} alt={item.name} loading="lazy" decoding="async"/>
+              : <div className="media-missing"><span>No still captured</span></div>}
+            <Pick checked={picked} label={`Select ${item.name}, ${social?'likely social':'not sure'}, ${detail}`} onToggle={extend=>picks.toggle(index,extend)}/>
+            {item.duration>0&&<span className="dur">{clock(item.duration)}<Icon name="play_circle"/></span>}
             <div className="bdg"><span className={`b ${social?'social':'unsure'}`}>{social?'Likely social':'Not sure'}</span></div>
-            {playing!==item.id&&item.duration>0&&<span className="dur">{clock(item.duration)}</span>}
-            <button type="button" className="socialplay" aria-label={playing===item.id?`Stop ${item.name}`:`Play ${item.name}`}
-              onClick={event=>{event.stopPropagation();setPlaying(current=>current===item.id?null:item.id)}}>{playing===item.id?'■':'▶'}</button>
-            <label className="socialpick" onClick={event=>event.stopPropagation()}>
-              <input type="checkbox" checked={selected.has(item.id)} onChange={event=>toggle(index,(event.nativeEvent as MouseEvent).shiftKey)} aria-label={`Select ${item.name}, ${social?'likely social':'not sure'}, ${detail}`}/>
-            </label>
-          </figure>;
-        })}</div>}
+          </RowTile>;
+        })}</Rows>}
+    {viewing!==null&&items.length>0&&<Viewer assets={items} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={decideInViewer} onPatch={()=>{}}/>}
     {items.length>0&&<p className="pager">{from>0&&<a className="btn small" href={href(band,Math.max(0,from-per))}>← Previous</a>}{to<shown&&<a className="btn small" href={href(band,from+per)}>Next {per} →</a>}</p>}
   </>;
 }

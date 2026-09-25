@@ -46,12 +46,19 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
   // Review starts from a photograph, as in Google Photos.
   await page.locator('.yhead ~ .gal .mo').first().click();
   await page.getByRole('dialog',{name:'Photo review'}).waitFor();
+  assert.equal(new URL(page.url()).pathname,'/on/09-07/photo/1','the preview has its own address');
   const started=Date.now();
   await page.keyboard.press('k');
   await page.locator('.rvpos').filter({hasText:'2 / 4'}).waitFor();
   assert.ok(Date.now()-started<180,'viewer waited for the network before advancing');
+  assert.equal(new URL(page.url()).pathname,'/on/09-07/photo/2','the address follows the photo');
+  // Info, once open, stays open from photo to photo.
+  await page.keyboard.press('i');
+  await page.locator('.rv.info').waitFor();
   await page.keyboard.press('k');
   await page.locator('.rvpos').filter({hasText:'3 / 4'}).waitFor();
+  assert.equal(await page.locator('.rv.info').count(),1,'Info closed when the photo changed');
+  await page.keyboard.press('i');
   await page.waitForFunction(()=>Object.keys(localStorage).filter(key=>key.startsWith('cull.pending.')).every(key=>JSON.parse(localStorage[key]).length===0));
   assert.deepEqual(individualWrites.map(item=>item.assetId),[1,2]);
   // A click on the photograph only hides the chrome; a click beside it leaves.
@@ -61,6 +68,11 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
   const stage=await page.locator('.rvstage').boundingBox();
   await page.mouse.click(stage.x+stage.width-20,stage.y+20);
   await viewer.waitFor({state:'hidden'});
+  assert.equal(new URL(page.url()).pathname,'/on/09-07','closing the preview left its address behind');
+  // A shared address opens the same photo.
+  await page.goto((process.env.APP_URL||'http://127.0.0.1:8842/').replace(/\/$/,'')+'/on/09-07/photo/3');
+  await viewer.waitFor();
+  assert.match(await page.locator('.rvinfo').innerText(),/THIRD\.JPG/);
   await browser.close();
-  console.log(JSON.stringify({faithfulToday:true,binCountShown:true,pageLoadedOnce:true,verifiedDuplicates:true,keeperChoiceAtomic:true,calendar:true,logoReturnsToday:true,instantKeyboardAdvance:true,durableQueueDrained:true,lightboxClosesOutside:true},null,2));
+  console.log(JSON.stringify({faithfulToday:true,binCountShown:true,pageLoadedOnce:true,verifiedDuplicates:true,keeperChoiceAtomic:true,calendar:true,logoReturnsToday:true,instantKeyboardAdvance:true,durableQueueDrained:true,lightboxClosesOutside:true,photoAddress:true,infoStaysOpen:true},null,2));
 })().catch(error=>{console.error(error);process.exit(1)});

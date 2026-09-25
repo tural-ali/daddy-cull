@@ -4,6 +4,7 @@ import {Media} from '../Media';
 import {Busy} from '../Busy';
 import {Deleting} from './Bin';
 import {Viewer} from './Viewer';
+import {usePhotoURL} from './photoURL';
 import {dayOfPath} from './goto';
 
 export type HistoryEvent={requestId:string;asset:Asset;status:string;favourite:boolean;previousStatus:'unreviewed'|'keep'|'later'|'cull';previousFavourite:boolean;createdAt:string};
@@ -33,7 +34,8 @@ export function Log({initial}:{initial:HistoryEvent[]}){
   // The choice being undone, so only its tile says it is working.
   const [busy,setBusy]=useState('');
   const [message,setMessage]=useState('');
-  const [viewing,setViewing]=useState<number|null>(null);
+  const photo=usePhotoURL(id=>initial.some(event=>String(event.asset.id)===id));
+  const viewing=photo.open===null?null:Number(photo.open);
   // The viewer steps through photographs, not events: a file chosen twice is
   // one frame, at the place of its latest choice.
   const assets=useMemo(()=>{
@@ -76,13 +78,13 @@ export function Log({initial}:{initial:HistoryEvent[]}){
       return <Fragment key={event.requestId}>
         {opensDay&&<h3 className="lday">{dayHeading(at)}</h3>}
         <figure className={`mo logtile${isUndone?' undone':''}${event.asset.favourite?' fav':''}`}>
-          <button type="button" className="shot" aria-label={`Look at ${name}`} onClick={()=>setViewing(event.asset.id)}><Media asset={event.asset}/></button>
+          <button type="button" className="shot" aria-label={`Look at ${name}`} onClick={()=>photo.show(event.asset.id)}><Media asset={event.asset}/></button>
           <div className="bdg"><span className={`b verb ${isUndone?'':tone}`}>{isUndone?'Undone':label}</span></div>
           {!isUndone&&<div className="acts"><button type="button" className="act" disabled={!!busy} onClick={()=>void undo(event)}>{busy===event.requestId?<Busy label="Undoing…" state="working"/>:'Undo'}</button></div>}
           <figcaption className="cap"><a href={dayOf(event.asset)} title={`Open ${event.asset.path.slice(0,event.asset.path.lastIndexOf('/'))}`}>{name}</a><span className="dim">{at.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</span></figcaption>
         </figure>
       </Fragment>;
     })}</div>}
-    {viewing!==null&&<Viewer assets={assets} initialID={viewing} onClose={()=>setViewing(null)} onSave={decideInViewer} onPatch={patch} dayOf={dayOf}/>}
+    {viewing!==null&&<Viewer assets={assets} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={decideInViewer} onPatch={patch} dayOf={dayOf}/>}
   </>;
 }

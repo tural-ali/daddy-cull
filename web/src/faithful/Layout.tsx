@@ -2,6 +2,7 @@ import {useEffect,useRef,useState,type FormEvent,type ReactNode} from 'react';
 import {Icon,type IconName} from '../Icon';
 import {Logo} from '../Logo';
 import {pathForDate} from './goto';
+import {SelectionBar,SelectionProvider,type Selection} from './selection';
 
 export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'log'|'bin'|'settings';
 type Item={href:string;route:LegacyRoute;label:string;icon:IconName};
@@ -72,6 +73,7 @@ function Streak({days,today}:{days:number;today:boolean}){
 
 export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:LegacyRoute;binFiles:number;reviewed?:{done:number;total:number};streak?:{days:number;today:boolean};flash?:string;children:ReactNode}){
   const [drawer,setDrawer]=useState(false);
+  const [selection,setSelection]=useState<Selection|null>(null);
   // On a wide screen the menu button hides the sidebar, as in Google Photos,
   // and the choice is remembered; on a narrow one it opens the drawer.
   const [sideHidden,setSideHidden]=useState(readSideHidden);
@@ -98,7 +100,7 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
   },[drawer]);
   const share=reviewed&&reviewed.total>0?reviewed.done/reviewed.total:0;
   return <div className={`shell${drawer?' drawer-open':''}${sideHidden?' side-hidden':''}`}>
-    <header className="gbar">
+    {selection?<SelectionBar selection={selection}/>:<header className="gbar">
       <button type="button" className="iconbtn menu" aria-label={menuOpen?'Hide the menu':'Show the menu'} title="Main menu" aria-expanded={menuOpen} aria-controls="side" onClick={toggleMenu}><Icon name={narrow&&drawer?'close':'menu'}/></button>
       <a className="brand" href="/" title="Today"><Logo/></a>
       <DateSearch/>
@@ -106,7 +108,7 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
         {streak&&<Streak days={streak.days} today={streak.today}/>}
         <a className={`iconbtn${route==='settings'?' on':''}`} href="/settings" aria-label="Settings" title="Settings" aria-current={route==='settings'?'page':undefined}><Icon name="settings" filled={route==='settings'}/></a>
       </div>
-    </header>
+    </header>}
     <aside id="side" className="side">
       <nav aria-label="Main navigation">
         {sections.map((section,index)=><div key={index} className="sidesec">
@@ -129,7 +131,7 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
     <button type="button" className="scrim" tabIndex={-1} aria-hidden="true" onClick={()=>setDrawer(false)}/>
     <div className="panel">
       {flash&&<p className="flash" role="status">{flash}</p>}
-      <main className={route==='today'||route==='year'?'wide':undefined}>{children}</main>
+      <main className={`${route==='today'||route==='year'?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}>{children}</SelectionProvider></main>
     </div>
   </div>;
 }

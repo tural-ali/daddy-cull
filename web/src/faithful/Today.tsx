@@ -4,6 +4,7 @@ import {Media} from '../Media';
 import {useDecisionQueue} from '../useDecisionQueue';
 import {calendarLabel} from './Year';
 import {Viewer} from './Viewer';
+import {usePhotoURL} from './photoURL';
 import {Busy} from '../Busy';
 
 export type TodayYear={day:string;year:number;files:number;bytes:number;status:'pending'|'done';assets:Asset[]};
@@ -33,7 +34,8 @@ export function Today({initial}:{initial:TodayData}){
   const [message,setMessage]=useState('');
   const [duplicateGroups,setDuplicateGroups]=useState<DuplicateGroup[]>([]);
   const [keepers,setKeepers]=useState<Record<string,number>>({});
-  const [viewer,setViewer]=useState<number|null>(null);
+  const photo=usePhotoURL(id=>initial.years.some(year=>year.assets.some(asset=>String(asset.id)===id)));
+  const viewer=photo.open===null?null:Number(photo.open);
   const assets=useMemo(()=>years.flatMap(year=>year.assets),[years]);
   // A photograph counts as reviewed once it has a decision or its year on this
   // date is marked reviewed, so marking a date fills the bar.
@@ -160,7 +162,7 @@ export function Today({initial}:{initial:TodayData}){
     </section>}
     {years.map(year=><section className={`yr${year.status==='done'?' settled':''}`} key={year.day}>
       <div className="yhead"><h2>{year.year}</h2><span className="ymeta">{year.assets.length.toLocaleString()} {year.assets.length===1?'memory':'memories'}{year.assets.length!==year.files&&<span className="dim"> from {year.files.toLocaleString()} files</span>} <span className="dim">· {bytes(year.bytes)}</span></span>{year.status==='done'&&<span className="tag done">reviewed</span>}</div>
-      {year.assets.length===0?<p className="note">Nothing left in this folder.</p>:<div className="gal">{year.assets.map(asset=><figure className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}`} key={asset.id} onClick={()=>{setSelected(asset.id);setViewer(asset.id)}} tabIndex={0}>
+      {year.assets.length===0?<p className="note">Nothing left in this folder.</p>:<div className="gal">{year.assets.map(asset=><figure className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}`} key={asset.id} onClick={()=>{setSelected(asset.id);photo.show(asset.id)}} tabIndex={0}>
         <Media asset={asset}/>
         <div className="bdg">{(asset.relatedCount??0)>0&&<span className="b dupe">duplicate</span>}{asset.kind==='video'&&<span className="b play">▶</span>}</div>
         <div className="acts"><button type="button" className="act cull" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':'cull')}}>{asset.status==='cull'?'Undo':'Remove'}</button><button type="button" className="act fav" disabled={!queue.ready} aria-pressed={asset.favourite} onClick={event=>{event.stopPropagation();save(asset,asset.status,!asset.favourite)}}>♡</button></div>
@@ -170,6 +172,6 @@ export function Today({initial}:{initial:TodayData}){
       {year.status!=='done'&&year.assets.length>0&&<p className="yact"><button className="btn small" disabled={saving} onClick={()=>void markYear(year.day)}>Mark {year.year} reviewed</button><a className="dim" href={`/day/${year.day}`}>Open {year.day} on its own</a></p>}
     </section>)}
     {assets.length>0&&<footer className="fbar keys"><span className="fleft"><span className="hint">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>?</b> for the rest</span></span><span className="fright">{doneYears<years.length&&<button className="btn" disabled={saving} onClick={()=>void markDate()}>Mark {initial.label} reviewed</button>}</span></footer>}
-    {viewer!==null&&<Viewer assets={assets} initialID={viewer} onClose={()=>setViewer(null)} onSave={save} onPatch={patchAsset}/>} 
+    {viewer!==null&&<Viewer assets={assets} initialID={viewer} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset}/>} 
   </>;
 }

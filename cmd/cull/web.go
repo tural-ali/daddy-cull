@@ -18,10 +18,11 @@ func webApp(dir string, routes []string) http.Handler {
 		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFile(w, r, filepath.Join(dir, "index.html"))
 	}
-	mux.HandleFunc("GET /on/{md}", page)
-	mux.HandleFunc("GET /day/{day}", page)
-	for _, route := range routes {
+	// Every page also answers with a photo open on it, so a preview's own
+	// address can be shared, bookmarked or reloaded.
+	for _, route := range append([]string{"/on/{md}", "/day/{day}"}, routes...) {
 		mux.HandleFunc("GET "+route, page)
+		mux.HandleFunc("GET "+route+"/photo/{photo}", page)
 	}
 	files := http.FileServer(http.Dir(dir))
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

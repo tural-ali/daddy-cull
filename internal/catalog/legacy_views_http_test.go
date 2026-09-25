@@ -18,8 +18,14 @@ func TestLegacyViewHTTPRoutes(t *testing.T) {
 	request := httptest.NewRequest("GET", "/api/screenshots", nil)
 	response := httptest.NewRecorder()
 	s.Handler().ServeHTTP(response, request)
-	if response.Code != 200 || response.Body.String() != "{\"items\":[],\"total\":0,\"bytes\":0}\n" {
+	if response.Code != 200 || response.Body.String() != "{\"items\":[],\"total\":0,\"bytes\":0,\"unreviewed\":0,\"reviewed\":0}\n" {
 		t.Fatalf("screenshots returned %d %q", response.Code, response.Body.String())
+	}
+	request = httptest.NewRequest("GET", "/api/screenshots?review=kept", nil)
+	response = httptest.NewRecorder()
+	s.Handler().ServeHTTP(response, request)
+	if response.Code != 400 {
+		t.Fatalf("an unknown review filter returned %d", response.Code)
 	}
 	request = httptest.NewRequest("GET", "/api/screenshot-bin", nil)
 	response = httptest.NewRecorder()

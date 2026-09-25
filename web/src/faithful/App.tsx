@@ -14,6 +14,7 @@ import {Upgrades,type UpgradePage} from './Upgrades';
 import {Photos} from './Photos';
 import {recoverPending} from '../recoverPending';
 import {BIN_CHANGED} from '../api';
+import {pagePath} from './photoURL';
 import {Busy} from '../Busy';
 
 type PageState={route:LegacyRoute;content:ReactNode};
@@ -55,7 +56,9 @@ function titleFor(path:string){
 export function App(){
   const now=new Date();
   const currentMD=`${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-  const initialPath=location.pathname==='/'?`/on/${currentMD}`:location.pathname;
+  // An open photo's address is its page's address plus /photo/<id>; the page
+  // itself reads the photo, the frame only needs the page.
+  const initialPath=location.pathname==='/'?`/on/${currentMD}`:pagePath();
   const [path]=useState(initialPath);
   const [stats,setStats]=useState<Stats|null>(null);
   const [page,setPage]=useState<PageState>({route:routeFor(initialPath),content:<Busy size={64} label="Opening the catalogue…"/>});
@@ -116,8 +119,8 @@ export function App(){
         return {route,content:<Social page={await json<SocialPage>(`/api/social?band=${encodeURIComponent(band)}&from=${from}`)} band={band} from={from}/>} as PageState;
       }
       if(path==='/screenshots'){
-        const params=new URLSearchParams(location.search),filter=params.get('show')||'',from=Math.max(0,Number.parseInt(params.get('from')||'0',10)||0);
-        return {route,content:<Screenshots page={await json<ScreenshotPage>(`/api/screenshots?kind=${encodeURIComponent(filter)}&from=${from}`)} filter={filter} from={from}/>} as PageState;
+        const params=new URLSearchParams(location.search),filter=params.get('show')||'',review=params.get('review')==='reviewed'?'reviewed':'',from=Math.max(0,Number.parseInt(params.get('from')||'0',10)||0);
+        return {route,content:<Screenshots page={await json<ScreenshotPage>(`/api/screenshots?kind=${encodeURIComponent(filter)}&review=${review}&from=${from}`)} filter={filter} review={review} from={from}/>} as PageState;
       }
       throw new Error('This legacy workflow has not been connected yet.');
     }

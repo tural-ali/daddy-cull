@@ -27,11 +27,20 @@ type ScreenshotItem struct {
 	State string `json:"state"`
 }
 
+// ScreenshotPage is one page of the holding area under one filter. Total and
+// Bytes are for that filter; Unreviewed and Reviewed count both sides of it,
+// for the filter buttons.
 type ScreenshotPage struct {
-	Items []ScreenshotItem `json:"items"`
-	Total int              `json:"total"`
-	Bytes int64            `json:"bytes"`
+	Items      []ScreenshotItem `json:"items"`
+	Total      int              `json:"total"`
+	Bytes      int64            `json:"bytes"`
+	Unreviewed int              `json:"unreviewed"`
+	Reviewed   int              `json:"reviewed"`
 }
+
+// A screenshot is reviewed once it has been kept: a decision only, so nothing
+// moves on disk and it stays in the holding area under Reviewed.
+const screenshotReviewed = "COALESCE(d.status,'unreviewed')='keep'"
 
 type screenshotFile struct {
 	path, day, name string
@@ -102,33 +111,46 @@ func (s *Store) ImportScreenshotDirectory(ctx context.Context, root string) (Scr
 }
 
 func (s *Store) ScreenshotBacklog(ctx context.Context, kind string, limit int) ([]ScreenshotItem, error) {
-	page, err := s.ScreenshotPage(ctx, kind, 0, limit)
+	page, err := s.ScreenshotPage(ctx, kind, "all", 0, limit)
 	return page.Items, err
 }
 
-func (s *Store) ScreenshotPage(ctx context.Context, kind string, from, limit int) (ScreenshotPage, error) {
+// ScreenshotPage lists waiting screenshots. review is "" for those not yet
+// reviewed, "reviewed" for those kept, or "all".
+func (s *Store) ScreenshotPage(ctx context.Context, kind, review string, from, limit int) (ScreenshotPage, error) {
 	page := ScreenshotPage{Items: make([]ScreenshotItem, 0)}
 	if kind != "" && kind != "image" && kind != "video" {
+		return page, ErrInvalid
+	}
+	if review != "" && review != "reviewed" && review != "all" {
 		return page, ErrInvalid
 	}
 	if from < 0 || limit < 1 || limit > 200 {
 		return page, ErrInvalid
 	}
-	countSQL := "SELECT count(*),COALESCE(sum(a.size_bytes),0) FROM assets a JOIN screenshot_items shots ON shots.asset_id=a.id WHERE shots.state='waiting'"
-	countArgs := make([]any, 0, 1)
-	if kind != "" {
-		countSQL += " AND a.kind=?"
-		countArgs = append(countArgs, kind)
-	}
-	if err := s.read.QueryRowContext(ctx, countSQL, countArgs...).Scan(&page.Total, &page.Bytes); err != nil {
-		return page, err
-	}
-	query := `SELECT a.id,a.relative_path,a.captured_at,a.kind,a.size_bytes,COALESCE(d.status,'unreviewed'),COALESCE(d.favourite,0),COALESCE(d.revision,0),a.source_id,(SELECT count(*) FROM assets alt WHERE alt.anchor_id=a.id),` + relatedCount + `,COALESCE(shots.day,''),shots.name,shots.state FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id JOIN screenshot_items shots ON shots.asset_id=a.id WHERE shots.state='waiting'`
+	where := " WHERE shots.state='waiting'"
 	args := make([]any, 0, 3)
 	if kind != "" {
-		query += " AND a.kind=?"
+		where += " AND a.kind=?"
 		args = append(args, kind)
 	}
+	var reviewedBytes, unreviewedBytes int64
+	if err := s.read.QueryRowContext(ctx, `SELECT COALESCE(sum(`+screenshotReviewed+`),0),COALESCE(sum(CASE WHEN `+screenshotReviewed+` THEN a.size_bytes END),0),
+		COALESCE(sum(NOT `+screenshotReviewed+`),0),COALESCE(sum(CASE WHEN NOT `+screenshotReviewed+` THEN a.size_bytes END),0)
+		FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id JOIN screenshot_items shots ON shots.asset_id=a.id`+where, args...).Scan(&page.Reviewed, &reviewedBytes, &page.Unreviewed, &unreviewedBytes); err != nil {
+		return page, err
+	}
+	switch review {
+	case "":
+		where += " AND NOT " + screenshotReviewed
+		page.Total, page.Bytes = page.Unreviewed, unreviewedBytes
+	case "reviewed":
+		where += " AND " + screenshotReviewed
+		page.Total, page.Bytes = page.Reviewed, reviewedBytes
+	default:
+		page.Total, page.Bytes = page.Reviewed+page.Unreviewed, reviewedBytes+unreviewedBytes
+	}
+	query := `SELECT a.id,a.relative_path,a.captured_at,a.kind,a.size_bytes,COALESCE(d.status,'unreviewed'),COALESCE(d.favourite,0),COALESCE(d.revision,0),a.source_id,(SELECT count(*) FROM assets alt WHERE alt.anchor_id=a.id),` + relatedCount + `,COALESCE(shots.day,''),shots.name,shots.state FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id JOIN screenshot_items shots ON shots.asset_id=a.id` + where
 	query += " ORDER BY COALESCE(shots.day,''),shots.name LIMIT ? OFFSET ?"
 	args = append(args, limit, from)
 	rows, err := s.read.QueryContext(ctx, query, args...)

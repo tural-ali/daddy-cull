@@ -154,7 +154,7 @@ func (s *Store) Handler() http.Handler {
 			http.Error(w, http.StatusText(400), 400)
 			return
 		}
-		items, err := s.ScreenshotPage(ctx, r.URL.Query().Get("kind"), from, 120)
+		items, err := s.ScreenshotPage(ctx, r.URL.Query().Get("kind"), r.URL.Query().Get("review"), from, 120)
 		if err != nil {
 			status := 503
 			if errors.Is(err, ErrInvalid) {

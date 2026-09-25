@@ -1,9 +1,12 @@
-import {useEffect,useRef,useState,type MouseEvent} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {FilePreview} from '../Media';
 import {binChanged} from '../api';
+import {Icon} from '../Icon';
 import {Lightbox,type LightboxItem} from './Lightbox';
 import {dayOfPath} from './goto';
 import {Busy} from '../Busy';
+import {Pick,RowTile,Rows,useSelectionBar,usePicks} from './selection';
+import {usePhotoURL} from './photoURL';
 
 /** One card in the Bin, whichever tool put the file there. */
 export type TrashItem={key:string;group:string;source:'marked'|'bin'|'legacy'|'screenshot';name:string;original:string;kind:string;size:number;sidecars:number;removedAt:string;preview?:string;disk?:string};
@@ -12,7 +15,7 @@ export type DeletingItem=TrashItem&{deletedAt:string;dueAt:string;attempts:numbe
 export type DeletingReport={graceDays:number;graceError?:string;items:DeletingItem[];lastRun:string;lastDeleted:number;lastError:string;checkIntervalMinutes:number};
 type Result={done:number;bytes:number;failures:{name:string;error:string}[];keptDays?:number};
 type Pending={title:string;body:string;confirm:string;run:()=>Promise<void>};
-type Control='restore-all'|'empty'|'restore'|'delete'|'lightbox';
+type Control='empty'|'restore'|'delete'|'lightbox';
 const minimumBusy=600;
 
 async function post(path:string,body:unknown):Promise<Result>{
@@ -50,15 +53,15 @@ export function countdown(dueAt:string){
 type Mode='bin'|'deleting';
 
 // TrashBoard is the Bin page, and also the Log's list of files deleted from the
-// Bin and still waiting out their grace period. Both are a grid of removed files
-// selected in whole batches, previewed in place, and acted on together; they
-// differ only in what can be done: the Bin restores or deletes, the waiting list
-// restores or deletes at once instead of on the day.
+// Bin and still waiting out their grace period. Both look like Google Photos'
+// Trash: a row-filling grid where a click previews, the round tick selects,
+// and the selection's actions sit in the top bar. They differ only in what
+// can be done: the Bin restores or deletes, the waiting list restores or
+// deletes at once instead of on the day. A batch moves as a whole, sidecars
+// and all, so ticking one file ticks its batch.
 function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   const [items,setItems]=useState<(TrashItem|DeletingItem)[]|null>(null);
   const [report,setReport]=useState<DeletingReport|null>(null);
-  const [selected,setSelected]=useState<Set<string>>(new Set());
-  const [anchor,setAnchor]=useState<string|null>(null);
   const [busy,setBusy]=useState('');
   // The control whose action is running, so the orb shows where the click was.
   const [doing,setDoing]=useState<Control|null>(null);
@@ -66,7 +69,6 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   const [error,setError]=useState('');
   const [failures,setFailures]=useState<Result['failures']>([]);
   const [pending,setPending]=useState<Pending|null>(null);
-  const [viewing,setViewing]=useState<string|null>(null);
   const dialog=useRef<HTMLDialogElement>(null);
 
   async function refresh(){
@@ -80,9 +82,6 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
         next=await response.json();
       }
       setItems(next);onCount?.(next.length);
-      // A selection only ever names what the list still holds.
-      const groups=new Set(next.map(item=>item.group));
-      setSelected(current=>new Set([...current].filter(group=>groups.has(group))));
     }catch(reason){setError((reason as Error).message)}
   }
   useEffect(()=>{void refresh()},[]);
@@ -95,29 +94,19 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
 
   const list=items??[];
   const grace=report?.graceDays??0;
-  // A batch moves as a whole, sidecars and all, so its cards are selected together.
-  const chosen=list.filter(item=>selected.has(item.group));
+  const picks=usePicks(list,item=>item.group);
+  const chosen=list.filter(item=>picks.picked.has(item.group));
   const chosenBytes=chosen.reduce((sum,item)=>sum+item.size,0);
   const totalBytes=list.reduce((sum,item)=>sum+item.size,0);
   const allSelected=list.length>0&&chosen.length===list.length;
   const previews:LightboxItem[]=list.filter(item=>item.preview).map(item=>({key:item.key,base:item.preview!,name:item.name,kind:item.kind,detail:caption(item),day:dayOfPath(item.original)??undefined}));
+  // Only the Bin's own previews have addresses; the Log's list sits under the
+  // Log's grid, which has them already.
+  const photo=usePhotoURL(key=>items===null?undefined:previews.some(item=>item.key===key),mode==='bin');
 
   function caption(item:TrashItem|DeletingItem){
     if('dueAt' in item)return `Deleted ${longDate(item.deletedAt)} · goes ${countdown(item.dueAt)}`;
     return `Removed ${removed(item.removedAt)}`;
-  }
-  function toggle(item:TrashItem,event:MouseEvent){
-    const next=new Set(selected);
-    if(event.shiftKey&&anchor){
-      const from=list.findIndex(other=>other.key===anchor),to=list.findIndex(other=>other.key===item.key);
-      if(from>=0&&to>=0){
-        if(!(event.metaKey||event.ctrlKey))next.clear();
-        for(let index=Math.min(from,to);index<=Math.max(from,to);index++)next.add(list[index].group);
-        setSelected(next);return;
-      }
-    }
-    if(next.has(item.group))next.delete(item.group);else next.add(item.group);
-    setSelected(next);setAnchor(item.key);
   }
   async function act(control:Control,label:string,run:()=>Promise<Result>,done:(result:Result)=>string){
     setBusy(label);setDoing(control);setError('');setMessage('');setFailures([]);
@@ -127,7 +116,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
     try{
       const result=await run();
       await shown;
-      setMessage(done(result));setFailures(result.failures);setSelected(new Set());
+      setMessage(done(result));setFailures(result.failures);picks.clear();
     }catch(reason){await shown;setError((reason as Error).message)}
     finally{setBusy('');setDoing(null);await refresh();binChanged()}
   }
@@ -181,53 +170,51 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
     });
   }
 
-  const summary=items===null?<Busy label={mode==='bin'?'Reading the Bin…':'Reading deleted files…'}/>:<><b>{list.length.toLocaleString()}</b> file{list.length===1?'':'s'} · <b>{bytes(totalBytes)}</b></>;
+  useSelectionBar({count:chosen.length,busy:!!busy,clear:picks.clear,actions:[
+    {label:allSelected?'Deselect all':`Select all ${list.length.toLocaleString()}`,icon:'select_all',onClick:()=>allSelected?picks.clear():picks.all()},
+    {label:'Restore',icon:'restore_from_trash',onClick:()=>restore(chosen.map(item=>item.key),'restore')},
+    {label:mode==='bin'?(grace>0?'Delete':'Delete for good'):'Delete now',icon:'delete_forever',danger:true,onClick:remove},
+  ]});
+
+  const summary=items===null?<Busy label={mode==='bin'?'Reading the Bin…':'Reading deleted files…'}/>:<><b>{list.length.toLocaleString()}</b> file{list.length===1?'':'s'} · <b>{bytes(totalBytes)}</b>{chosen.length>0&&<span className="dim"> · {bytes(chosenBytes)} selected</span>}</>;
   const hint=mode==='bin'
-    ?(report===null?'':grace>0?<>Removed files wait here until you delete them. Deleted files stay on disk for {grace} more day{grace===1?'':'s'}, restorable from the <a href="/log">Log</a>, then are deleted automatically. <a href="/settings#bin">Change</a></>:<>Deleting from the Bin is immediate and cannot be undone. <a href="/settings#bin">Keep deleted files for a while instead</a></>)
+    ?(report===null?'':grace>0?<>Deleted files stay on disk for {grace} more day{grace===1?'':'s'}, restorable from the <a href="/log">Log</a>, then are deleted automatically. <a href="/settings#bin">Change</a></>:<>Deleting from the Bin is immediate and cannot be undone. <a href="/settings#bin">Keep deleted files for a while instead</a></>)
     :(report===null?'':<>Deleted from the Bin, still on disk. Each is deleted automatically {grace} day{grace===1?'':'s'} after it was deleted, checked every {report.checkIntervalMinutes} minutes. <a href="/settings#bin">Change</a></>);
   // On the Log the waiting list only exists while something is waiting; once the
   // last file is restored or deleted, only the sentence saying so remains.
   if(mode==='deleting'&&items!==null&&list.length===0&&!error)return message?<p className="flash" role="status">{message}</p>:null;
   return <>
     <section className={mode==='bin'?'binhead':'binhead deletinghead'}>
-      {mode==='bin'?<h1>Bin</h1>:<h2>Deleted, waiting to go</h2>}
+      <div className="headrow">
+        {mode==='bin'?<h1>Bin</h1>:<h2>Deleted, waiting to go</h2>}
+        {mode==='bin'&&list.length>0&&<button type="button" className="textbtn" disabled={!!busy} onClick={empty}>{doing==='empty'?<Busy label={busy} state="working"/>:<><Icon name="delete"/>Empty Bin</>}</button>}
+      </div>
       <p className="ysum">{summary}</p>
       {hint&&<p className="hint">{hint}</p>}
       {report?.graceError&&<p className="note warn" role="alert">Automatic deletion is paused: {report.graceError} Save a number of days in <a href="/settings#bin">Settings</a> to resume it.</p>}
-      {mode==='bin'&&list.length>0&&<div className="binacts">
-        <button className="btn" disabled={!!busy} onClick={()=>restore(list.map(item=>item.key),'restore-all')}>{face('restore-all','Restore everything')}</button>
-        <button className="btn danger ghosty" disabled={!!busy} onClick={empty}>{face('empty','Empty the Bin')}</button>
-      </div>}
     </section>
+    {busy&&doing!=='empty'&&doing!=='lightbox'&&<p className="flash" role="status"><Busy label={busy} state="working"/></p>}
     {message&&<p className="flash" role="status">{message}</p>}
     {failures.length>0&&<div className="note warn" role="alert"><b>{files(failures.length)} could not be handled and {failures.length===1?'is':'are'} still {mode==='bin'?'in the Bin':'waiting'}:</b><ul className="plain">{failures.slice(0,20).map((failure,index)=><li key={index}><span className="mono">{failure.name}</span>: {failure.error}</li>)}</ul>{failures.length>20&&<p>and {(failures.length-20).toLocaleString()} more.</p>}</div>}
     {error&&<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>{setError('');void refresh()}}>Reload</button></p>}
     {mode==='bin'&&items!==null&&list.length===0&&!error&&<p className="note">The Bin is empty. Nothing has been removed, or everything removed has been dealt with.</p>}
-    {list.length>0&&<div className={`gal tight bingal${mode==='deleting'?' small':''}`}>
-      {list.map(item=>{
+    {list.length>0&&<Rows className={`bingrid${mode==='deleting'?' small':''}`}>
+      {list.map((item,index)=>{
         const waiting='dueAt' in item?item:null;
-        return <figure key={item.key} className={`mo gone${selected.has(item.group)?' sel':''}${waiting&&parse(waiting.dueAt)<=Date.now()?' due':''}`} onClick={event=>{if(event.metaKey||event.ctrlKey||event.shiftKey){event.preventDefault();toggle(item,event)}}}>
-          <button type="button" role="checkbox" className="tick" aria-checked={selected.has(item.group)} aria-label={`Select ${item.name}`} onClick={event=>{event.stopPropagation();toggle(item,event)}}><span/></button>
-          {item.preview?<button type="button" className="shot" aria-label={`Preview ${item.name}`} onClick={event=>{if(event.metaKey||event.ctrlKey||event.shiftKey)return;setViewing(item.key)}}><FilePreview base={item.preview} name={item.name} kind={item.kind}/></button>
+        const picked=picks.picked.has(item.group);
+        const detail=waiting
+          ?`${waiting.lastError?`Could not delete, will retry: ${waiting.lastError}`:`Goes ${countdown(waiting.dueAt)}`} · ${bytes(item.size)}`
+          :[bytes(item.size),item.sidecars>0?`+${item.sidecars} sidecar${item.sidecars===1?'':'s'}`:'',item.removedAt?`removed ${removed(item.removedAt)}`:'',item.disk??''].filter(Boolean).join(' · ');
+        return <RowTile key={item.key} className={`gone${picked?' picked':''}${waiting&&parse(waiting.dueAt)<=Date.now()?' due':''}`} title={`${item.name}\n${item.original}\n${detail}`}
+          onClick={event=>{if(event.shiftKey&&picks.picked.size>0)picks.toggle(index,true);else if(item.preview)photo.show(item.key);else picks.toggle(index,false)}}>
+          {item.preview?<FilePreview base={item.preview} name={item.name} kind={item.kind}/>
             :<div className="media-missing"><span>{item.kind==='sidecar'?'Sidecar':'Preview unavailable'}</span><small>{item.name.split('.').pop()?.toUpperCase()}{item.kind==='sidecar'?' · its photograph has already left':''}</small></div>}
-          <figcaption className="cap stack">
-            <span title={item.original}>{item.name}</span>
-            {waiting
-              ?<span className={waiting.lastError?'due':'dim'} title={waiting.lastError?`The last attempt failed: ${waiting.lastError}`:`Deleted ${new Date(parse(waiting.deletedAt)).toLocaleString()}, goes ${new Date(parse(waiting.dueAt)).toLocaleString()}`}>{waiting.lastError?`Could not delete, will retry`:`Goes ${countdown(waiting.dueAt)}`} · {bytes(item.size)}</span>
-              :<span className="dim" title={`Removed ${new Date(parse(item.removedAt)).toLocaleString()}`}>{bytes(item.size)}{item.sidecars>0&&` · +${item.sidecars} sidecar${item.sidecars===1?'':'s'}`}{item.removedAt&&` · ${removed(item.removedAt)}`}{item.disk&&` · ${item.disk}`}</span>}
-          </figcaption>
-        </figure>})}
-    </div>}
-    {list.length>0&&<footer className="fbar binbar">
-      <span className="fleft">
-        <label className="selall"><input type="checkbox" checked={allSelected} disabled={!!busy} onChange={()=>setSelected(allSelected?new Set():new Set(list.map(item=>item.group)))}/> Select all</label>
-        <span className="sel"><span id="selcount">{chosen.length.toLocaleString()}</span> selected{chosen.length>0&&` · ${bytes(chosenBytes)}`}</span>
-        <button className="btn" disabled={!!busy||chosen.length===0} onClick={()=>restore(chosen.map(item=>item.key),'restore')}>{face('restore','Restore selected')}</button>
-        <button className="btn danger" disabled={!!busy||chosen.length===0} onClick={remove}>{face('delete',mode==='bin'?(grace>0?'Delete selected':'Delete selected for good'):'Delete selected now')}</button>
-      </span>
-      <span className="fright hint">Shift-click selects a run. A file that cannot be deleted is reported, never counted as gone.</span>
-    </footer>}
-    {viewing&&<Lightbox items={previews} initialKey={viewing} onClose={()=>setViewing(null)} actions={current=>{
+          <Pick checked={picked} label={`Select ${item.name}, ${detail}`} onToggle={extend=>picks.toggle(index,extend)}/>
+          {item.kind==='video'&&<span className="dur"><Icon name="play_circle"/></span>}
+          {waiting&&<div className="bdg"><span className={`b${waiting.lastError?' warn':''}`}>{waiting.lastError?'Could not delete':`Goes ${countdown(waiting.dueAt)}`}</span></div>}
+        </RowTile>})}
+    </Rows>}
+    {photo.open!==null&&previews.length>0&&<Lightbox items={previews} initialKey={photo.open} onClose={photo.close} onMove={photo.moved} actions={current=>{
       // The writer's own batches give back one photograph at a time; the other
       // engines move a batch only as a whole, so the button says so.
       const item=list.find(other=>other.key===current.key);

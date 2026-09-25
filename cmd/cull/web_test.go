@@ -24,6 +24,8 @@ func TestWebAppNeverServesAStalePage(t *testing.T) {
 		{"/bin", "app", "no-cache"},
 		{"/on/09-23", "app", "no-cache"},
 		{"/day/2020-09-23", "app", "no-cache"},
+		{"/on/09-23/photo/42", "app", "no-cache"},
+		{"/bin/photo/shot%3A7", "app", "no-cache"},
 		{"/queue.html", "queue", "no-cache"},
 		{"/assets/app-abc123.js", "js", "public, max-age=31536000, immutable"},
 	} {

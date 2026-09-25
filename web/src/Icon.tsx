@@ -31,6 +31,20 @@ import OpenNew from '@material-symbols/svg-400/outlined/open_in_new.svg?raw';
 import OpenNewFill from '@material-symbols/svg-400/outlined/open_in_new-fill.svg?raw';
 import Fire from '@material-symbols/svg-400/outlined/local_fire_department.svg?raw';
 import FireFill from '@material-symbols/svg-400/outlined/local_fire_department-fill.svg?raw';
+import Check from '@material-symbols/svg-400/outlined/check.svg?raw';
+import CheckFill from '@material-symbols/svg-400/outlined/check-fill.svg?raw';
+import SelectAll from '@material-symbols/svg-400/outlined/select_all.svg?raw';
+import SelectAllFill from '@material-symbols/svg-400/outlined/select_all-fill.svg?raw';
+import RestoreBin from '@material-symbols/svg-400/outlined/restore_from_trash.svg?raw';
+import RestoreBinFill from '@material-symbols/svg-400/outlined/restore_from_trash-fill.svg?raw';
+import DeleteForever from '@material-symbols/svg-400/outlined/delete_forever.svg?raw';
+import DeleteForeverFill from '@material-symbols/svg-400/outlined/delete_forever-fill.svg?raw';
+import PlayCircle from '@material-symbols/svg-400/outlined/play_circle.svg?raw';
+import PlayCircleFill from '@material-symbols/svg-400/outlined/play_circle-fill.svg?raw';
+import FileMove from '@material-symbols/svg-400/outlined/drive_file_move.svg?raw';
+import FileMoveFill from '@material-symbols/svg-400/outlined/drive_file_move-fill.svg?raw';
+import Undo from '@material-symbols/svg-400/outlined/undo.svg?raw';
+import UndoFill from '@material-symbols/svg-400/outlined/undo-fill.svg?raw';
 import Done from '@material-symbols/svg-400/outlined/task_alt.svg?raw';
 import DoneFill from '@material-symbols/svg-400/outlined/task_alt-fill.svg?raw';
 
@@ -50,7 +64,14 @@ const icons={
   menu:[Menu,MenuFill],
   close:[Close,CloseFill],
   task_alt:[Done,DoneFill],
+  play_circle:[PlayCircle,PlayCircleFill],
+  check:[Check,CheckFill],
+  select_all:[SelectAll,SelectAllFill],
+  restore_from_trash:[RestoreBin,RestoreBinFill],
+  delete_forever:[DeleteForever,DeleteForeverFill],
   local_fire_department:[Fire,FireFill],
+  drive_file_move:[FileMove,FileMoveFill],
+  undo:[Undo,UndoFill],
 } as const;
 
 export type IconName=keyof typeof icons;
