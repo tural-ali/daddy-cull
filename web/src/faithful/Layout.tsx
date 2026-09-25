@@ -1,6 +1,6 @@
 import type {ReactNode} from 'react';
 
-export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'log'|'bin'|'settings';
+export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'log'|'bin'|'settings';
 const navigation: {href:string;route:LegacyRoute;label:string}[]=[
   {href:'/',route:'today',label:'Today'},
   {href:'/year',route:'year',label:'Year'},
@@ -8,6 +8,7 @@ const navigation: {href:string;route:LegacyRoute;label:string}[]=[
   {href:'/shadows',route:'shadows',label:'Shadowed'},
   {href:'/screenshots',route:'shots',label:'Screenshots'},
   {href:'/social',route:'social',label:'Saved from social'},
+  {href:'/photos',route:'photos',label:'Apple Photos'},
   {href:'/log',route:'log',label:'Log'},
   {href:'/bin',route:'bin',label:'Bin'},
 ];

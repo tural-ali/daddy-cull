@@ -1053,34 +1053,113 @@ button.danger:not(.btn) {
   border-radius: var(--radius);
 }
 
-/* --------------------------------------------------- Apple Photos handoff --
- * Culling a file here leaves the same photograph in Photos, so the bin ends by
- * saying so and counting what is outstanding. It is a status panel, not a
- * control: the Photos side is finished by Cull Sync on the Mac, deliberately,
- * because a web page on the LAN has no business reaching into a photo library.
+/* ----------------------------------------------------------- Apple Photos --
+ * Culling a file here leaves the same photograph in Photos. The page asks Cull
+ * Sync on the Mac to find each one, and every deletion is shown as a pair: the
+ * archive's file beside what Photos holds, because that side-by-side look is
+ * the only honest confirmation that the two really are the same photograph.
  */
-.handoff {
-  margin: 2rem 0 1rem;
-  padding: 1rem 1.1rem 1.2rem;
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-.handoff h2 { margin: 0 0 .35rem; font-size: 15px; }
-.handoff .ysum { margin: .5rem 0; }
+.photoshead { margin-bottom: 1rem; }
+.photoshead .hint { max-width: 88ch; }
 
-.handoff .held { margin-top: .9rem; }
-.handoff .held summary {
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 12.5px;
+.phelper {
+  display: flex; align-items: center; gap: .6rem;
+  margin: .8rem 0; font-size: 13.5px; color: var(--muted);
 }
-.handoff .heldlist {
-  margin: .5rem 0 0;
-  padding-left: 1.1rem;
-  color: var(--text);
-  font-size: 12.5px;
-  line-height: 1.7;
+.phelper .pdot {
+  flex: none; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--faint);
+}
+.phelper.online { color: var(--text); }
+.phelper.online .pdot { background: var(--good); }
+
+.pacts { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: 1rem 0; }
+
+.pprogress {
+  display: flex; align-items: center; gap: .5rem 1rem; flex-wrap: wrap;
+  margin: 1rem 0; padding: .8rem 1rem;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
+  font-size: 13.5px;
+}
+.pprogress.confirm {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--line));
+  background: color-mix(in oklab, var(--accent) 10%, var(--bg-2));
+  font-weight: 600;
+}
+.pprogress progress { flex: 1 1 12rem; max-width: 22rem; height: 6px; accent-color: var(--accent); }
+.pprogress .dim { font-variant-numeric: tabular-nums; font-weight: 400; }
+
+/* Until the shared Busy component lands with its own animation, a quiet
+   pulsing dot keeps a waiting label from reading as a frozen page. */
+.pacts .busy, .pprogress .busy { display: inline-flex; align-items: center; gap: .5rem; }
+.pacts .busy::before, .pprogress .busy::before {
+  content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); animation: pbusy 1.2s ease-in-out infinite;
+}
+@keyframes pbusy { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) {
+  .pacts .busy::before, .pprogress .busy::before { animation: none; }
+}
+
+.psec { margin: 1.6rem 0; }
+.psec > header { display: flex; align-items: baseline; gap: 1rem; }
+.psec h2 { margin: 0; font-size: 16px; }
+.psec h2 .dim { font-weight: 400; font-variant-numeric: tabular-nums; }
+.psec .selall { margin-left: auto; display: inline-flex; align-items: center; gap: .4rem; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.psec .selall input, .prow input { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.psec .hint { margin: .25rem 0 .7rem; }
+.psec.quiet { margin-bottom: 5rem; }
+
+.plist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.prow > label, .prow:not(:has(> label)) {
+  display: flex; align-items: center; gap: .9rem;
+  padding: .5rem .7rem;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.prow > label { cursor: pointer; }
+.prow.sel > label { border-color: color-mix(in oklab, var(--accent) 50%, var(--line)); }
+.prow:not(.sel) > label .pthumb { opacity: .55; }
+
+.pthumb {
+  position: relative; flex: none; margin: 0;
+  width: 88px; height: 88px;
+  background: var(--bg-3); border-radius: var(--radius-sm); overflow: hidden;
+}
+.pthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pthumb .video-badge { display: none; }
+.pthumb .media-missing small { font-size: 9px; }
+.pfav {
+  position: absolute; right: 4px; bottom: 3px;
+  color: var(--fav); font-size: 13px; line-height: 1;
+  text-shadow: 0 0 3px rgb(0 0 0 / .6);
+}
+.pmatches { display: flex; gap: 6px; flex-wrap: wrap; }
+.parrow { flex: none; color: var(--faint); font-size: 18px; }
+
+.pinfo { display: flex; flex-direction: column; gap: .2rem; min-width: 0; font-size: 13px; }
+.pinfo > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pinfo .mono { font-size: 12.5px; }
+.pbadge {
+  display: inline-block; padding: 0 .4em; border-radius: 4px;
+  background: var(--bg-4); color: var(--muted); font-size: 11.5px;
+}
+.pbadge.near { background: color-mix(in oklab, var(--warn) 22%, var(--bg-3)); color: var(--text); }
+.pout { font-size: 12.5px; font-weight: 600; }
+.pout.deleted, .pout.favourited { color: var(--good); }
+.pout.not-deleted, .pout.failed { color: var(--warn); }
+
+.pmore { margin: .6rem 0; }
+.pmore summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.pmore ul { margin: .5rem 0 0; font-size: 12.5px; }
+.pmore ul li { margin-bottom: .2rem; }
+.note .pmore { margin: .5rem 0 .7rem; }
+
+.psynced { max-width: 36rem; margin-top: 2rem; }
+
+@media (max-width: 640px) {
+  .pthumb { width: 64px; height: 64px; }
+  .prow > label, .prow:not(:has(> label)) { flex-wrap: wrap; gap: .6rem; }
+  .pinfo { flex-basis: 100%; }
 }
 
 /* ============================================================== shadowed == */
