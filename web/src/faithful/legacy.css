@@ -1552,5 +1552,5 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
 /* The Bin and Log footer keeps its buttons on one row; the hint gives way first. */
 .fbar.binbar .fleft { flex: none; flex-wrap: nowrap; }
 .fbar.binbar .fright { flex: 1 1 0; min-width: 0; justify-content: flex-end; text-align: right; }
-@media (max-width: 960px) { .fbar.binbar .fright:not(:has(.busy)) { display: none; } }
+@media (max-width: 960px) { .fbar.binbar .fright { display: none; } }
 @media (max-width: 720px) { .fbar.binbar .fleft { flex-wrap: wrap; } }

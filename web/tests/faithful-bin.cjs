@@ -71,6 +71,7 @@ const fixture=()=>[
   assert.equal(posts.length,1,'Cancel sent a deletion');
   await page.getByRole('button',{name:'Delete selected for good'}).click();
   await dialog.getByRole('button',{name:'Delete 2 files'}).click();
+  await page.locator('.fbar .btn.danger .busy').waitFor();
   await page.getByText('2 files permanently deleted, freeing 2.0 MB.').waitFor();
   assert.deepEqual(posts[1],{path:'/api/trash/delete',body:{keys:['bin:aa:12','bin:aa:13'],confirmation:'DELETE 2'}});
 
@@ -80,6 +81,8 @@ const fixture=()=>[
   await empty.waitFor();
   assert.match(await empty.innerText(),/All 3 files in the Bin/);
   await empty.getByRole('button',{name:'Empty the Bin'}).click();
+  // The orb shows in the button that was pressed, even when the answer is instant.
+  await page.locator('.binacts .btn.danger .busy').waitFor();
   await page.getByText(/The Bin was emptied: 3 files permanently deleted/).waitFor();
   assert.deepEqual(posts[2],{path:'/api/trash/empty',body:{confirmation:'DELETE 3'}});
   await page.getByText(/The Bin is empty/).waitFor();

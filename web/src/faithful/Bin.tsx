@@ -11,6 +11,8 @@ export type DeletingItem=TrashItem&{deletedAt:string;dueAt:string;attempts:numbe
 export type DeletingReport={graceDays:number;graceError?:string;items:DeletingItem[];lastRun:string;lastDeleted:number;lastError:string;checkIntervalMinutes:number};
 type Result={done:number;bytes:number;failures:{name:string;error:string}[];keptDays?:number};
 type Pending={title:string;body:string;confirm:string;run:()=>Promise<void>};
+type Control='restore-all'|'empty'|'restore'|'delete'|'lightbox';
+const minimumBusy=600;
 
 async function post(path:string,body:unknown):Promise<Result>{
   const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -57,6 +59,8 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   const [selected,setSelected]=useState<Set<string>>(new Set());
   const [anchor,setAnchor]=useState<string|null>(null);
   const [busy,setBusy]=useState('');
+  // The control whose action is running, so the orb shows where the click was.
+  const [doing,setDoing]=useState<Control|null>(null);
   const [message,setMessage]=useState('');
   const [error,setError]=useState('');
   const [failures,setFailures]=useState<Result['failures']>([]);
@@ -114,16 +118,24 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
     if(next.has(item.group))next.delete(item.group);else next.add(item.group);
     setSelected(next);setAnchor(item.key);
   }
-  async function act(label:string,run:()=>Promise<Result>,done:(result:Result)=>string){
-    setBusy(label);setError('');setMessage('');setFailures([]);
+  async function act(control:Control,label:string,run:()=>Promise<Result>,done:(result:Result)=>string){
+    setBusy(label);setDoing(control);setError('');setMessage('');setFailures([]);
+    // Scheduling a deletion takes milliseconds; the orb stays long enough to be
+    // seen, so a click never looks as if nothing happened.
+    const shown=new Promise(resolve=>setTimeout(resolve,minimumBusy));
     try{
       const result=await run();
+      await shown;
       setMessage(done(result));setFailures(result.failures);setSelected(new Set());
-    }catch(reason){setError((reason as Error).message)}
-    finally{setBusy('');await refresh();binChanged()}
+    }catch(reason){await shown;setError((reason as Error).message)}
+    finally{setBusy('');setDoing(null);await refresh();binChanged()}
   }
-  function restore(keys:string[]){
-    void act('Restoring…',()=>post('/api/trash/restore',{keys}),result=>`${files(result.done)} put back where they came from.`);
+  // A control's own text, or the orb while its action runs.
+  function face(control:Control,idle:string){
+    return doing===control?<Busy label={busy} state="working"/>:idle;
+  }
+  function restore(keys:string[],control:Control){
+    void act(control,'Restoring…',()=>post('/api/trash/restore',{keys}),result=>`${files(result.done)} put back where they came from.`);
   }
   function deleted(result:Result){
     if(result.keptDays){
@@ -144,7 +156,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
         title:`Delete ${files(count)} now?`,
         body:`${files(count)} (${bytes(chosenBytes)}) will be permanently deleted now instead of when their grace period ends, sidecars included. This cannot be undone.`,
         confirm:`Delete ${files(count)} now`,
-        run:()=>act('Deleting…',()=>post('/api/trash/purge-now',{keys,confirmation:`DELETE ${count}`}),deleted),
+        run:()=>act('delete','Deleting…',()=>post('/api/trash/purge-now',{keys,confirmation:`DELETE ${count}`}),deleted),
       });
       return;
     }
@@ -152,7 +164,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
       title:grace>0?`Delete ${files(count)}?`:`Delete ${files(count)} for good?`,
       body:consequence(files(count),chosenBytes),
       confirm:`Delete ${files(count)}`,
-      run:()=>act('Deleting…',()=>post('/api/trash/delete',{keys,confirmation:`DELETE ${count}`}),deleted),
+      run:()=>act('delete','Deleting…',()=>post('/api/trash/delete',{keys,confirmation:`DELETE ${count}`}),deleted),
     });
   }
   function empty(){
@@ -161,7 +173,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
       title:'Empty the Bin?',
       body:consequence(`All ${files(count)} in the Bin`,totalBytes),
       confirm:'Empty the Bin',
-      run:()=>act('Emptying…',()=>post('/api/trash/empty',{confirmation:`DELETE ${count}`}),result=>result.keptDays?deleted(result):`The Bin was emptied: ${files(result.done)} permanently deleted, freeing ${bytes(result.bytes)}.`),
+      run:()=>act('empty','Emptying…',()=>post('/api/trash/empty',{confirmation:`DELETE ${count}`}),result=>result.keptDays?deleted(result):`The Bin was emptied: ${files(result.done)} permanently deleted, freeing ${bytes(result.bytes)}.`),
     });
   }
 
@@ -179,8 +191,8 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
       {hint&&<p className="hint">{hint}</p>}
       {report?.graceError&&<p className="note warn" role="alert">Automatic deletion is paused: {report.graceError} Save a number of days in <a href="/settings#bin">Settings</a> to resume it.</p>}
       {mode==='bin'&&list.length>0&&<div className="binacts">
-        <button className="btn" disabled={!!busy} onClick={()=>restore(list.map(item=>item.key))}>Restore everything</button>
-        <button className="btn danger ghosty" disabled={!!busy} onClick={empty}>Empty the Bin</button>
+        <button className="btn" disabled={!!busy} onClick={()=>restore(list.map(item=>item.key),'restore-all')}>{face('restore-all','Restore everything')}</button>
+        <button className="btn danger ghosty" disabled={!!busy} onClick={empty}>{face('empty','Empty the Bin')}</button>
       </div>}
     </section>
     {message&&<p className="flash" role="status">{message}</p>}
@@ -206,16 +218,16 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
       <span className="fleft">
         <label className="selall"><input type="checkbox" checked={allSelected} disabled={!!busy} onChange={()=>setSelected(allSelected?new Set():new Set(list.map(item=>item.group)))}/> Select all</label>
         <span className="sel"><span id="selcount">{chosen.length.toLocaleString()}</span> selected{chosen.length>0&&` · ${bytes(chosenBytes)}`}</span>
-        <button className="btn" disabled={!!busy||chosen.length===0} onClick={()=>restore(chosen.map(item=>item.key))}>Restore selected</button>
-        <button className="btn danger" disabled={!!busy||chosen.length===0} onClick={remove}>{mode==='bin'?(grace>0?'Delete selected':'Delete selected for good'):'Delete selected now'}</button>
+        <button className="btn" disabled={!!busy||chosen.length===0} onClick={()=>restore(chosen.map(item=>item.key),'restore')}>{face('restore','Restore selected')}</button>
+        <button className="btn danger" disabled={!!busy||chosen.length===0} onClick={remove}>{face('delete',mode==='bin'?(grace>0?'Delete selected':'Delete selected for good'):'Delete selected now')}</button>
       </span>
-      <span className="fright hint">{busy?<Busy label={busy} state="working"/>:'Shift-click selects a run. A file that cannot be deleted is reported, never counted as gone.'}</span>
+      <span className="fright hint">Shift-click selects a run. A file that cannot be deleted is reported, never counted as gone.</span>
     </footer>}
     {viewing&&<Lightbox items={previews} initialKey={viewing} onClose={()=>setViewing(null)} actions={current=>{
       // A batch is restored as a whole, so the button says when that is more than this one file.
       const group=list.find(item=>item.key===current.key)?.group;
       const batch=list.filter(item=>item.group===group).length;
-      return <button type="button" className="rvbtn" disabled={!!busy} onClick={()=>restore([current.key])}>{busy?<Busy label={busy} state="working"/>:(batch>1?`Restore with its batch (${batch} files)`:'Restore')}</button>;
+      return <button type="button" className="rvbtn" disabled={!!busy} onClick={()=>restore([current.key],'lightbox')}>{face('lightbox',batch>1?`Restore with its batch (${batch} files)`:'Restore')}</button>;
     }}/>}
     <dialog ref={dialog} className="confirm" aria-labelledby={`confirm-title-${mode}`} onClose={()=>setPending(null)} onClick={event=>{if(event.target===event.currentTarget)setPending(null)}}>
       {pending&&<form method="dialog" onSubmit={event=>{event.preventDefault();const run=pending.run;setPending(null);void run()}}>
