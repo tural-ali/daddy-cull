@@ -32,7 +32,7 @@ func (s *Store) Handler() http.Handler {
 	mux.HandleFunc("GET /api/today/{md}", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
-		data, err := s.Today(ctx, r.PathValue("md"), time.Now())
+		data, err := s.Today(ctx, r.PathValue("md"))
 		if err != nil {
 			status := 503
 			if errors.Is(err, ErrInvalid) {
@@ -442,7 +442,7 @@ func (s *Store) Handler() http.Handler {
 		_ = s.read.QueryRowContext(ctx, "SELECT count(*) FROM assets WHERE anchor_id IS NOT NULL").Scan(&candidates)
 		var calendarDays, reviewedDays, decisions, favourites, evidence, fullHashes, marked int
 		_ = s.read.QueryRowContext(ctx, "SELECT count(DISTINCT day) FROM asset_days").Scan(&calendarDays)
-		_ = s.read.QueryRowContext(ctx, "SELECT count(*) FROM day_progress dp WHERE "+reviewedThisSeason, reviewSeason(time.Now())).Scan(&reviewedDays)
+		_ = s.read.QueryRowContext(ctx, "SELECT count(*) FROM day_progress WHERE status='done'").Scan(&reviewedDays)
 		_ = s.read.QueryRowContext(ctx, "SELECT count(*) FROM decisions WHERE status!='unreviewed' OR favourite=1").Scan(&decisions)
 		_ = s.read.QueryRowContext(ctx, "SELECT count(*) FROM decisions WHERE favourite=1").Scan(&favourites)
 		_ = s.read.QueryRowContext(ctx, "SELECT count(*) FROM asset_evidence").Scan(&evidence)

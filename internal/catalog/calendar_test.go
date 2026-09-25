@@ -38,7 +38,7 @@ func TestCalendarMatchesLegacyDateAcrossYears(t *testing.T) {
 	if cell == nil || cell.MD != "09-07" || cell.Years != 3 || cell.Files != 4 || cell.State != "todo" || !cell.Today {
 		t.Fatalf("unexpected calendar cell: %+v", cell)
 	}
-	today, err := s.Today(ctx, "09-07", time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC))
+	today, err := s.Today(ctx, "09-07")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestCalendarProgressIsSeparateFromPhotoDecisions(t *testing.T) {
 func TestCalendarRejectsInvalidDateAndConflictingRequest(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	if _, err := s.Today(ctx, "02-30", time.Now()); err == nil {
+	if _, err := s.Today(ctx, "02-30"); err == nil {
 		t.Fatal("accepted impossible month-day")
 	}
 	if _, err := s.SetDayProgress(ctx, DayProgressChange{Day: "2020-01-02", Status: "done", RequestID: "progress-request-2"}); err == nil {
@@ -92,92 +92,44 @@ func TestArchiveDayUsesDatedHoldingAreaFilename(t *testing.T) {
 	}
 }
 
-// A date is reviewed once a year, because each year adds another anniversary of
-// it. A mark made last year must leave the date waiting again from 1 January,
-// on the calendar and on the day page alike, without the mark being lost.
-func TestCalendarReviewMarksLapseAtTheTurnOfTheYear(t *testing.T) {
+// A review mark belongs to one year's day. A reviewed date stays reviewed until
+// media from a new year lands on it, and then comes back with only the new files
+// waiting. A file that has left the archive no longer waits at all.
+func TestCalendarReviewedDateReturnsWhenANewYearAddsMedia(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	if _, err := s.write.ExecContext(ctx, "INSERT INTO assets(relative_path,captured_at,kind,size_bytes,source_id) VALUES('/archive/2020/2020-09/2020-09-25/A.HEIC',1601028000,'image',10,'archive')"); err != nil {
+	add := func(paths ...string) {
+		for _, path := range paths {
+			if _, err := s.write.ExecContext(ctx, "INSERT INTO assets(relative_path,captured_at,kind,size_bytes,source_id) VALUES(?,0,'image',10,'archive')", path); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := s.IndexCalendar(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("/archive/2020/2020-09/2020-09-25/A.HEIC", "/archive/2020/2020-09/2020-09-25/B.HEIC", "/archive/2021/2021-09/2021-09-25/GONE.JPG")
+	if _, err := s.write.ExecContext(ctx, "INSERT INTO file_state(asset_id,state,plan_id) SELECT id,'purged','plan' FROM assets WHERE relative_path LIKE '%GONE.JPG'"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.IndexCalendar(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.write.ExecContext(ctx, "INSERT INTO day_progress(day,status,reviewed_at) VALUES('2020-09-25','done','2026-09-25T09:00:00Z')"); err != nil {
-		t.Fatal(err)
-	}
-	berlin, err := time.LoadLocation("Europe/Berlin")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, check := range []struct {
-		now   time.Time
-		state string
-	}{
-		{time.Date(2026, 12, 31, 23, 30, 0, 0, berlin), "done"},
-		{time.Date(2027, 1, 1, 0, 30, 0, 0, berlin), "todo"},
-		{time.Date(2027, 9, 25, 12, 0, 0, 0, berlin), "todo"},
-	} {
-		year, err := s.Calendar(ctx, check.now)
+	cell := func() *CalendarCell {
+		year, err := s.Calendar(ctx, time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := year.Months[8].Cells[24].State; got != check.state {
-			t.Fatalf("on %s the 25 September cell is %q, wanted %q", check.now, got, check.state)
-		}
-		today, err := s.Today(ctx, "09-25", check.now)
-		if err != nil {
-			t.Fatal(err)
-		}
-		want := "pending"
-		if check.state == "done" {
-			want = "done"
-		}
-		if len(today.Years) != 1 || today.Years[0].Status != want {
-			t.Fatalf("on %s the day page shows %+v, wanted %q", check.now, today.Years, want)
-		}
+		return year.Months[8].Cells[24]
 	}
-	var kept string
-	if err := s.read.QueryRowContext(ctx, "SELECT status FROM day_progress WHERE day='2020-09-25'").Scan(&kept); err != nil || kept != "done" {
-		t.Fatalf("the lapsed mark was not kept as history: %q %v", kept, err)
+	if got := cell(); got.State != "todo" || got.Years != 1 || got.Files != 2 || got.Waiting != 2 {
+		t.Fatalf("before review, wanted one year of 2 waiting files and the purged one left out: %+v", got)
 	}
-}
-
-// The calendar marks where culling has happened: files marked for the Bin, files
-// already moved or deleted, and files the earlier tool removed. A file that has
-// left the archive no longer counts as waiting for review.
-func TestCalendarCountsRemovedFilesPerDate(t *testing.T) {
-	s := testStore(t)
-	ctx := context.Background()
-	for _, path := range []string{
-		"/archive/2020/2020-09/2020-09-25/KEEP.JPG",
-		"/archive/2020/2020-09/2020-09-25/MARKED.JPG",
-		"/archive/2021/2021-09/2021-09-25/PURGED.JPG",
-	} {
-		if _, err := s.write.ExecContext(ctx, "INSERT INTO assets(relative_path,captured_at,kind,size_bytes,source_id) VALUES(?,0,'image',10,'archive')", path); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := s.IndexCalendar(ctx); err != nil {
+	if _, err := s.SetDayProgress(ctx, DayProgressChange{Day: "2020-09-25", Status: "done", RequestID: "reviewed-2020-09-25"}); err != nil {
 		t.Fatal(err)
 	}
-	for _, statement := range []string{
-		"INSERT INTO decisions(asset_id,status,favourite,revision) SELECT id,'cull',0,1 FROM assets WHERE relative_path LIKE '%MARKED.JPG' OR relative_path LIKE '%PURGED.JPG'",
-		"INSERT INTO file_state(asset_id,state,plan_id) SELECT id,'purged','plan' FROM assets WHERE relative_path LIKE '%PURGED.JPG'",
-		"INSERT INTO legacy_culled(legacy_id,batch,kind,original_path,culled_path,day,size_bytes,culled_at) VALUES(1,'b','media','/disks/disk1/2019/x.JPG','/disks/disk1/.culled/x.JPG','2019-09-25',10,'2026-09-01')",
-		"INSERT INTO legacy_culled(legacy_id,batch,kind,original_path,culled_path,day,size_bytes,culled_at,restored_at) VALUES(2,'b','media','/disks/disk1/2019/y.JPG','/disks/disk1/.culled/y.JPG','2019-09-25',10,'2026-09-01','2026-09-02')",
-	} {
-		if _, err := s.write.ExecContext(ctx, statement); err != nil {
-			t.Fatalf("%s: %v", statement, err)
-		}
+	if got := cell(); got.State != "done" || got.Waiting != 0 {
+		t.Fatalf("after review, wanted a reviewed date with nothing waiting: %+v", got)
 	}
-	year, err := s.Calendar(ctx, time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC))
-	if err != nil {
-		t.Fatal(err)
-	}
-	cell := year.Months[8].Cells[24]
-	if cell.Removed != 3 || cell.Years != 1 || cell.Files != 2 {
-		t.Fatalf("wanted 3 removed and one year of 2 waiting files, got %+v", cell)
+	add("/archive/2027/2027-09/2027-09-25/NEW1.HEIC", "/archive/2027/2027-09/2027-09-25/NEW2.HEIC", "/archive/2027/2027-09/2027-09-25/NEW3.HEIC")
+	if got := cell(); got.State == "done" || got.Waiting != 3 || got.Files != 5 {
+		t.Fatalf("a new year's media should bring the date back with 3 waiting: %+v", got)
 	}
 }

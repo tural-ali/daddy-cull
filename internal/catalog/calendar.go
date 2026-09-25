@@ -18,7 +18,7 @@ type CalendarCell struct {
 	Years   int    `json:"years"`
 	Files   int    `json:"files"`
 	Done    int    `json:"done"`
-	Removed int    `json:"removed"`
+	Waiting int    `json:"waiting"`
 	State   string `json:"state"`
 	Today   bool   `json:"today"`
 }
@@ -144,19 +144,6 @@ func (s *Store) IndexCalendar(ctx context.Context) error {
 	return tx.Commit()
 }
 
-// reviewSeason is the moment this year's review marks start to count, as a UTC
-// timestamp comparable with day_progress.reviewed_at. Every date is looked at
-// again each year, because each year adds another anniversary of it, so a mark
-// made last year leaves the date waiting again from 1 January. The mark itself
-// is kept: it is history, and only its effect on the calendar lapses.
-func reviewSeason(now time.Time) string {
-	return time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location()).UTC().Format(time.RFC3339)
-}
-
-// reviewedThisSeason is the SQL for "this year-day was marked reviewed since the
-// season began", with the season start as its one parameter.
-const reviewedThisSeason = "dp.status='done' AND julianday(dp.reviewed_at)>=julianday(?)"
-
 func validMonthDay(md string) (time.Time, bool) {
 	if len(md) != 5 {
 		return time.Time{}, false
@@ -167,52 +154,31 @@ func validMonthDay(md string) (time.Time, bool) {
 
 func (s *Store) Calendar(ctx context.Context, now time.Time) (CalendarData, error) {
 	data := CalendarData{Today: now.Format("01-02"), Months: make([]CalendarMonth, 12)}
-	type aggregate struct{ years, files, done, removed int }
+	type aggregate struct{ years, files, done, waiting int }
 	byMD := make(map[string]aggregate)
-	// A file that has left the archive no longer waits for review, exactly as
-	// the day page leaves it out, but it is counted as removed so the calendar
-	// shows where culling has already happened. Marked files count as removed
-	// too: from the page's point of view they are gone once Remove is pressed.
+	// A review mark belongs to one year's day, so a date stays reviewed only
+	// until media from a new year lands on it: that year's day is unmarked, and
+	// the date comes back with just the new files waiting. A file that has left
+	// the archive no longer counts, exactly as the day page leaves it out.
 	rows, err := s.read.QueryContext(ctx, `SELECT substr(ad.day,6,5),
-		count(DISTINCT CASE WHEN fs.asset_id IS NULL THEN substr(ad.day,1,4) END),
-		coalesce(sum(fs.asset_id IS NULL),0),
-		count(DISTINCT CASE WHEN fs.asset_id IS NULL AND `+reviewedThisSeason+` THEN ad.day END),
-		coalesce(sum(fs.asset_id IS NOT NULL OR d.status='cull'),0)
+		count(DISTINCT substr(ad.day,1,4)),
+		count(*),
+		count(DISTINCT CASE WHEN dp.status='done' THEN ad.day END),
+		coalesce(sum(dp.status IS NULL OR dp.status!='done'),0)
 		FROM asset_days ad
-		LEFT JOIN file_state fs ON fs.asset_id=ad.asset_id AND fs.state!='restored'
-		LEFT JOIN decisions d ON d.asset_id=ad.asset_id
 		LEFT JOIN day_progress dp ON dp.day=ad.day
-		GROUP BY substr(ad.day,6,5)`, reviewSeason(now))
+		WHERE NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=ad.asset_id AND fs.state!='restored')
+		GROUP BY substr(ad.day,6,5)`)
 	if err != nil {
 		return data, err
 	}
 	for rows.Next() {
 		var md string
 		var a aggregate
-		if err = rows.Scan(&md, &a.years, &a.files, &a.done, &a.removed); err != nil {
+		if err = rows.Scan(&md, &a.years, &a.files, &a.done, &a.waiting); err != nil {
 			rows.Close()
 			return data, err
 		}
-		byMD[md] = a
-	}
-	if err = rows.Close(); err != nil {
-		return data, err
-	}
-	// Files the earlier tool removed never entered this catalogue, but they were
-	// culled from these dates all the same.
-	rows, err = s.read.QueryContext(ctx, "SELECT substr(day,6,5),count(*) FROM legacy_culled WHERE restored_at IS NULL AND length(day)=10 GROUP BY substr(day,6,5)")
-	if err != nil {
-		return data, err
-	}
-	for rows.Next() {
-		var md string
-		var removed int
-		if err = rows.Scan(&md, &removed); err != nil {
-			rows.Close()
-			return data, err
-		}
-		a := byMD[md]
-		a.removed += removed
 		byMD[md] = a
 	}
 	if err = rows.Close(); err != nil {
@@ -239,7 +205,7 @@ func (s *Store) Calendar(ctx context.Context, now time.Time) (CalendarData, erro
 					data.Progress.Part++
 				}
 			}
-			cells[day-1] = &CalendarCell{MD: md, DOM: day, Years: a.years, Files: a.files, Done: a.done, Removed: a.removed, State: state, Today: md == data.Today}
+			cells[day-1] = &CalendarCell{MD: md, DOM: day, Years: a.years, Files: a.files, Done: a.done, Waiting: a.waiting, State: state, Today: md == data.Today}
 		}
 		data.Months[month-1] = CalendarMonth{Name: first.Format("January"), Cells: cells}
 	}
@@ -247,7 +213,7 @@ func (s *Store) Calendar(ctx context.Context, now time.Time) (CalendarData, erro
 	return data, nil
 }
 
-func (s *Store) Today(ctx context.Context, md string, now time.Time) (TodayData, error) {
+func (s *Store) Today(ctx context.Context, md string) (TodayData, error) {
 	date, ok := validMonthDay(md)
 	if !ok {
 		return TodayData{}, ErrInvalid
@@ -259,7 +225,7 @@ func (s *Store) Today(ctx context.Context, md string, now time.Time) (TodayData,
 		Next:     date.AddDate(0, 0, 1).Format("01-02"),
 		Years:    make([]TodayYear, 0),
 	}
-	rows, err := s.read.QueryContext(ctx, `SELECT ad.day,CAST(substr(ad.day,1,4) AS INTEGER),count(*),sum(a.size_bytes),CASE WHEN `+reviewedThisSeason+` THEN 'done' ELSE 'pending' END FROM asset_days ad JOIN assets a ON a.id=ad.asset_id LEFT JOIN day_progress dp ON dp.day=ad.day WHERE substr(ad.day,6,5)=? AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored') GROUP BY ad.day ORDER BY ad.day`, reviewSeason(now), md)
+	rows, err := s.read.QueryContext(ctx, `SELECT ad.day,CAST(substr(ad.day,1,4) AS INTEGER),count(*),sum(a.size_bytes),COALESCE(dp.status,'pending') FROM asset_days ad JOIN assets a ON a.id=ad.asset_id LEFT JOIN day_progress dp ON dp.day=ad.day WHERE substr(ad.day,6,5)=? AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored') GROUP BY ad.day ORDER BY ad.day`, md)
 	if err != nil {
 		return data, err
 	}

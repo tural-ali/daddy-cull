@@ -25,6 +25,6 @@ export function Layout({route,binFiles,flash,children}:{route:LegacyRoute;binFil
       <a className={`cog${route==='settings'?' on':''}`} href="/settings" title="Indexing and maintenance" aria-current={route==='settings'?'page':undefined}>Settings</a>
     </header>
     {flash&&<p className="flash" role="status">{flash}</p>}
-    <main className={route==='today'?'wide':undefined}>{children}</main>
+    <main className={route==='today'||route==='year'?'wide':undefined}>{children}</main>
   </>;
 }

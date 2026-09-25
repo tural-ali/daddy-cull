@@ -38,6 +38,16 @@
   --bad:       #e8695f;
   --fav:       #f2789d;
 
+  /* Calendar heat: how much media still waits on a date, in the pastel,
+     dark-lettered style of a fare calendar. Kept bright in both themes so the
+     three bands read at a glance; only the lettering follows the theme. */
+  --heat-low:     #7fdcab;
+  --heat-low-ink: #0c3b24;
+  --heat-mid:     #f8c56e;
+  --heat-mid-ink: #4a2c02;
+  --heat-high:    #f7a0a5;
+  --heat-high-ink:#5a1017;
+
   --radius:    8px;
   --radius-sm: 5px;
   --gap:       10px;      /* §15: 8-12 px gallery gaps */
@@ -546,48 +556,46 @@ main:has(.gal) .blankstate { max-width: 88ch; }
 
 /* ------------------------------------------------------------- year view -- */
 
+/* The whole year on one screen, each date a square big enough to read and hit.
+   The columns share the width, so the grid fills a desktop and scrolls
+   sideways, never squeezes, on a phone. */
 .calendar { overflow-x: auto; padding-bottom: .4rem; }
 .cmonth {
   display: grid;
-  grid-template-columns: 2.6rem repeat(31, 24px);
-  align-items: center; gap: 3px;
-  margin-bottom: 3px;
+  grid-template-columns: 3rem repeat(31, minmax(28px, 1fr));
+  align-items: center; gap: 5px;
+  margin-bottom: 5px;
 }
-.cmonth .mlabel { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.cmonth .mlabel { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .cell {
   display: grid; place-items: center;
-  width: 24px; height: 24px;
-  border-radius: 4px;
-  font-size: 10.5px; font-variant-numeric: tabular-nums;
+  aspect-ratio: 1; max-height: 48px;
+  border-radius: 7px;
+  font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums;
   color: var(--faint); background: var(--bg-3);
-  transition: transform var(--ease), background var(--ease);
+  transition: transform var(--ease), box-shadow var(--ease);
 }
-.cell:hover { transform: scale(1.18); text-decoration: none; z-index: 2; }
+.cell:hover { transform: scale(1.1); text-decoration: none; z-index: 2; box-shadow: 0 4px 14px rgb(0 0 0 / .25); }
+.cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cell.blank { visibility: hidden; }
-.cell.none { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
-.cell.todo { background: var(--bg-4); color: var(--muted); }
-.cell.part { background: color-mix(in oklab, var(--warn) 45%, var(--bg-4)); color: #fff; }
-.cell.done { background: color-mix(in oklab, var(--good) 62%, var(--bg-4)); color: #fff; }
-.cell.now  { box-shadow: 0 0 0 2px var(--accent); color: var(--text); }
-/* A date something was removed from carries a small corner mark, whatever its
-   review state, so past culling stays visible after the yearly reset. */
-.cell.cut { position: relative; }
-.cell.cut::after {
-  content: ""; position: absolute; top: 2px; right: 2px;
-  width: 5px; height: 5px; border-radius: 50%;
-  background: var(--bad); box-shadow: 0 0 0 1px var(--bg-2);
-}
+.cell.none { background: transparent; box-shadow: inset 0 0 0 1px var(--line); font-weight: 500; }
+.cell.low  { background: var(--heat-low);  color: var(--heat-low-ink); }
+.cell.mid  { background: var(--heat-mid);  color: var(--heat-mid-ink); }
+.cell.high { background: var(--heat-high); color: var(--heat-high-ink); }
+/* Reviewed dates step back: still there to open, no longer asking for anything. */
+.cell.done { background: var(--bg-3); color: var(--faint); font-weight: 500; }
+.cell.now  { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
 
 .legend { display: flex; flex-wrap: wrap; gap: .9rem; margin: 1rem 0; font-size: 12px; color: var(--muted); }
 .legend .lg { display: inline-flex; align-items: center; white-space: nowrap; }
 .legend .key { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: .3rem; vertical-align: -1px; }
 .legend .key.none { box-shadow: inset 0 0 0 1px var(--line-2); }
 .legend .key.todo { background: var(--bg-4); }
-.legend .key.part { background: color-mix(in oklab, var(--warn) 45%, var(--bg-4)); }
-.legend .key.done { background: color-mix(in oklab, var(--good) 62%, var(--bg-4)); }
+.legend .key.low  { background: var(--heat-low); }
+.legend .key.mid  { background: var(--heat-mid); }
+.legend .key.high { background: var(--heat-high); }
+.legend .key.done { background: var(--bg-3); box-shadow: inset 0 0 0 1px var(--line-2); }
 .legend .key.now  { box-shadow: 0 0 0 2px var(--accent); }
-.legend .key.cut  { position: relative; background: var(--bg-4); }
-.legend .key.cut::after { content: ""; position: absolute; top: 1px; right: 1px; width: 4px; height: 4px; border-radius: 50%; background: var(--bad); }
 
 /* ------------------------------------------------------------- completion -- */
 /* The photograph is the largest thing here. The numbers are small, there is no
