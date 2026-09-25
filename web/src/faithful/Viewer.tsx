@@ -1,9 +1,15 @@
-import {useEffect,useMemo,useState,type MouseEvent} from 'react';
+import {useEffect,useLayoutEffect,useMemo,useRef,useState,type MouseEvent} from 'react';
 import {Icon} from '../Icon';
 import {binChanged,type Asset,type Status} from '../api';
 
 function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
 function preview(asset:Asset){return `/api/media/${asset.id}/preview?size=large`}
+/** The file's format as Apple Photos badges it: RAW for any camera RAW, the
+ * extension for everything else. */
+function format(asset:Asset){
+  const extension=asset.path.includes('.')?asset.path.split('.').pop()!.toUpperCase():'';
+  return asset.kind==='raw'?'RAW':extension;
+}
 
 /** `dayOf`, when given, turns the date into a link to the file's own day, for
  * pages that show files from many days. */
@@ -33,6 +39,20 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove}:{a
   const date=capture?.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'})??'Date unknown';
   const time=capture?.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})??'';
   const compareFiles=useMemo(()=>related??[],[related]);
+  // The badge sits on the photograph's own top-left corner, which moves with
+  // the picture's shape and the window, so it follows the drawn media.
+  const media=useRef<HTMLImageElement&HTMLVideoElement>(null);
+  const [corner,setCorner]=useState<{left:number;top:number}|null>(null);
+  useLayoutEffect(()=>{
+    const element=media.current;
+    if(!element){setCorner(null);return}
+    const place=()=>setCorner(element.offsetWidth>0?{left:element.offsetLeft,top:element.offsetTop}:null);
+    place();
+    const observer=new ResizeObserver(place);
+    observer.observe(element);observer.observe(element.parentElement!);
+    element.addEventListener('load',place);element.addEventListener('loadedmetadata',place);
+    return()=>{observer.disconnect();element.removeEventListener('load',place);element.removeEventListener('loadedmetadata',place)};
+  },[current?.id,zoom]);
 
   function step(change:number){if(assets.length)setAt(index=>(index+change+assets.length)%assets.length);setZoom(false);setBare(false);setRelated(null)}
   function choose(status:Status,favourite?:boolean,advance=false){if(!current)return;if(onSave(current,status,favourite)&&advance)step(1)}
@@ -113,7 +133,8 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove}:{a
     <div className="rvtop">{dayOf?<a className="rvday" href={dayOf(current)} target="_blank" rel="noopener" title="Open this day in a new tab">{date}<Icon name="open_in_new"/></a>:<span className="rvday">{date}</span>}<span className="rvwhen">{time}</span><span className="rvpos">{at+1} / {assets.length}</span><button type="button" className="rvpath" aria-label="Copy file path" title={current.path} onClick={()=>void navigator.clipboard.writeText(current.path)}>📋</button><span className="rvbar"><span style={{width:`${progress}%`}}/></span><button type="button" className="rvx" aria-label="Close review" title="Close (Esc)" onClick={onClose}>×</button></div>
     <div className={`rvstage${zoom?' zoom':''}${current.kind==='video'?' hasvideo':''}`} onClick={event=>{if((event.target as HTMLElement).tagName==='IMG')setBare(value=>!value)}}>
       <button type="button" className="rvnav prev" aria-label="Previous" onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
-      {current.kind==='video'?<video key={current.id} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`}/>:<img key={current.id} src={preview(current)} alt={name}/>} 
+      {current.kind==='video'?<video ref={media} key={current.id} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`}/>:<img ref={media} key={current.id} src={preview(current)} alt={name}/>}
+      {corner&&!zoom&&format(current)&&<span className="rvformat" style={{left:corner.left+12,top:corner.top+12}} title={name.split('.').pop()?.toUpperCase()}>{format(current)}</span>}
       <button type="button" className="rvnav next" aria-label="Next" onClick={event=>{event.stopPropagation();step(1)}}>›</button>
     </div>
     <div className="rvbot"><button type="button" className="rvbtn cull" onClick={()=>choose(current.status==='cull'?'unreviewed':'cull',undefined,true)}><span className="ico">{current.status==='cull'?'↶':'🗑'}</span>{current.status==='cull'?'Undo remove':'Remove'} <kbd>X</kbd></button><button type="button" className={`rvbtn keep${current.status==='keep'?' on':''}`} onClick={()=>choose('keep',undefined,true)}><span className="ico">✓</span>{current.status==='keep'?'Kept':'Keep'} <kbd>K</kbd></button><button type="button" className={`rvbtn fav${current.favourite?' on':''}`} onClick={()=>choose(current.status,!current.favourite)}><span className="ico">{current.favourite?'★':'☆'}</span>{current.favourite?'Favourited':'Favourite'} <kbd>F</kbd></button>{(current.relatedCount??0)>0&&<button type="button" className="rvbtn cmp" onClick={()=>void openCompare()}>Compare <kbd>C</kbd></button>}<button type="button" className="rvbtn" onClick={()=>setInfo(value=>!value)}>Info <kbd>I</kbd></button></div>

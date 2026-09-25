@@ -190,6 +190,22 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   background: var(--bg-4); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,.3);
 }
 .gbaracts { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+/* The page's own actions, before the streak and Settings. */
+.pageacts { display: flex; align-items: center; gap: 8px; margin-right: 8px; }
+.pagenote { font-size: 14px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pageacts .btn.primary { height: 36px; padding: 0 18px; border-radius: 18px; white-space: nowrap; }
+.pageacts .textbtn { white-space: nowrap; }
+.pageacts .short, .pageacts .icon { display: none; }
+@media (max-width: 1000px) { .pagenote { display: none; } }
+@media (max-width: 600px) {
+  .pageacts .long { display: none; }
+  .pageacts .short { display: inline; }
+  .pageacts .hasicon .short { display: none; }
+  .pageacts .hasicon .icon { display: grid; }
+  .pageacts .hasicon { width: 40px; height: 40px; padding: 0; justify-content: center; border-radius: 999px; }
+  .pageacts .btn.primary.hasicon { padding: 0; }
+}
+@media (max-width: 600px) { .pageacts { margin-right: 0; } .pageacts .textbtn { padding: 0 10px; font-size: 13px; } .pageacts .btn.primary { padding: 0 12px; font-size: 13px; } }
 .iconbtn {
   display: grid; place-items: center; width: 44px; height: 44px; flex: none;
   color: var(--muted); background: none; border: 0; border-radius: 999px; cursor: pointer;
@@ -207,11 +223,10 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   border-radius: 999px; transition: background var(--ease), color var(--ease);
   font-variant-numeric: tabular-nums;
 }
-.streak:hover { color: var(--text); background: var(--hover); text-decoration: none; }
 .streak b { font-weight: 700; }
 .streak .icon, .streak .icon svg { width: 22px; height: 22px; }
 .streak.lit { color: var(--warn); background: color-mix(in oklab, var(--warn) 14%, transparent); }
-.streak.lit:hover { background: color-mix(in oklab, var(--warn) 22%, transparent); }
+.sideprogress:hover .streak.lit { background: color-mix(in oklab, var(--warn) 22%, transparent); }
 @media (max-width: 600px) {
   .streak { padding: 0 10px 0 8px; gap: 4px; }
   .streak .unit { display: none; }
@@ -264,7 +279,15 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .sideprogresshead .icon { color: var(--muted); }
 .sideprogress .meter { display: block; height: 4px; background: var(--bg-4); border-radius: 999px; overflow: hidden; }
 .sideprogress .meter > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
-.sideprogressnote { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sideprogressnote { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sideprogressfoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; }
+.sideprogressfoot .streak { height: 32px; padding: 0 12px 0 9px; margin-right: -8px; font-size: 13.5px; }
+.sideprogressfoot .streak .icon, .sideprogressfoot .streak .icon svg { width: 20px; height: 20px; }
+.sideprogressfoot .streak .unit { display: inline; }
+/* With no run yet the flame alone asks for one; its title says so. */
+.sideprogressfoot .streak.none { padding: 0 6px; }
+.sideprogressfoot .streak.none .unit { display: none; }
+.sideprogress:hover .streak:not(.lit) { color: var(--text); }
 
 .panel {
   min-width: 0; min-height: calc(100vh - var(--head-h));
@@ -865,6 +888,15 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   width: auto; height: auto;
   object-fit: contain; display: block;
   transition: opacity 110ms linear;
+}
+/* The format on the photograph's corner, as Apple Photos marks a Live Photo. */
+.rvformat {
+  position: absolute; z-index: 2; pointer-events: none;
+  padding: 5px 12px; border-radius: 999px;
+  font-size: 13px; font-weight: 600; letter-spacing: .06em; line-height: 1.2;
+  color: rgba(255, 255, 255, .88);
+  background: rgba(20, 20, 20, .55);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4);
 }
 .rvstage.zoom {
   padding: 0; overflow: auto; cursor: grab;
