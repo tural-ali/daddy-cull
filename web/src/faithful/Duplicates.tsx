@@ -1,6 +1,7 @@
 import {useMemo,useState} from 'react';
 import type {DuplicateGroup} from './Today';
 import {binChanged} from '../api';
+import {Busy} from '../Busy';
 
 export type {DuplicateGroup} from './Today';
 export type DuplicateMember=DuplicateGroup['members'][number];
@@ -147,7 +148,7 @@ export function Duplicates({report}:{report:DuplicateReport}){
         onClick={()=>{setRule(entry.key);setOverrides({})}}>{entry.label}</button>)}
       <span className="dupespace">
         <span>Marking <b>{doomed.toLocaleString()}</b> {doomed===1?'copy':'copies'} across <b>{active.length.toLocaleString()}</b> {active.length===1?'group':'groups'} frees <b>{bytes(freeing)}</b></span>
-        <button type="button" className="btn primary" disabled={busy||active.length===0} onClick={()=>void resolve(active)}>{busy?'Saving…':`Mark ${doomed.toLocaleString()} for the Bin`}</button>
+        <button type="button" className="btn primary" disabled={busy||active.length===0} onClick={()=>void resolve(active)}>{busy?<Busy label="Saving…" state="working"/>:`Mark ${doomed.toLocaleString()} for the Bin`}</button>
       </span>
     </div>}
     {message&&<p className="flash" role="status">{message}</p>}

@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState,type MouseEvent} from 'react';
 import {FilePreview} from '../Media';
+import {Busy} from '../Busy';
 
 /** One card in the Bin, whichever tool put the file there. */
 export type TrashItem={key:string;group:string;source:'marked'|'bin'|'legacy'|'screenshot';name:string;original:string;kind:string;size:number;sidecars:number;removedAt:string;preview?:string;disk?:string};
@@ -110,7 +111,7 @@ export function Bin({onCount}:{onCount?:(count:number)=>void}){
   return <>
     <section className="binhead">
       <h1>Bin</h1>
-      <p className="ysum">{items===null?'Reading the Bin…':<><b>{list.length.toLocaleString()}</b> file{list.length===1?'':'s'} · <b>{bytes(totalBytes)}</b></>}</p>
+      <p className="ysum">{items===null?<Busy label="Reading the Bin…"/>:<><b>{list.length.toLocaleString()}</b> file{list.length===1?'':'s'} · <b>{bytes(totalBytes)}</b></>}</p>
       <p className="hint">Removed files are kept here so a mistake costs nothing. Nothing is deleted automatically.</p>
       {list.length>0&&<div className="binacts">
         <button className="btn" disabled={!!busy} onClick={()=>restore(list.map(item=>item.key))}>Restore everything</button>
@@ -139,7 +140,7 @@ export function Bin({onCount}:{onCount?:(count:number)=>void}){
         <button className="btn" disabled={!!busy||chosen.length===0} onClick={()=>restore(chosen.map(item=>item.key))}>Restore selected</button>
         <button className="btn danger" disabled={!!busy||chosen.length===0} onClick={remove}>Delete selected for good</button>
       </span>
-      <span className="fright hint">{busy||'Shift-click selects a run. A file that cannot be deleted is reported, never counted as gone.'}</span>
+      <span className="fright hint">{busy?<Busy label={busy} state="working"/>:'Shift-click selects a run. A file that cannot be deleted is reported, never counted as gone.'}</span>
     </footer>}
     <dialog ref={dialog} className="confirm" aria-labelledby="confirm-title" onClose={()=>setPending(null)} onClick={event=>{if(event.target===event.currentTarget)setPending(null)}}>
       {pending&&<form method="dialog" onSubmit={event=>{event.preventDefault();const run=pending.run;setPending(null);void run()}}>

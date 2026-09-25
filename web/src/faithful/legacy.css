@@ -167,6 +167,21 @@ main:has(.gal) .blankstate { max-width: 88ch; }
   color: var(--text);
 }
 
+/* A waiting state is a thinking orb and a few words, never a spinner. The small
+   orb gives back 4px above and below, so a line or a button does not grow by a
+   pixel when it appears. The large one stands in for a page or panel that has
+   nothing to show yet. */
+.busy { display: inline-flex; align-items: center; gap: .45em; vertical-align: top; }
+.busy > canvas { flex: none; margin: -4px 0; }
+/* A button is disabled while its own request runs, and at the usual 40% the
+   words saying what it is doing all but disappear. */
+.btn:disabled:has(> .busy) { opacity: .75; cursor: progress; }
+.busy.big {
+  display: flex; flex-direction: column; justify-content: center; gap: .75rem;
+  margin: 4.5rem auto; color: var(--muted); font-size: 13.5px; text-align: center;
+}
+.busy.big > canvas { margin: 0; }
+
 .btn {
   display: inline-flex; align-items: center; gap: .4rem;
   padding: .42rem .8rem;

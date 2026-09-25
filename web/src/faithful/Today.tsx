@@ -4,6 +4,7 @@ import {Media} from '../Media';
 import {useDecisionQueue} from '../useDecisionQueue';
 import {calendarLabel} from './Year';
 import {Viewer} from './Viewer';
+import {Busy} from '../Busy';
 
 export type TodayYear={day:string;year:number;files:number;bytes:number;status:'pending'|'done';assets:Asset[]};
 export type TodayData={md:string;label:string;previous:string;next:string;years:TodayYear[];memories:number;bytes:number};
@@ -137,7 +138,7 @@ export function Today({initial}:{initial:TodayData}){
       <span className="sep">·</span><span className="dim">{bytes(initial.bytes)}</span>
     </div>
     {assets.length>0&&<div className="dprog"><div className="pbar"><span style={{width:`${reviewed/assets.length*100}%`}}/></div><span className="ofn">{reviewed} / {assets.length}</span></div>}
-    {message&&<p className="flash" role="status">{message}</p>}
+    {message&&<p className="flash" role="status">{saving||(message==='Saving…'&&queue.pending>0&&!queue.error)?<Busy label={message} state="working"/>:message}</p>}
     {queue.error&&<p className="note warn" role="alert">{queue.error} <button className="btn small" onClick={queue.retry}>Retry the same save</button></p>}
     {years.length===0&&<p className="note">Nothing in the archive is filed under {initial.label}, so there is nothing to review.</p>}
     {duplicateGroups.length>0&&<section className="xdupes">

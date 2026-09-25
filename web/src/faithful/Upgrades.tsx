@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import {Media} from '../Media';
 import {binChanged,type Asset} from '../api';
+import {Busy} from '../Busy';
 
 type UpgradeCopy={asset:Asset;pixels:string;ratio:number;date:string;album:string;available:boolean};
 type UpgradeGroup={archive:Asset;day:string;pixels:string;accepted?:string;acceptedAsset?:Asset;copies:UpgradeCopy[]};
@@ -55,7 +56,7 @@ export function Upgrades({initial}:{initial:UpgradePage}){
           <figure className="card side"><a href={`/api/media/${group.archive.id}/original`} target="_blank" rel="noreferrer"><Media asset={group.archive}/></a><figcaption><span className="fn">in the archive</span><span className="sz">{group.pixels}</span></figcaption></figure>
           <figure className="card side better"><a href={`/api/media/${rightAsset.id}/original`} target="_blank" rel="noreferrer"><Media asset={rightAsset}/></a><figcaption><span className="fn">{group.accepted?'added to the archive':`Google · ${best.album}`}</span><span className="sz">{best.pixels}</span><span className="tag flag">{best.ratio.toFixed(1)}× pixels</span>{!group.accepted&&!best.available&&<span className="tag other">file missing</span>}{extra>0&&<span className="tag other">+{extra} album {extra===1?'copy':'copies'}</span>}</figcaption></figure>
         </div>
-        {!group.accepted&&best.available&&<div className="gact"><button className="primary" disabled={busy!==null} onClick={()=>void accept(group,best)}>{busy===group.archive.id?'Verifying and copying…':'Add the higher-resolution copy'}</button><span className="hint">Copied and SHA-256 verified beside the original. The Google file stays untouched.</span></div>}
+        {!group.accepted&&best.available&&<div className="gact"><button className="btn primary" disabled={busy!==null} onClick={()=>void accept(group,best)}>{busy===group.archive.id?<Busy label="Verifying and copying…" state="working"/>:'Add the higher-resolution copy'}</button><span className="hint">Copied and SHA-256 verified beside the original. The Google file stays untouched.</span></div>}
       </section>;
     })}
   </>;

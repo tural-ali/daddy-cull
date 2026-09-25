@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import {Busy} from '../Busy';
 
 export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number};
 
@@ -22,7 +23,7 @@ export function Settings({stats}:{stats:Stats}){
   }
   return <section className="settings">
     <h1>Settings</h1>
-    {message&&<p className="flash" role="status">{message}</p>}
+    {message&&<p className="flash" role="status">{busy?<Busy label={message} state="solving"/>:message}</p>}
     <h2>Index</h2>
     <p className="hint">The catalogue refresh reads metadata already imported into this service. It does not alter an original file.</p>
     <dl className="kv">
