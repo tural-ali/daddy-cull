@@ -93,6 +93,17 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
         marked:value.marked+(status==='cull'?chosen.length:0),
       }));
       setSelected(new Set());setAnchor(null);
+      // What was decided has left the list, so reading the same offset again
+      // brings the next videos up into view instead of leaving the page empty.
+      // Past the last page, the one before it is shown instead.
+      try{
+        const response=await fetch(`/api/social?band=${encodeURIComponent(band)}&from=${from}`);
+        if(response.ok){
+          const next:SocialPage=await response.json();
+          if(next.items.length===0&&from>0){location.assign(href(band,Math.max(0,from-per)));return}
+          setCurrent(next);
+        }
+      }catch{/* the local list above is already correct, only shorter */}
       setUndo({
         changes:chosen.map((item,index)=>({assetId:item.id,status:'unreviewed',favourite:item.favourite,expectedRevision:saved[index].revision,requestId:requestID()})),
         label:count,
