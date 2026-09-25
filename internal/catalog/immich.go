@@ -408,8 +408,10 @@ func (y *ImmichSync) setFavourite(ctx context.Context, immichID string, favourit
 }
 
 // call sends one request to Immich. Its errors describe the request by method,
-// endpoint and status only: never the key, and never Immich's response body,
-// which is not ours to repeat in a log.
+// endpoint and status, plus the short reason Immich gives in its "message"
+// field, such as "Not found or no asset.update access", which is what tells a
+// key without rights over the asset from a missing asset. Never the key, and
+// never the rest of the response body.
 func (y *ImmichSync) call(ctx context.Context, method, endpoint string, body []byte, out any) error {
 	request, err := http.NewRequestWithContext(ctx, method, y.base+endpoint, bytes.NewReader(body))
 	if err != nil {
@@ -428,11 +430,22 @@ func (y *ImmichSync) call(ctx context.Context, method, endpoint string, body []b
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode > 299 {
+		var reason struct {
+			Message any `json:"message"`
+		}
+		_ = json.NewDecoder(io.LimitReader(response.Body, immichMaxResponse)).Decode(&reason)
 		io.Copy(io.Discard, io.LimitReader(response.Body, immichMaxResponse))
+		said := ""
+		if text := strings.TrimSpace(fmt.Sprint(reason.Message)); reason.Message != nil && text != "" {
+			if len(text) > 160 {
+				text = text[:160]
+			}
+			said = ": " + text
+		}
 		// Immich being busy, restarting or behind a failing proxy passes;
 		// a refused key or a rejected request does not pass by retrying.
 		transient := response.StatusCode == http.StatusRequestTimeout || response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500
-		return &immichError{permanent: !transient, message: fmt.Sprintf("Immich answered %s %s with %d", method, endpoint, response.StatusCode)}
+		return &immichError{permanent: !transient, message: fmt.Sprintf("Immich answered %s %s with %d%s", method, endpoint, response.StatusCode, said)}
 	}
 	if out == nil {
 		io.Copy(io.Discard, io.LimitReader(response.Body, immichMaxResponse))

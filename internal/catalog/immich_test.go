@@ -26,6 +26,7 @@ type fakeImmich struct {
 	assets   []immichAsset
 	down     bool
 	status   int
+	reason   string
 	requests int
 	searches int
 	updates  []fakeImmichUpdate
@@ -57,6 +58,14 @@ func (f *fakeImmich) serve(w http.ResponseWriter, r *http.Request) {
 	if f.down {
 		f.mu.Unlock()
 		http.Error(w, "starting", 503)
+		return
+	}
+	if f.status != 0 && f.reason != "" {
+		status, reason := f.status, f.reason
+		f.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		json.NewEncoder(w).Encode(map[string]any{"message": reason, "statusCode": status})
 		return
 	}
 	if f.status != 0 {
@@ -628,5 +637,26 @@ func TestImmichStatsReportTheQueue(t *testing.T) {
 	}
 	if stats["immichSynced"] != 1.0 || stats["immichPending"] != 1.0 || stats["immichFailed"] != 1.0 {
 		t.Fatalf("stats: synced=%v pending=%v failed=%v", stats["immichSynced"], stats["immichPending"], stats["immichFailed"])
+	}
+}
+
+// The family library belongs to its own Immich user, and a key of anyone else's
+// is refused with a 400 that looks like any other. Immich's short reason is kept,
+// because it is the only thing that tells the two apart, and the key is still
+// scrubbed if a reply ever repeats it.
+func TestImmichKeepsImmichsReasonForARefusal(t *testing.T) {
+	f := newFakeImmich(t, immichAsset{ID: "im-12", OriginalPath: "/mnt/family-archive/h.jpg"})
+	s, y, clock := immichFixture(t, f)
+	withClock(y, clock)
+	addImmichTestAsset(t, s, 12, "/archive/h.jpg", "archive")
+	heart(t, s, 12, true)
+	f.set(func(f *fakeImmich) { f.status = 400; f.reason = "Not found or no asset.update access " + fakeImmichKey })
+	drainNow(t, y)
+	row := queueRow(t, s, 12)
+	if row.state != "failed" || !strings.Contains(row.lastError, "no asset.update access") {
+		t.Fatalf("the refusal lost Immich's reason: %+v", row)
+	}
+	if strings.Contains(row.lastError, fakeImmichKey) {
+		t.Fatalf("the key leaked into the stored error: %s", row.lastError)
 	}
 }
