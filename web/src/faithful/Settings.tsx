@@ -1,6 +1,6 @@
 import {useState} from 'react';
 
-export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;bin?:number};
+export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number};
 
 function localDate(value:string){
   if(!value)return 'never';
@@ -37,6 +37,7 @@ export function Settings({stats}:{stats:Stats}){
       <div><dt>Files with imported evidence</dt><dd>{stats.evidence.toLocaleString()}</dd></div>
       <div><dt>Files fully hashed for duplicates</dt><dd>{stats.fullHashes.toLocaleString()}</dd></div>
       <div><dt>Favourites marked</dt><dd>{stats.favourites.toLocaleString()}</dd></div>
+      {stats.immichSynced!==undefined&&<div><dt>Favourites in Immich</dt><dd>{stats.immichSynced.toLocaleString()} synced · {(stats.immichPending??0).toLocaleString()} waiting · {(stats.immichFailed??0).toLocaleString()} failed</dd></div>}
       <div><dt>Review decisions</dt><dd>{stats.decisions.toLocaleString()}</dd></div>
       <div><dt>Shadow groups</dt><dd>{stats.shadowGroups.toLocaleString()}</dd></div>
       <div><dt>Screenshots waiting</dt><dd>{stats.screenshots.toLocaleString()}</dd></div>

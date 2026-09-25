@@ -47,6 +47,10 @@ func main() {
 	demoNetwork := flag.Bool("demo-network", false, "allow private-network access; media access uses fixed read-only proxy routes")
 	check := flag.Bool("check", false, "check a running local prototype and exit")
 	web := flag.String("web", "web/dist", "compiled React directory")
+	// The Immich key is taken from IMMICH_KEY only, never from a flag, so it
+	// does not appear in a process listing or in the container's command line.
+	immichURL := flag.String("immich-url", os.Getenv("IMMICH_URL"), "Immich base URL that archive favourites are mirrored to; empty disables the sync")
+	immichPrefix := flag.String("immich-path-prefix", envOr("IMMICH_PATH_PREFIX", catalog.DefaultImmichPathPrefix), "archive path as Immich's external library recorded it")
 	flag.Parse()
 	imports := 0
 	for _, value := range []string{*importFile, *importEvidence, *importLegacy, *importScreenshots, *importUpgrades, *importSocial} {
@@ -244,6 +248,9 @@ func main() {
 		mux.Handle("/api/trash/", catalog.TrashGateway(*binUpstream, secret))
 		mux.Handle("/api/", s.Handler())
 		mux.Handle("/", webApp(*web, []string{"/year", "/duplicates", "/upgrades", "/shadows", "/screenshots", "/social", "/log", "/bin", "/settings"}))
+		// Favourites are saved by this process, so the worker that mirrors them
+		// to Immich runs here too; the private writer has no reason to reach it.
+		startImmichSync(ctx, s, catalog.ImmichConfig{URL: *immichURL, Key: os.Getenv("IMMICH_KEY"), PathPrefix: *immichPrefix})
 	}
 	server := &http.Server{Addr: *addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 0, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}
 	go func() {
@@ -271,4 +278,29 @@ func resolveTool(name string) string {
 		return ""
 	}
 	return resolved
+}
+
+// startImmichSync starts the favourite mirror when Immich is configured. A
+// missing or malformed setting is reported once and leaves the review app
+// running without it: hearts are still saved and queued, and reach Immich once
+// the setting is fixed and the app restarted.
+func startImmichSync(ctx context.Context, s *catalog.Store, cfg catalog.ImmichConfig) {
+	sync, err := catalog.NewImmichSync(s, cfg)
+	if err != nil {
+		log.Printf("Immich favourite sync disabled: %v", err)
+		return
+	}
+	if sync == nil {
+		log.Print("Immich favourite sync disabled: IMMICH_URL or IMMICH_KEY is not set; favourites are queued until it is")
+		return
+	}
+	log.Printf("Immich favourite sync enabled for %s", cfg.URL)
+	go sync.Run(ctx)
+}
+
+func envOr(name, fallback string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	return fallback
 }
