@@ -182,9 +182,13 @@ func (h *PhotosHub) setStateLocked(j *photosJob, state string) {
 	j.state = state
 	j.updated = h.now()
 	j.rev++
+	// Progress belongs to the stage the helper is working through. Once it is
+	// not working, the last count would only read as a stalled progress bar.
+	if state != "checking" && state != "applying" {
+		j.stage, j.message, j.done, j.total = "", "", 0, 0
+	}
 	if j.terminal() {
 		j.finished = j.updated
-		j.stage, j.done, j.total = "", 0, 0
 	}
 	h.bumpLocked()
 }

@@ -57,6 +57,7 @@ func checkAndMatch(t *testing.T, h *PhotosHub, missing ...string) PhotosJobView 
 	if task.Task != "check" || task.JobID != view.ID || len(task.Entries) != view.ToCheck {
 		t.Fatalf("task %+v", task)
 	}
+	h.Seen(PhotosHeartbeat{Version: "test", Access: "authorized", Job: view.ID, Stage: "matching", Done: 1, Total: 2})
 	skip := map[string]bool{}
 	for _, name := range missing {
 		skip[name] = true
@@ -97,6 +98,10 @@ func TestPhotosJobRunsFromCheckToRecordedResult(t *testing.T) {
 	h, s, _ := photosHubFixture(t)
 	ctx := context.Background()
 	view := checkAndMatch(t, h, "IMG_0100.PNG")
+	// The check's last progress count must not linger on as a stalled bar.
+	if view.Stage != "" || view.Done != 0 || view.Total != 0 {
+		t.Fatalf("planned job still shows progress: %s %d/%d", view.Stage, view.Done, view.Total)
+	}
 
 	if len(view.Missing) != 1 || view.Missing[0].Name != "IMG_0100.PNG" {
 		t.Fatalf("missing %+v", view.Missing)
