@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState,type FormEvent,type ReactNode} from 'react';
+import {useEffect,useRef,useState,type CSSProperties,type FormEvent,type ReactNode} from 'react';
 import {Icon,type IconName} from '../Icon';
 import {Logo} from '../Logo';
 import {pathForDate} from './goto';
@@ -100,6 +100,9 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
     });
   }
   const menuOpen=narrow?drawer:!sideHidden;
+  // Folded on a wide screen, the sidebar is a rail of icons whose labels
+  // become tooltips.
+  const rail=!narrow&&sideHidden;
   useEffect(()=>{
     if(!drawer)return;
     const close=(event:KeyboardEvent)=>{if(event.key==='Escape')setDrawer(false)};
@@ -109,7 +112,7 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
   const share=reviewed&&reviewed.total>0?reviewed.done/reviewed.total:0;
   return <div className={`shell${drawer?' drawer-open':''}${sideHidden?' side-hidden':''}`}>
     {selection?<SelectionBar selection={selection}/>:<header className="gbar">
-      <button type="button" className="iconbtn menu" aria-label={menuOpen?'Hide the menu':'Show the menu'} title="Main menu" aria-expanded={menuOpen} aria-controls="side" onClick={toggleMenu}><Icon name={narrow&&drawer?'close':'menu'}/></button>
+      <button type="button" className="iconbtn menu" aria-label={narrow?(drawer?'Close the menu':'Open the menu'):(sideHidden?'Expand the menu':'Collapse the menu')} title="Main menu" aria-expanded={menuOpen} aria-controls="side" onClick={toggleMenu}><Icon name={narrow&&drawer?'close':'menu'}/></button>
       <a className="brand" href="/" title="Today"><Logo/></a>
       <DateSearch/>
       <div className="gbaracts">
@@ -123,15 +126,16 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
           {section.title&&<h2 className="sidetitle">{section.title}</h2>}
           {section.items.map(item=>{
             const on=route===item.route;
-            return <a key={item.route} href={item.href} className={on?'on':undefined} aria-current={on?'page':undefined}>
+            return <a key={item.route} href={item.href} className={on?'on':undefined} aria-current={on?'page':undefined} title={rail?item.label:undefined}>
               <Icon name={item.icon} filled={on}/><span className="sidelabel">{item.label}</span>
               {item.route==='bin'&&binFiles>0&&<span className="count" aria-label={`${binFiles.toLocaleString()} file${binFiles===1?'':'s'}`}>{binFiles.toLocaleString()}</span>}
             </a>;
           })}
         </div>)}
       </nav>
-      {reviewed&&reviewed.total>0&&<a className="sideprogress" href="/year" title="Open the calendar">
-        <span className="sideprogresshead"><Icon name="task_alt"/>Reviewed</span>
+      {reviewed&&reviewed.total>0&&<a className="sideprogress" href="/year" style={{'--share':Math.min(1,share)} as CSSProperties}
+        title={rail?`Reviewed ${reviewed.done.toLocaleString()} of ${reviewed.total.toLocaleString()} dates${streak&&streak.days>0?` · ${streak.days.toLocaleString()} ${streak.days===1?'day':'days'} in a row`:''}`:'Open the calendar'}>
+        <span className="sideprogresshead"><Icon name="task_alt"/><span className="sidelabel">Reviewed</span></span>
         <span className="meter" role="progressbar" aria-label="Calendar dates reviewed" aria-valuemin={0} aria-valuemax={reviewed.total} aria-valuenow={reviewed.done}><span style={{width:`${Math.min(100,share*100)}%`}}/></span>
         <span className="sideprogressfoot"><span className="sideprogressnote">{reviewed.done.toLocaleString()} of {reviewed.total.toLocaleString()} dates</span>{streak&&<Streak days={streak.days} today={streak.today}/>}</span>
       </a>}

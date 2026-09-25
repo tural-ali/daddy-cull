@@ -70,6 +70,7 @@
 
   --head-h:    64px;
   --side-w:    256px;
+  --rail-w:    80px;
   --font:      "Google Sans Flex Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
   --radius:    8px;
@@ -232,13 +233,42 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   .streak .unit { display: none; }
 }
 
-/* Sidebar hidden from the menu button: the page takes the width and keeps its
-   rounded corner, set in from the edge like the right side. */
+/* Sidebar folded from the menu button: as in Google Photos it becomes a rail
+   of icons, each current one a filled circle, the groups set apart by short
+   rules instead of titles, and every label kept as the link's name and
+   tooltip. Reviewed folds to its icon inside a ring that fills as dates are
+   reviewed. */
 @media (min-width: 1001px) {
-  .side-hidden { grid-template-columns: minmax(0, 1fr); }
-  .side-hidden .side { display: none; }
-  .side-hidden .panel { margin-left: 16px; }
-  .side-hidden .fbar { left: 32px; }
+  .side-hidden { grid-template-columns: var(--rail-w) minmax(0, 1fr); }
+  .side-hidden .side { padding: 8px 0 16px; align-items: center; scrollbar-width: none; }
+  .side-hidden .sidesec { align-items: center; gap: 4px; }
+  .side-hidden .sidesec + .sidesec { margin-top: 12px; }
+  .side-hidden .sidesec + .sidesec::before { content: ""; width: 48px; height: 1px; margin-bottom: 8px; background: var(--line); }
+  .side-hidden .sidetitle { display: none; }
+  .side-hidden .side nav a { position: relative; justify-content: center; width: 48px; height: 48px; padding: 0; gap: 0; }
+  .side-hidden .sidelabel {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap;
+  }
+  .side-hidden .side .count {
+    position: absolute; top: 3px; right: -2px; min-width: 18px; padding: 0 5px;
+    font-size: 11px; line-height: 18px; box-shadow: 0 0 0 2px var(--shell);
+  }
+  .side-hidden .sideprogress { align-items: center; padding: 12px 0 4px; border-top: 0; }
+  .side-hidden .sideprogress .meter, .side-hidden .sideprogressfoot { display: none; }
+  .side-hidden .sideprogresshead {
+    position: relative; justify-content: center; width: 48px; height: 48px; gap: 0;
+    border-radius: 999px; transition: background var(--ease);
+  }
+  .side-hidden .sideprogresshead::before {
+    content: ""; position: absolute; inset: 6px; border-radius: 999px;
+    background: conic-gradient(var(--accent) calc(var(--share, 0) * 1turn), var(--bg-4) 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  }
+  .side-hidden .sideprogresshead .icon, .side-hidden .sideprogresshead .icon svg { width: 20px; height: 20px; }
+  .side-hidden .sideprogress:hover .sideprogresshead { background: var(--hover); }
+  .side-hidden .fbar { left: var(--rail-w); }
 }
 
 .side {
