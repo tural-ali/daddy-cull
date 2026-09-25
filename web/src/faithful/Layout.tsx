@@ -30,6 +30,10 @@ const sections:{title?:string;items:Item[]}[]=[
   ]},
 ];
 
+// Pages built around a grid run the full width of the panel, as in Google
+// Photos; Settings and Apple Photos keep a reading measure.
+const gridRoutes=new Set<LegacyRoute>(['today','year','dupes','upgrades','shadows','shots','social','log','bin']);
+
 function DateSearch(){
   const [value,setValue]=useState('');
   const [problem,setProblem]=useState('');
@@ -131,7 +135,7 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
     <button type="button" className="scrim" tabIndex={-1} aria-hidden="true" onClick={()=>setDrawer(false)}/>
     <div className="panel">
       {flash&&<p className="flash" role="status">{flash}</p>}
-      <main className={`${route==='today'||route==='year'?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}>{children}</SelectionProvider></main>
+      <main className={`${gridRoutes.has(route)?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}>{children}</SelectionProvider></main>
     </div>
   </div>;
 }

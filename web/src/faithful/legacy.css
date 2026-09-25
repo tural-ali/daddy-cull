@@ -324,18 +324,14 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .panel > .flash { margin: 16px 16px 0; }
 
 main { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1.5rem 0; }
-main.wide { max-width: 1680px; }
-
 /* A page built around a grid of photographs is the one kind that gets better
    with more room: more per row, each one larger, and less scrolling to see the
-   same day. The 1120px measure exists for reading, so it is lifted only where
-   there is a gallery, and the prose on those pages keeps a measure of its own -
-   a hint stretched across a 34" monitor is not easier to read, it is harder. */
-main:has(.gal) { max-width: 100%; }
-main:has(.gal) .note,
-main:has(.gal) .hint,
-main:has(.gal) .ysum,
-main:has(.gal) .blankstate { max-width: 88ch; }
+   same day. The 1120px measure exists for reading, so grid pages run the full
+   width whether or not the grid has anything in it yet, and their prose keeps
+   a measure of its own - a hint stretched across a 34" monitor is not easier
+   to read, it is harder. */
+main.wide, main:has(.gal, .rows) { max-width: 100%; }
+:is(main.wide, main:has(.gal, .rows)) :is(.note, .hint, .ysum, .blankstate, .flash) { max-width: 88ch; }
 
 /* --------------------------------------------------------- notes and bars -- */
 
