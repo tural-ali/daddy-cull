@@ -2,6 +2,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {FilePreview} from '../Media';
 import {Busy} from '../Busy';
 import {CullSyncSetup} from './CullSyncSetup';
+import {usePageActions} from './pageActions';
 
 type JobState='queued_check'|'checking'|'planned'|'queued_apply'|'applying'|'done'|'failed'|'cancelled';
 type Agent={online:boolean;lastSeen?:string;version?:string;access?:string};
@@ -256,6 +257,12 @@ export function Photos(){
   const rows=(list:Row[])=>planned||!view?list:list.filter(row=>view.selected.includes(row.id));
   const deletes=view?view.delete.filter(row=>chosen.has(row.id)).length:0;
   const favourites=view?view.favourite.filter(row=>chosen.has(row.id)).length:0;
+  // Apply sits at the top right with the other page actions, and says what it
+  // will do before it is pressed.
+  usePageActions(planned&&view&&view.delete.length+view.favourite.length>0?{
+    note:`${plural(deletes,'deletion')} · ${plural(favourites,'favourite')}`,
+    actions:[{label:'Apply in Photos',short:'Apply',icon:'cloud_sync',primary:true,disabled:!!posting||deletes+favourites===0,title:'Favourites are set first. Photos then asks on the Mac before it deletes anything.',onClick:()=>void apply()}],
+  }:null);
   const selectedDeletes=view?view.selected.filter(id=>id.startsWith('delete:')).length:0;
   const agent=status?.agent;
   const warning=agent?access(agent):'';
@@ -320,6 +327,7 @@ export function Photos(){
     {view&&view.skipped>0&&view.state!=='planned'&&<p className="note">{plural(view.skipped,'chosen item')} changed in Cull after the check and {view.skipped===1?'was':'were'} left out.</p>}
 
     {view&&showRows&&<>
+      {planned&&view.delete.length+view.favourite.length>0&&<p className="hint">Untick anything to leave it alone, then use <b>Apply in Photos</b> at the top. Favourites are set first. Photos then asks on the Mac before it deletes anything.</p>}
       {planned&&view.delete.length+view.favourite.length===0&&<p className="note">None of what Cull would change is in Photos, so there is nothing to apply.</p>}
       <RowGroup title="Delete from Photos" hint="Left: the file in the archive. Right: what Cull Sync found in Photos. Each goes to Recently Deleted." rows={rows(view.delete)} chosen={chosen} editable={planned} onToggle={toggle} onAll={all}/>
       <RowGroup title="Mark as favourite in Photos" hint="Favourites in Cull that Photos has not been given yet. A heart on the right means Photos already has it as a favourite." rows={rows(view.favourite)} chosen={chosen} editable={planned} onToggle={toggle} onAll={all}/>
@@ -330,13 +338,6 @@ export function Photos(){
       </section>}
     </>}
 
-    {planned&&view&&view.delete.length+view.favourite.length>0&&<footer className="fbar">
-      <span className="fleft">
-        <span className="sel">{plural(deletes,'deletion')} · {plural(favourites,'favourite')}</span>
-        <button className="btn primary" disabled={!!posting||deletes+favourites===0} onClick={()=>void apply()}>Apply in Photos</button>
-      </span>
-      <span className="fright hint">Favourites are set first. Photos then asks on the Mac before it deletes anything.</span>
-    </footer>}
 
     {overview&&(overview.synced.deleted>0||overview.synced.favourited>0)&&<dl className="kv psynced">
       <div><dt>Deleted from Photos by Cull</dt><dd>{overview.synced.deleted.toLocaleString()}</dd></div>

@@ -30,6 +30,9 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
   await page.getByRole('link',{name:/^Bin 2 files$/}).waitFor();
   assert.equal(fetched.filter(path=>path==='/api/today/09-07').length,1,'the page loaded its data more than once');
   assert.equal(await page.locator('.xgroup').count(),1);
+  // The page's own action sits at the top right, as in Google Photos, not in a bar at the bottom.
+  await page.locator('.gbar .pageacts').getByRole('button',{name:/^Mark .+ reviewed$/}).waitFor();
+  assert.equal(await page.locator('.fbar button').count(),0);
   assert.match(await page.locator('.xdupes').innerText(),/byte-identical, verified by full hash/);
   await page.getByRole('button',{name:'choose as keeper'}).click();
   await page.getByRole('button',{name:/Keep the selected copy/}).click();

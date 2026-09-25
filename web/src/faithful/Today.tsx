@@ -6,6 +6,7 @@ import {calendarLabel} from './Year';
 import {Viewer} from './Viewer';
 import {usePhotoURL} from './photoURL';
 import {Busy} from '../Busy';
+import {usePageActions} from './pageActions';
 
 export type TodayYear={day:string;year:number;files:number;bytes:number;status:'pending'|'done';assets:Asset[]};
 export type TodayData={md:string;label:string;previous:string;next:string;years:TodayYear[];memories:number;bytes:number};
@@ -133,6 +134,7 @@ export function Today({initial}:{initial:TodayData}){
     return()=>controller.abort();
   },[initial.md]);
 
+  usePageActions(assets.length>0&&doneYears<years.length?{actions:[{label:`Mark ${initial.label} reviewed`,short:'Mark reviewed',icon:'task_alt',disabled:saving,onClick:()=>void markDate()}]}:null);
   return <>
     <div className="dhead">
       <a className="step" data-nav="prev" href={`/on/${initial.previous}`}>← {calendarLabel(initial.previous)}</a>
@@ -171,7 +173,7 @@ export function Today({initial}:{initial:TodayData}){
       </figure>)}</div>}
       {year.status!=='done'&&year.assets.length>0&&<p className="yact"><button className="btn small" disabled={saving} onClick={()=>void markYear(year.day)}>Mark {year.year} reviewed</button><a className="dim" href={`/day/${year.day}`}>Open {year.day} on its own</a></p>}
     </section>)}
-    {assets.length>0&&<footer className="fbar keys"><span className="fleft"><span className="hint">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>?</b> for the rest</span></span><span className="fright">{doneYears<years.length&&<button className="btn" disabled={saving} onClick={()=>void markDate()}>Mark {initial.label} reviewed</button>}</span></footer>}
+    {assets.length>0&&<footer className="fbar keys"><span className="fleft"><span className="hint">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>?</b> for the rest</span></span></footer>}
     {viewer!==null&&<Viewer assets={assets} initialID={viewer} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset}/>} 
   </>;
 }

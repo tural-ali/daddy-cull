@@ -3,6 +3,7 @@ import {Icon,type IconName} from '../Icon';
 import {Logo} from '../Logo';
 import {pathForDate} from './goto';
 import {SelectionBar,SelectionProvider,type Selection} from './selection';
+import {PageActionButtons,PageActionsProvider,type PageActions} from './pageActions';
 
 export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'log'|'bin'|'settings';
 type Item={href:string;route:LegacyRoute;label:string;icon:IconName};
@@ -31,8 +32,9 @@ const sections:{title?:string;items:Item[]}[]=[
 ];
 
 // Pages built around a grid run the full width of the panel, as in Google
-// Photos; Settings and Apple Photos keep a reading measure.
-const gridRoutes=new Set<LegacyRoute>(['today','year','dupes','upgrades','shadows','shots','social','log','bin']);
+// Photos; the Year calendar, Settings and Apple Photos keep a reading measure,
+// since a calendar stretched across a wide screen is hard to read along a row.
+const gridRoutes=new Set<LegacyRoute>(['today','dupes','upgrades','shadows','shots','social','log','bin']);
 
 function DateSearch(){
   const [value,setValue]=useState('');
@@ -70,14 +72,16 @@ function Streak({days,today}:{days:number;today:boolean}){
   const title=today?`${days} ${unit} in a row with a review, today included`
     :days>0?`${days} ${unit} in a row. Review something today to keep it going`
     :'Review something today to start a streak';
-  return <a className={`streak${today?' lit':''}`} href="/year" title={title} aria-label={title}>
+  // It sits inside the Reviewed link, which already opens the calendar.
+  return <span className={`streak${today?' lit':''}${days>0?'':' none'}`} title={title} aria-label={title}>
     <Icon name="local_fire_department" filled={today}/>{days>0?<span><b>{days.toLocaleString()}</b><span className="unit"> {unit}</span></span>:<span className="unit">Start a streak</span>}
-  </a>;
+  </span>;
 }
 
 export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:LegacyRoute;binFiles:number;reviewed?:{done:number;total:number};streak?:{days:number;today:boolean};flash?:string;children:ReactNode}){
   const [drawer,setDrawer]=useState(false);
   const [selection,setSelection]=useState<Selection|null>(null);
+  const [pageActions,setPageActions]=useState<PageActions|null>(null);
   // On a wide screen the menu button hides the sidebar, as in Google Photos,
   // and the choice is remembered; on a narrow one it opens the drawer.
   const [sideHidden,setSideHidden]=useState(readSideHidden);
@@ -109,7 +113,7 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
       <a className="brand" href="/" title="Today"><Logo/></a>
       <DateSearch/>
       <div className="gbaracts">
-        {streak&&<Streak days={streak.days} today={streak.today}/>}
+        {pageActions&&<PageActionButtons page={pageActions}/>}
         <a className={`iconbtn${route==='settings'?' on':''}`} href="/settings" aria-label="Settings" title="Settings" aria-current={route==='settings'?'page':undefined}><Icon name="settings" filled={route==='settings'}/></a>
       </div>
     </header>}
@@ -129,13 +133,13 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
       {reviewed&&reviewed.total>0&&<a className="sideprogress" href="/year" title="Open the calendar">
         <span className="sideprogresshead"><Icon name="task_alt"/>Reviewed</span>
         <span className="meter" role="progressbar" aria-label="Calendar dates reviewed" aria-valuemin={0} aria-valuemax={reviewed.total} aria-valuenow={reviewed.done}><span style={{width:`${Math.min(100,share*100)}%`}}/></span>
-        <span className="sideprogressnote">{reviewed.done.toLocaleString()} of {reviewed.total.toLocaleString()} dates</span>
+        <span className="sideprogressfoot"><span className="sideprogressnote">{reviewed.done.toLocaleString()} of {reviewed.total.toLocaleString()} dates</span>{streak&&<Streak days={streak.days} today={streak.today}/>}</span>
       </a>}
     </aside>
     <button type="button" className="scrim" tabIndex={-1} aria-hidden="true" onClick={()=>setDrawer(false)}/>
     <div className="panel">
       {flash&&<p className="flash" role="status">{flash}</p>}
-      <main className={`${gridRoutes.has(route)?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}>{children}</SelectionProvider></main>
+      <main className={`${gridRoutes.has(route)?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}><PageActionsProvider value={setPageActions}>{children}</PageActionsProvider></SelectionProvider></main>
     </div>
   </div>;
 }
