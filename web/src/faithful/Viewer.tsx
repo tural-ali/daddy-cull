@@ -37,7 +37,6 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove}:{a
   // starts clean. A file moved off the archive between scans answers 404.
   const [broken,setBroken]=useState<{id:number;gone:boolean}|null>(null);
   const current=assets[Math.min(at,Math.max(0,assets.length-1))];
-  const progress=assets.length?Math.round((at+1)/assets.length*100):0;
   const capture=current?.capturedAt?new Date(current.capturedAt*1000):null;
   const name=current?.path.split('/').pop()??'';
   const date=capture?.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'})??'Date unknown';
@@ -142,7 +141,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove}:{a
     onClose();
   }
   return <div className={`rv on${bare?' bare':''}${info?' info':''}${current.favourite?' isfav':''}${related?' cmp':''}`} role="dialog" aria-modal="true" aria-label="Photo review" onClick={outside}>
-    <div className="rvtop">{dayOf?<a className="rvday" href={dayOf(current)} target="_blank" rel="noopener" title="Open this day in a new tab">{date}<Icon name="open_in_new"/></a>:<span className="rvday">{date}</span>}<span className="rvwhen">{time}</span><span className="rvpos">{at+1} / {assets.length}</span><button type="button" className="rvpath" aria-label="Copy file path" title={current.path} onClick={()=>void navigator.clipboard.writeText(current.path)}>📋</button><span className="rvbar"><span style={{width:`${progress}%`}}/></span><button type="button" className="rvx" aria-label="Close review" title="Close (Esc)" onClick={onClose}>×</button></div>
+    <div className="rvtop">{dayOf?<a className="rvday" href={dayOf(current)} target="_blank" rel="noopener" title="Open this day in a new tab">{date}<Icon name="open_in_new"/></a>:<span className="rvday">{date}</span>}<span className="rvwhen">{time}</span><span className="rvpos">{at+1} / {assets.length}</span><button type="button" className="rvx" aria-label="Close review" title="Close (Esc)" onClick={onClose}>×</button></div>
     <div className={`rvstage${zoom?' zoom':''}${current.kind==='video'?' hasvideo':''}`} onClick={event=>{if((event.target as HTMLElement).tagName==='IMG')setBare(value=>!value)}}>
       <button type="button" className="rvnav prev" aria-label="Previous" onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
       {broken?.id===current.id?<div className="rvgone" role="status"><b>{broken.gone?'This file is no longer in the archive':'This file could not be shown'}</b><span>{broken.gone?'It was moved or removed on the server since the last scan. It leaves review at the next nightly scan.':'Try again in a moment.'}</span></div>

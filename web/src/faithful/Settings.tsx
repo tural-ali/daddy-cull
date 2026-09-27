@@ -2,8 +2,9 @@ import {useEffect,useState} from 'react';
 import {Busy} from '../Busy';
 import {dayStartsAt,nightStartsAt,readChoice,saveChoice,themeEvent,themeFor,type ThemeChoice} from '../theme';
 import {bytes,longDate,readDeleting,type DeletingReport} from './Bin';
+import {clearSessionSound,setVideoSoundPreference} from '../SessionVideo';
 
-export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number;calendarDates?:number;reviewedDates?:number;streak?:number;reviewedToday?:boolean};
+export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;videoMuted?:boolean;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number;calendarDates?:number;reviewedDates?:number;streak?:number;reviewedToday?:boolean};
 
 function localDate(value:string){
   if(!value)return 'never';
@@ -108,6 +109,33 @@ function Appearance(){
   </>;
 }
 
+// VideoSettings chooses whether clips start muted. Saving applies to this tab
+// at once, dropping any sound choice made in it, and to every other browser.
+function VideoSettings({initial}:{initial:boolean}){
+  const [muted,setMuted]=useState(initial);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  async function choose(next:boolean){
+    if(next===muted||busy)return;
+    setBusy(true);setError('');
+    try{
+      const response=await fetch('/api/settings/video',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({muted:next})});
+      if(!response.ok)throw new Error((await response.text()).trim()||'The setting could not be saved.');
+      const saved:{muted:boolean}=await response.json();
+      setMuted(saved.muted);setVideoSoundPreference(saved.muted);clearSessionSound();
+    }catch(reason){setError((reason as Error).message)}finally{setBusy(false)}
+  }
+  return <>
+    <h2 id="video">Video</h2>
+    <div className="segmented" role="radiogroup" aria-label="Video sound">
+      <label className={muted?'on':undefined}><input type="radio" name="video-sound" value="muted" checked={muted} disabled={busy} onChange={()=>void choose(true)}/>Start muted</label>
+      <label className={muted?undefined:'on'}><input type="radio" name="video-sound" value="sound" checked={!muted} disabled={busy} onChange={()=>void choose(false)}/>Start with sound</label>
+    </div>
+    {error&&<p className="note warn" role="alert">{error}</p>}
+    <p className="hint">{muted?'Clips open silent. Turning the sound on in the viewer keeps it on for the rest of that tab.':'Clips open with sound. Muting one in the viewer keeps the rest of that tab quiet.'}</p>
+  </>;
+}
+
 export function Settings({stats}:{stats:Stats}){
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
@@ -147,6 +175,7 @@ export function Settings({stats}:{stats:Stats}){
       <div><dt>Legacy Bin files</dt><dd>{stats.legacyBin.toLocaleString()}</dd></div>
     </dl>
     <BinSettings/>
+    <VideoSettings initial={stats.videoMuted!==false}/>
     <Appearance/>
     <h2>Google Takeout</h2>
     <p><a href="/upgrades">Review upgrades</a> · {stats.upgradeCandidates.toLocaleString()} archive photos have confirmed higher-resolution Takeout matches. They appear beside the archive original, not as a separate collection.</p>

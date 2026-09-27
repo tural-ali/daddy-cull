@@ -915,8 +915,6 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .rvtop a.rvday .icon, .rvtop .rvdaylink .icon { opacity: .75; }
 .rvtop a.rvday:hover, .rvtop .rvdaylink:hover { background: #24262c; }
 .rvtop a.rvday:focus-visible, .rvtop .rvdaylink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.rvtop .rvbar { width: 8rem; height: 3px; background: #24262c; border-radius: 999px; overflow: hidden; }
-.rvtop .rvbar > span { display: block; height: 100%; background: var(--accent); }
 
 /* Flex, not grid, and deliberately so. A grid with no explicit rows sizes its
    row to its content, so the image's `max-height: 100%` had no definite height
@@ -1509,33 +1507,6 @@ button.danger:not(.btn, .iconbtn) {
   font-weight: 600;
 }
 .btn.small.on:hover { background: color-mix(in oklab, var(--accent) 20%, var(--bg-2)); }
-
-/* ------------------------------------------------------------- file path --
-   The identity of the thing on screen, in the terms the reviewer will need it:
-   the path as the share serves it, not as this container mounts it. It sits in
-   the top bar rather than behind Info because "which file is this" is asked
-   constantly and answered nowhere else, and it is a button because reading a
-   path off a screen and retyping it is how transcription errors happen.
-   Truncated from the left: the tail of an archive path is what distinguishes
-   two files, the head is the same for all of them. */
-.rvtop .rvpath {
-  flex: none;
-  margin-left: 1rem;
-  padding: 0.15rem 0.4rem;
-  border: 0;
-  border-radius: 5px;
-  background: #1b1d22;
-  color: #8b8f99;
-  font: inherit;
-  font-size: 0.78rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  line-height: 1;
-  opacity: 0.75;
-  cursor: pointer;
-}
-.rvtop .rvpath:hover { background: #24262c; color: #e6e7ea; }
-.rvtop .rvpath:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (max-width: 700px) { .rvtop .rvpath { display: none; } }
 
 /* ------------------------------------------------------------------ the log --
    A list, not a table: the eye goes down one column of times and one column of

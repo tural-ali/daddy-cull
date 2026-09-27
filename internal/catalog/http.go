@@ -270,6 +270,29 @@ func (s *Store) Handler() http.Handler {
 		}
 		writeJSON(w, report)
 	})
+	// Whether clips start muted is a preference, so it is saved here and read by
+	// every browser with the rest of the stats.
+	mux.HandleFunc("POST /api/settings/video", func(w http.ResponseWriter, r *http.Request) {
+		if !sameOriginJSON(w, r) {
+			return
+		}
+		var input struct {
+			Muted *bool `json:"muted"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil || input.Muted == nil {
+			http.Error(w, "muted required", 400)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		if err := s.SetVideoMuted(ctx, *input.Muted); err != nil {
+			http.Error(w, "the setting could not be saved", 503)
+			return
+		}
+		writeJSON(w, map[string]bool{"muted": *input.Muted})
+	})
 	mux.HandleFunc("GET /api/screenshot-bin", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
@@ -530,7 +553,8 @@ func (s *Store) Handler() http.Handler {
 			dates = calendar.Progress
 		}
 		activity, _ := s.Activity(ctx, viewerLocation(r), time.Now())
-		json.NewEncoder(w).Encode(map[string]any{"total": n, "synthetic": library != "real", "snapshotAt": snapshot, "candidates": candidates, "calendarDays": calendarDays, "reviewedDays": reviewedDays, "decisions": decisions, "favourites": favourites, "evidence": evidence, "fullHashes": fullHashes, "marked": marked, "legacyBin": legacyBin, "shadowGroups": shadowGroups, "screenshots": screenshots, "social": social, "upgradesAccepted": upgradesAccepted, "upgradeCandidates": upgradeCandidates, "bin": bin, "immichSynced": immichSynced, "immichPending": immichPending, "immichFailed": immichFailed, "calendarDates": dates.Dates, "reviewedDates": dates.Done, "streak": activity.Streak, "reviewedToday": activity.Today})
+		videoMuted, _ := s.VideoMuted(ctx)
+		json.NewEncoder(w).Encode(map[string]any{"total": n, "synthetic": library != "real", "snapshotAt": snapshot, "candidates": candidates, "calendarDays": calendarDays, "reviewedDays": reviewedDays, "decisions": decisions, "favourites": favourites, "evidence": evidence, "fullHashes": fullHashes, "marked": marked, "legacyBin": legacyBin, "shadowGroups": shadowGroups, "screenshots": screenshots, "social": social, "upgradesAccepted": upgradesAccepted, "upgradeCandidates": upgradeCandidates, "bin": bin, "immichSynced": immichSynced, "immichPending": immichPending, "immichFailed": immichFailed, "calendarDates": dates.Dates, "reviewedDates": dates.Done, "streak": activity.Streak, "reviewedToday": activity.Today, "videoMuted": videoMuted})
 	})
 	return mux
 }

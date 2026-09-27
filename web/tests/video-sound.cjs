@@ -10,11 +10,13 @@ const video=(id,name)=>({id,path:`/archive/2010/2010-09/2010-09-07/${name}`,capt
 const clips=[video(1,'FIRST.MP4'),video(2,'SECOND.MP4'),video(3,'THIRD.MP4')];
 const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
 
-async function mock(page){
+async function mock(page,videoMuted=true){
   await page.clock.setFixedTime(new Date('2026-09-07T10:00:00'));
   await page.route('**/api/**',route=>{
     const url=new URL(route.request().url());
-    if(url.pathname==='/api/stats')return route.fulfill({json:{total:3,synthetic:false,snapshotAt:'2026-09-06 01:49:00',candidates:0,calendarDays:1,reviewedDays:0,decisions:0,favourites:0,evidence:0,fullHashes:0,marked:0}});
+    if(url.pathname==='/api/stats')return route.fulfill({json:{total:3,synthetic:false,snapshotAt:'2026-09-06 01:49:00',candidates:0,calendarDays:1,reviewedDays:0,decisions:0,favourites:0,evidence:0,fullHashes:0,marked:0,legacyBin:0,shadowGroups:0,screenshots:0,social:0,upgradesAccepted:0,upgradeCandidates:0,bin:0,immichSynced:0,immichPending:0,immichFailed:0,videoMuted}});
+    if(url.pathname==='/api/settings/video'&&route.request().method()==='POST'){videoMuted=route.request().postDataJSON().muted;return route.fulfill({json:{muted:videoMuted}})}
+    if(url.pathname==='/api/trash/deleting')return route.fulfill({json:{graceDays:30,items:[],lastRun:'',lastDeleted:0,lastError:'',checkIntervalMinutes:15}});
     if(url.pathname==='/api/today/09-07')return route.fulfill({json:{md:'09-07',label:'7 September',previous:'09-06',next:'09-08',years:[{day:'2010-09-07',year:2010,files:3,bytes:clip.length*3,status:'pending',assets:clips}],memories:3,bytes:clip.length*3}});
     if(/^\/api\/media\/\d+\/original$/.test(url.pathname))return route.fulfill({contentType:'video/webm',body:clip});
     if(url.pathname.startsWith('/api/media/'))return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#526b52"/></svg>'});
@@ -34,6 +36,7 @@ async function playing(page){await page.waitForFunction(()=>{const v=document.qu
   await page.getByRole('dialog',{name:'Photo review'}).waitFor();
   await playing(page);
   assert.deepEqual(await state(page),{muted:true,volume:1},'the first clip starts muted');
+  assert.equal(await page.locator('.rvtop .rvpath, .rvtop .rvbar').count(),0,'the top strip has no copy button or progress bar');
 
   // The viewer turns the sound on and lowers it, as the video controls would.
   await page.locator('.rv video').evaluate(v=>{v.muted=false;v.volume=0.4});
@@ -62,6 +65,34 @@ async function playing(page){await page.waitForFunction(()=>{const v=document.qu
   await playing(other);
   assert.equal((await state(other)).muted,true,'a new tab starts muted');
   await browser.close();
+
+  // Settings can make sound the default. A tab that then mutes a clip stays
+  // quiet, and choosing "Start muted" again forgets that tab's choice.
+  const chosen=await chromium.launch({channel:'chrome',headless:true,args:['--autoplay-policy=no-user-gesture-required']});
+  const loud=await (await chosen.newContext()).newPage();
+  await mock(loud,false);
+  await loud.goto(`${base}/on/09-07/photo/1`);
+  await loud.getByRole('dialog',{name:'Photo review'}).waitFor();
+  await playing(loud);
+  assert.deepEqual(await state(loud),{muted:false,volume:1},'with the preference set, the first clip starts with sound');
+  await loud.locator('.rv video').evaluate(v=>{v.muted=true});
+  await loud.waitForFunction(()=>JSON.parse(sessionStorage.getItem('cull.video-sound')||'{}').muted===true);
+  await loud.keyboard.press('ArrowRight');
+  await loud.waitForURL(/\/photo\/2$/);
+  await playing(loud);
+  assert.equal((await state(loud)).muted,true,'muting carries over the sound preference in this tab');
+  await loud.goto(`${base}/settings`);
+  const group=loud.getByRole('radiogroup',{name:'Video sound'});
+  await group.waitFor();
+  assert.equal(await group.getByRole('radio',{name:'Start with sound'}).isChecked(),true,'Settings shows the saved preference');
+  await group.getByText('Start muted').click();
+  await loud.waitForFunction(()=>document.querySelector('input[name=video-sound][value=muted]').checked);
+  await loud.waitForFunction(()=>sessionStorage.getItem('cull.video-sound')===null);
+  await loud.goto(`${base}/on/09-07/photo/3`);
+  await loud.getByRole('dialog',{name:'Photo review'}).waitFor();
+  await playing(loud);
+  assert.deepEqual(await state(loud),{muted:true,volume:1},'after saving "Start muted" the next clip starts muted');
+  await chosen.close();
 
   // Without a click in this page load, browsers refuse to autoplay with sound.
   // Headless Chrome never enforces that, so the refusal is reproduced here.

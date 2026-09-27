@@ -5,6 +5,7 @@ import {Today,type TodayData} from './Today';
 import {Year,type YearData} from './Year';
 import {Duplicates,type DuplicateGroup,type DuplicateReport} from './Duplicates';
 import {Settings,type Stats} from './Settings';
+import {setVideoSoundPreference} from '../SessionVideo';
 import {Log,type HistoryEvent} from './Log';
 import {Bin} from './Bin';
 import {Screenshots,type ScreenshotPage} from './Screenshots';
@@ -72,7 +73,7 @@ export function App(){
   useEffect(()=>{
     if(!recovered)return;
     const controller=new AbortController();
-    json<Stats>(`/api/stats?tz=${zone}`).then(setStats).catch(reason=>{if(!controller.signal.aborted)setError((reason as Error).message)});
+    json<Stats>(`/api/stats?tz=${zone}`).then(next=>{setVideoSoundPreference(next.videoMuted!==false);setStats(next)}).catch(reason=>{if(!controller.signal.aborted)setError((reason as Error).message)});
     // The badge is read again whenever a page says the Bin may have changed.
     // A burst of saves collapses into one read, and a failed read keeps the
     // last count rather than blanking the page.
