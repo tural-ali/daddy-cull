@@ -40,6 +40,7 @@ func main() {
 	importScreenshots := flag.String("import-screenshots", "", "index screenshot holding-area metadata without opening media")
 	importUpgrades := flag.String("import-upgrades", "", "import the confirmed Takeout upgrade TSV")
 	scanArchive := flag.String("scan-archive", "", "add media in this archive directory's day folders that the catalogue does not hold yet, then exit")
+	phoneDeletions := flag.String("phone-deletions", "", "read photos deleted on a phone from stdin, as host paths under this archive directory, mark for the Bin the ones nobody decided on, then exit")
 	screenshotFilter := flag.Bool("screenshot-filter", false, "read paths on stdin, print \"<path>\\t<rule>\" for each one that is a screenshot, then exit")
 	importSocial := flag.String("import-social", "", "import the social-video detection report TSV")
 	socialArchivePrefix := flag.String("social-archive-prefix", "/mnt/user/family-archive", "host archive prefix recorded in the social report")
@@ -66,7 +67,7 @@ func main() {
 	immichPrefix := flag.String("immich-path-prefix", envOr("IMMICH_PATH_PREFIX", catalog.DefaultImmichPathPrefix), "archive path as Immich's external library recorded it")
 	flag.Parse()
 	imports := 0
-	for _, value := range []string{*importFile, *importEvidence, *importLegacy, *importScreenshots, *importUpgrades, *importSocial, *scanArchive} {
+	for _, value := range []string{*importFile, *importEvidence, *importLegacy, *importScreenshots, *importUpgrades, *importSocial, *scanArchive, *phoneDeletions} {
 		if value != "" {
 			imports++
 		}
@@ -150,6 +151,14 @@ func main() {
 		if encodeErr := json.NewEncoder(os.Stdout).Encode(result); encodeErr != nil {
 			log.Fatal(encodeErr)
 		}
+		return
+	}
+	if *phoneDeletions != "" {
+		result, markErr := s.MarkPhoneDeletions(ctx, *phoneDeletions, os.Stdin)
+		if markErr != nil {
+			log.Fatal(markErr)
+		}
+		fmt.Println(result)
 		return
 	}
 	if *importScreenshots != "" {

@@ -73,7 +73,7 @@ func TestVersion8CatalogueAllowsRefusedImmichHearts(t *testing.T) {
 	defer s.Close()
 	var version, attempts int
 	var state, id string
-	if err = s.read.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 9 {
+	if err = s.read.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 10 {
 		t.Fatalf("version %d %v", version, err)
 	}
 	if err = s.read.QueryRow("SELECT state,attempts,immich_id FROM immich_favourites WHERE asset_id=1").Scan(&state, &attempts, &id); err != nil || state != "failed" || attempts != 38 || id != "im-1" {

@@ -42,7 +42,7 @@ func Open(path string) (*Store, error) {
 	if err = w.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return fail(err)
 	}
-	if version > 9 {
+	if version > 10 {
 		return fail(fmt.Errorf("catalogue schema is newer than this application"))
 	}
 	if err = w.QueryRow("SELECT count(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'").Scan(&tables); err != nil {
@@ -67,7 +67,7 @@ func Open(path string) (*Store, error) {
 	if _, err = w.Exec(fmt.Sprintf(`
 BEGIN IMMEDIATE;
 PRAGMA application_id=%d;
-PRAGMA user_version=9;
+PRAGMA user_version=10;
 CREATE TABLE IF NOT EXISTS sources (
  id TEXT PRIMARY KEY,
  label TEXT NOT NULL,
@@ -283,6 +283,18 @@ CREATE TABLE IF NOT EXISTS photos_sync (
 CREATE TABLE IF NOT EXISTS missing_assets (
  asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
  since TEXT NOT NULL
+);
+-- Photos deleted on a phone after they graduated into the archive, each
+-- handled once; see phone_deletions.go.
+CREATE TABLE IF NOT EXISTS phone_deletions (
+ zone TEXT NOT NULL,
+ rel_path TEXT NOT NULL,
+ size_bytes INTEGER NOT NULL,
+ reported_at TEXT NOT NULL,
+ asset_id INTEGER REFERENCES assets(id),
+ outcome TEXT NOT NULL CHECK(outcome IN ('marked','already-marked','kept','favourite','in-bin','not-catalogued','changed')),
+ handled_at TEXT NOT NULL,
+ PRIMARY KEY(zone,rel_path,size_bytes)
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS stats (id INTEGER PRIMARY KEY CHECK(id=1), total INTEGER NOT NULL);
