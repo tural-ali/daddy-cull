@@ -180,7 +180,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   background: var(--bg-3); border-radius: 999px;
   transition: background var(--ease), box-shadow var(--ease);
 }
-.search:focus-within { background: var(--bg-2); box-shadow: 0 1px 3px rgba(0,0,0,.25), 0 0 0 1px var(--line-2); }
+.search:has(input:focus) { background: var(--bg-2); box-shadow: 0 1px 3px rgba(0,0,0,.25), 0 0 0 1px var(--line-2); }
 .search input {
   flex: 1; min-width: 0; height: 100%;
   font: inherit; font-size: 16px; color: var(--text);
@@ -240,9 +240,9 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 @keyframes streakbump { 0% { transform: scale(1); } 30% { transform: scale(1.18); background: color-mix(in oklab, var(--flame) 26%, transparent); } 100% { transform: scale(1); } }
 @keyframes flamepop { 0% { transform: none; } 35% { transform: translateY(-3px) rotate(-8deg) scale(1.2); } 70% { transform: rotate(4deg); } 100% { transform: none; } }
 
-/* The calendar the pill opens: the run in large type, then a month of days,
-   each reviewed day a flame disc and each run joined into one band. */
-.streakcal {
+/* The calendars that drop from the top bar, the streak's and the date
+   pill's: the headline in large type, then a month of days. */
+.calpop {
   position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
   width: 336px; padding: 20px 16px 14px;
   background: var(--bg-2); border: 1px solid var(--line); border-radius: 24px;
@@ -252,39 +252,97 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   outline: none;
 }
 @keyframes calin { from { opacity: 0; transform: translateY(-6px) scale(.96); } }
-.streakhead { display: flex; align-items: center; gap: 14px; padding: 0 6px 16px; border-bottom: 1px solid var(--line); }
-.streakhead .flame { display: grid; place-items: center; width: 56px; height: 56px; flex: none; border-radius: 18px; color: var(--muted); background: var(--bg-3); }
-.streakhead .flame .icon, .streakhead .flame .icon svg { width: 34px; height: 34px; }
-.streakhead.lit .flame { color: #fff; background: linear-gradient(160deg, var(--flame-2), var(--flame)); box-shadow: 0 6px 18px color-mix(in oklab, var(--flame) 35%, transparent); }
-.streakhead p { margin: 0; }
-.streakhead .big { font-size: 20px; line-height: 26px; }
-.streakhead .big b { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.streakhead.lit .big b { color: var(--flame); }
-.streakhead .sub { margin-top: 2px; font-size: 13px; line-height: 18px; color: var(--muted); }
-.streakmonth { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; margin: 10px 0 6px; }
-.streakmonth p { margin: 0; text-align: center; display: flex; flex-direction: column; font-size: 14px; }
-.streakmonth p span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.streakmonth .iconbtn { width: 40px; height: 40px; }
-.streakmonth .iconbtn:disabled { opacity: .3; cursor: default; background: none; }
-.streakmonth .next .icon { transform: scaleX(-1); }
-.streakgrid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 4px; }
-.streakgrid .dow { height: 24px; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--faint); }
-.streakgrid .d { position: relative; height: 38px; display: grid; place-items: center; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text); }
-.streakgrid .d > span { position: relative; z-index: 1; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 999px; }
-.streakgrid .d.future { color: var(--faint); }
-.streakgrid .d.on > span { color: #fff; font-weight: 700; background: linear-gradient(160deg, var(--flame-2), var(--flame)); }
+.calhead { display: flex; align-items: center; gap: 14px; padding: 0 6px 16px; border-bottom: 1px solid var(--line); }
+.calhead .tile { display: grid; place-items: center; width: 56px; height: 56px; flex: none; border-radius: 18px; color: var(--muted); background: var(--bg-3); }
+.calhead .tile .icon, .calhead .tile .icon svg { width: 34px; height: 34px; }
+.calhead p { margin: 0; }
+.calhead .big { font-size: 20px; line-height: 26px; }
+.calhead .big b { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.calhead .sub { margin-top: 2px; font-size: 13px; line-height: 18px; color: var(--muted); }
+.calhead .sub b { color: var(--text); font-weight: 600; }
+.calmonth { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; margin: 10px 0 6px; }
+.calmonth p { margin: 0; text-align: center; display: flex; flex-direction: column; font-size: 14px; }
+.calmonth p span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.calmonth .iconbtn { width: 40px; height: 40px; }
+.calmonth .iconbtn:disabled { opacity: .3; cursor: default; background: none; }
+.calmonth .next .icon { transform: scaleX(-1); }
+.calgrid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 4px; }
+.calgrid .dow { height: 24px; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--faint); }
+.calgrid .d { position: relative; height: 38px; display: grid; place-items: center; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text); }
+.calgrid .d > span { position: relative; z-index: 1; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 999px; }
+.calgrid .d.future { color: var(--faint); }
+.calgrid .d.today > span { box-shadow: inset 0 0 0 2px var(--text); }
+.calfoot { margin: 12px 6px 0; font-size: 13px; color: var(--muted); }
+.calfoot b { color: var(--text); font-weight: 600; }
+.calfoot .textbtn { height: auto; padding: 2px 6px; margin-left: 2px; font-size: 13px; }
+
+/* The streak's calendar: each reviewed day a flame disc and each run joined
+   into one band. */
+.streakcal .calhead.lit .tile { color: #fff; background: linear-gradient(160deg, var(--flame-2), var(--flame)); box-shadow: 0 6px 18px color-mix(in oklab, var(--flame) 35%, transparent); }
+.streakcal .calhead.lit .big b { color: var(--flame); }
+.streakcal .d.on > span { color: #fff; font-weight: 700; background: linear-gradient(160deg, var(--flame-2), var(--flame)); }
 /* A run is a band behind the discs, from the centre of its first day to the
    centre of its last within the week. */
-.streakgrid .d.jl::before, .streakgrid .d.jr::after {
+.streakcal .d.jl::before, .streakcal .d.jr::after {
   content: ""; position: absolute; top: 5px; bottom: 5px; width: 50%;
   background: color-mix(in oklab, var(--flame) 38%, transparent);
 }
-.streakgrid .d.jl::before { left: 0; }
-.streakgrid .d.jr::after { right: 0; }
-.streakgrid .d.today > span { box-shadow: inset 0 0 0 2px var(--text); }
-.streakgrid .d.today.on > span { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .85); }
-.streakfoot { margin: 12px 6px 0; font-size: 13px; color: var(--muted); }
-.streakfoot b { color: var(--text); font-weight: 600; }
+.streakcal .d.jl::before { left: 0; }
+.streakcal .d.jr::after { right: 0; }
+.streakcal .d.today.on > span { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .85); }
+
+/* The date pill in the search bar: the page's date, ticked once every year
+   on it is reviewed, opening the calendar of dates. */
+.searchwrap { position: relative; min-width: 0; }
+.datepill {
+  display: inline-flex; align-items: center; gap: 6px; flex: none; height: 34px; padding: 0 4px 0 10px; margin-right: 4px;
+  color: var(--text); font: inherit; font-size: 14px; font-weight: 550; white-space: nowrap;
+  background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 999px; cursor: pointer;
+  transition: background var(--ease), border-color var(--ease);
+}
+.datepill .icon, .datepill .icon svg { width: 18px; height: 18px; }
+.datepill > .icon { color: var(--muted); }
+.datepill.done > .icon { color: var(--good); }
+.datepill .drop { display: grid; margin-left: -2px; color: var(--muted); }
+.datepill .drop .icon, .datepill .drop .icon svg { width: 22px; height: 22px; }
+.datepill .short { display: none; }
+.datepill:hover, .datepill[aria-expanded="true"] { background: var(--hover); border-color: var(--line-2); }
+.datepill[aria-expanded="true"] .drop { transform: rotate(180deg); }
+.datepill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.search.dated { padding-left: 6px; }
+.searchwrap > .calpop { left: 44px; transform-origin: 40px 0; }
+
+/* The date calendar: a reviewed date is a mint disc, a partly reviewed one
+   carries a dot, a date with nothing filed is faint, and the page's own date
+   is solid. */
+.datecal .calhead.lit .tile { color: var(--bg); background: var(--good); }
+.datecal .calgrid a.d { color: var(--text); border-radius: 999px; text-decoration: none; outline: none; }
+.datecal .calgrid a.d:hover > span { background: var(--hover); }
+.datecal .calgrid a.d:focus-visible > span { outline: 2px solid var(--accent); outline-offset: 1px; }
+.datecal .d.none { color: var(--faint); }
+.datecal .d.done > span, .datecal .calgrid a.d.done:hover > span { color: var(--good); font-weight: 650; background: color-mix(in oklab, var(--good) 20%, transparent); }
+.datecal .d.part > span::after {
+  content: ""; position: absolute; bottom: 3px; left: 50%; width: 4px; height: 4px; margin-left: -2px;
+  border-radius: 999px; background: var(--good);
+}
+.datecal .d.current > span, .datecal .calgrid a.d.current:hover > span { color: var(--bg); font-weight: 700; background: var(--text); }
+.datecal .d.current.part > span::after { background: var(--bg); }
+.callegend { display: flex; align-items: center; gap: 6px; }
+.callegend .key { position: relative; width: 12px; height: 12px; border-radius: 999px; }
+.callegend .key + .key, .callegend .key:not(:first-child) { margin-left: 10px; }
+.callegend .key.done { background: color-mix(in oklab, var(--good) 35%, transparent); }
+.callegend .key.part::after { content: ""; position: absolute; left: 4px; top: 4px; width: 4px; height: 4px; border-radius: 999px; background: var(--good); }
+.calsteps { display: flex; align-items: center; gap: 4px; margin: 10px -4px 0; padding-top: 10px; border-top: 1px solid var(--line); }
+.calsteps a {
+  display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 10px;
+  font-size: 13px; color: var(--muted); border-radius: 999px; white-space: nowrap;
+}
+.calsteps a:hover { color: var(--text); background: var(--hover); text-decoration: none; }
+.calsteps .icon, .calsteps .icon svg { width: 18px; height: 18px; }
+.calsteps .fwd { margin-left: auto; }
+.calsteps .fwd .icon { transform: scaleX(-1); }
+.calsteps .totoday { margin-left: auto; color: var(--accent); font-weight: 600; }
+.calsteps .totoday + .fwd { margin-left: 0; }
 
 /* The opening moment: the page blurs away, the flame springs up with the
    count beneath it, and at the end both fly into the pill. */
@@ -318,7 +376,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 @media (max-width: 600px) {
   .introflame, .introflame .icon, .introflame .icon svg { width: 128px; height: 128px; }
   .introcount b { font-size: 84px; }
-  .streakcal { position: fixed; top: calc(var(--head-h) + 4px); left: 8px; right: 8px; width: auto; }
+  .calpop, .searchwrap > .calpop { position: fixed; top: calc(var(--head-h) + 4px); left: 8px; right: 8px; width: auto; }
 }
 
 /* Sidebar folded from the menu button: as in Google Photos it becomes a rail
@@ -432,25 +490,32 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 }
 @media (max-width: 600px) {
   .gbar { display: flex; }
-  .search { flex: 1 1 auto; }
+  .searchwrap { flex: 1 1 auto; }
   .gbaracts { margin-left: auto; }
   .streakpill { padding: 0 8px 0 4px; font-size: 15px; }
   .brand svg { height: 20px; }
   .search { height: 44px; padding-right: 10px; }
   .search input { font-size: 15px; }
+  .datepill .long { display: none; }
+  .datepill .short { display: inline; }
 }
 /* A phone has no room for a field beside the logo and the streak, so search
-   folds to its icon, as in Google Photos, and opens across the bar when
-   tapped. */
+   folds to its icon and the date pill, as in Google Photos, and opens across
+   the bar when tapped. */
 @media (max-width: 480px) {
-  .search { flex: none; width: 44px; padding: 0 2px; background: none; transition: none; }
+  .searchwrap { position: static; flex: none; }
+  .search { flex: none; width: auto; padding: 0 2px; background: none; transition: none; }
   .search input { width: 0; flex: 0; padding: 0; }
-  .search:focus-within {
+  .datepill { padding-right: 10px; margin-right: 0; }
+  .datepill .drop { display: none; }
+  .search:has(input:focus) {
     position: absolute; left: 8px; right: 8px; z-index: 5; width: auto;
     padding-right: 12px; background: var(--bg-2);
   }
-  .search:focus-within input { flex: 1; }
+  .search:has(input:focus) input { flex: 1; }
 }
+
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 .pill {
   display: inline-block; min-width: 1.45em; padding: 0 .35em;
@@ -536,18 +601,6 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 /* The gallery has to begin as high on the page as it can, so everything above
    it is one line of type per idea: where you are, what is here, how far in. */
 
-.dhead {
-  display: flex; align-items: baseline; gap: 1rem;
-  margin: 0 0 .2rem;
-}
-.dhead h1 { margin: 0; font-size: 32px; font-weight: 400; letter-spacing: -.01em; }
-.dhead .step {
-  font-size: 13px; color: var(--muted);
-  padding: .2rem .5rem; border-radius: var(--radius-sm);
-  white-space: nowrap;
-}
-.dhead .step:hover { background: var(--bg-3); color: var(--text); text-decoration: none; }
-.dhead .step[data-nav="next"] { margin-left: auto; }
 
 .dline {
   display: flex; flex-wrap: wrap; align-items: center; gap: .45rem;
@@ -1343,7 +1396,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   .shell .snacks { left: calc(var(--side-w) + 24px); max-width: min(680px, calc(100vw - var(--side-w) - 48px)); }
   .shell.side-hidden .snacks { left: calc(var(--rail-w) + 24px); }
 }
-@media (prefers-reduced-motion: reduce) { .snack, .streakpill.bump, .streakpill.bump .icon, .streakcal { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .snack, .streakpill.bump, .streakpill.bump .icon, .calpop { animation: none; } }
 .toast {
   position: fixed; left: 1.1rem; bottom: 1.1rem;
   z-index: 200;
@@ -1374,9 +1427,6 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 
 @media (max-width: 720px) {
   main, main.wide { padding: 1rem .8rem 0; }
-  .dhead { flex-wrap: wrap; gap: .5rem; }
-  .dhead h1 { font-size: 22px; order: -1; flex: 1 0 100%; }
-  .dhead .step[data-nav="next"] { margin-left: auto; }
   .gal { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
   .gal.tight { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
   .mo .acts { opacity: 1; }

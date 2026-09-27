@@ -75,7 +75,8 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   await page.locator('.gal figure.sel[data-asset="2"]').waitFor();
 
   // The choice follows to the next day in this tab.
-  await page.getByRole('link',{name:/8 September/}).first().click();
+  await page.getByRole('button',{name:/^7 September/}).click();
+  await page.getByRole('navigation',{name:'Nearby dates'}).getByRole('link',{name:'8 Sep'}).click();
   await chip('Favourites').waitFor();
   assert.equal(await chip('Favourites').getAttribute('aria-pressed'),'true');
   await page.getByText('Nothing on this date matches the filters.').waitFor();

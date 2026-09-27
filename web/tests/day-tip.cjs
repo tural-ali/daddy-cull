@@ -40,7 +40,8 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   await tip.waitFor({state:'hidden'});
 
   // The next day, opened without a reload, does not bring it back.
-  await page.getByRole('link',{name:/8 September/}).first().click();
+  await page.getByRole('button',{name:/^7 September/}).click();
+  await page.getByRole('navigation',{name:'Nearby dates'}).getByRole('link',{name:'8 Sep'}).click();
   await page.locator('.gal figure').waitFor();
   await page.clock.runFor(500);
   assert.equal(await tip.count(),0,'moving to another day shows no tip');

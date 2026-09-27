@@ -9,6 +9,8 @@ import {Busy} from '../Busy';
 import {Icon,type IconName} from '../Icon';
 import {Celebration,type Tally} from './Celebration';
 import {usePageActions} from './pageActions';
+import {shortLabel,usePageDate} from './DatePicker';
+import {dayName} from './goto';
 import {requestID,sendDecisions} from './decisions';
 import {historyKey,undoKeys,useHistory,type HistoryEntry,type Snapshot} from './history';
 
@@ -17,7 +19,11 @@ export type TodayData={md:string;label:string;previous:string;next:string;years:
 export type DuplicateMember=Asset&{day:string};
 export type DuplicateGroup={hash:string;size:number;reclaimable:number;members:DuplicateMember[]};
 
-function currentMD(){const now=new Date();return `${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`}
+/** Whether a key went to a field being typed in, which the page's single
+ * letter shortcuts must leave alone. */
+function typing(target:EventTarget|null){
+  return target instanceof HTMLInputElement||target instanceof HTMLTextAreaElement||target instanceof HTMLSelectElement||(target instanceof HTMLElement&&target.isContentEditable);
+}
 function bytes(value:number){
   if(value<1024)return `${value} B`;
   if(value<1024**2)return `${(value/1024).toFixed(1)} KB`;
@@ -254,7 +260,7 @@ export function Today({initial}:{initial:TodayData}){
   });
   useEffect(()=>{
     function key(event:KeyboardEvent){
-      if(viewer!==null||event.ctrlKey||event.metaKey||event.altKey||event.target instanceof HTMLButtonElement)return;
+      if(viewer!==null||event.ctrlKey||event.metaKey||event.altKey||event.target instanceof HTMLButtonElement||typing(event.target))return;
       const index=shown.findIndex(asset=>asset.id===selected);
       if(event.key==='ArrowRight'){
         event.preventDefault();
@@ -284,13 +290,16 @@ export function Today({initial}:{initial:TodayData}){
     return()=>controller.abort();
   },[initial.md]);
 
+  // The date lives in the search bar as a pill; a single day's page names its
+  // year too.
+  const dayPage=location.pathname.match(/^\/day\/(\d{4}-\d{2}-\d{2})/)?.[1];
+  const pageLabel=dayPage?dayName(`/day/${dayPage}`):initial.label;
+  usePageDate({md:initial.md,label:pageLabel,
+    short:shortLabel(initial.md,dayPage?.slice(0,4)),
+    done:dateDone,years:years.length,yearsDone:doneYears,previous:initial.previous,next:initial.next});
   usePageActions(assets.length>0&&doneYears<years.length?{actions:[{label:`Mark ${initial.label} reviewed`,short:'Mark reviewed',icon:'task_alt',disabled:saving||queue.pending>0,onClick:()=>void markDate()}]}:null);
   return <>
-    <div className="dhead">
-      <a className="step" data-nav="prev" href={`/on/${initial.previous}`}>← {calendarLabel(initial.previous)}</a>
-      <h1>{initial.label}{initial.md===currentMD()&&<span className="tag today">today</span>}{dateDone&&<span className="tag done">reviewed</span>}</h1>
-      <a className="step" data-nav="next" href={`/on/${initial.next}`}>{calendarLabel(initial.next)} →</a>
-    </div>
+    <h1 className="vh">{pageLabel}</h1>
     <div className="dline">
       <span className="count">{initial.memories.toLocaleString()} {initial.memories===1?'memory':'memories'}</span>
       <span className="sep">·</span><span>{years.length} {years.length===1?'year':'years'}</span>

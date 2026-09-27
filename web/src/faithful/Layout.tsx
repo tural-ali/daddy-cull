@@ -1,10 +1,11 @@
-import {useEffect,useRef,useState,type CSSProperties,type FormEvent,type ReactNode} from 'react';
+import {useCallback,useEffect,useRef,useState,type CSSProperties,type FormEvent,type ReactNode} from 'react';
 import {Icon,type IconName} from '../Icon';
 import {Logo} from '../Logo';
 import {pathForDate} from './goto';
 import {SelectionBar,SelectionProvider,type Selection} from './selection';
 import {PageActionButtons,PageActionsProvider,type PageActions} from './pageActions';
 import {StreakCalendar,StreakIntro,StreakPill,introDue} from './Streak';
+import {DateCalendar,DatePill,PageDateProvider,type PageDate} from './DatePicker';
 
 export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'log'|'bin'|'settings';
 type Item={href:string;route:LegacyRoute;label:string;icon:IconName};
@@ -37,10 +38,15 @@ const sections:{title?:string;items:Item[]}[]=[
 // since a calendar stretched across a wide screen is hard to read along a row.
 const gridRoutes=new Set<LegacyRoute>(['today','dupes','upgrades','shadows','shots','social','log','bin']);
 
-function DateSearch(){
+/** The search field goes to a typed date. On a date's page that date sits in
+ * the field as a pill, and the pill opens a calendar to pick another. */
+function DateSearch({date}:{date:PageDate|null}){
   const [value,setValue]=useState('');
   const [problem,setProblem]=useState('');
+  const [open,setOpen]=useState(false);
   const input=useRef<HTMLInputElement>(null);
+  const pill=useRef<HTMLButtonElement>(null);
+  const close=useCallback(()=>setOpen(false),[]);
   function go(event:FormEvent){
     event.preventDefault();
     // On a phone the field is folded to its icon, so the icon opens it.
@@ -49,14 +55,18 @@ function DateSearch(){
     if(path)location.assign(path);
     else setProblem('Type a date, such as 14 Aug 2019, or 14 Aug for every year.');
   }
-  return <form className="search" role="search" onSubmit={go}>
-    <button type="submit" className="searchgo" aria-label="Go to the date"
-      onPointerDown={event=>{if(!value.trim())event.preventDefault()}}><Icon name="search"/></button>
-    <input ref={input} type="search" value={value} aria-label="Go to a date" aria-invalid={problem?true:undefined} aria-describedby={problem?'search-problem':undefined}
-      placeholder="Go to a date, like 14 Aug 2019" autoComplete="off" enterKeyHint="go"
-      onChange={event=>{setValue(event.target.value);setProblem('')}}/>
-    {problem&&<p id="search-problem" className="searchproblem" role="alert">{problem}</p>}
-  </form>;
+  return <div className="searchwrap">
+    <form className={`search${date?' dated':''}`} role="search" onSubmit={go}>
+      <button type="submit" className="searchgo" aria-label="Go to the date"
+        onPointerDown={event=>{if(!value.trim())event.preventDefault()}}><Icon name="search"/></button>
+      {date&&<DatePill date={date} pill={pill} open={open} onToggle={()=>setOpen(current=>!current)}/>}
+      <input ref={input} type="search" value={value} aria-label="Go to a date" aria-invalid={problem?true:undefined} aria-describedby={problem?'search-problem':undefined}
+        placeholder={date?'Go to another date':'Go to a date, like 14 Aug 2019'} autoComplete="off" enterKeyHint="go"
+        onChange={event=>{setValue(event.target.value);setProblem('')}}/>
+      {problem&&<p id="search-problem" className="searchproblem" role="alert">{problem}</p>}
+    </form>
+    {open&&date&&<DateCalendar date={date} anchor={pill} onClose={close}/>}
+  </div>;
 }
 
 /** The app's frame: a top bar with the logo, the review streak and date
@@ -71,6 +81,7 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
   const [drawer,setDrawer]=useState(false);
   const [selection,setSelection]=useState<Selection|null>(null);
   const [pageActions,setPageActions]=useState<PageActions|null>(null);
+  const [pageDate,setPageDate]=useState<PageDate|null>(null);
   // On a wide screen the menu button hides the sidebar, as in Google Photos,
   // and the choice is remembered; on a narrow one it opens the drawer.
   const [sideHidden,setSideHidden]=useState(readSideHidden);
@@ -103,6 +114,7 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
   // animation once a day, and a bump when today's first review lights it.
   const pill=useRef<HTMLButtonElement>(null);
   const [calendarOpen,setCalendarOpen]=useState(false);
+  const closeCalendar=useCallback(()=>setCalendarOpen(false),[]);
   const [intro,setIntro]=useState(false);
   const [bump,setBump]=useState(false);
   const introChecked=useRef(false);
@@ -121,10 +133,10 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
         <a className="brand" href="/" title="Today"><Logo/></a>
         {streak&&<div className="streakwrap">
           <StreakPill streak={streak} pill={pill} open={calendarOpen} bump={bump} onToggle={()=>setCalendarOpen(open=>!open)}/>
-          {calendarOpen&&<StreakCalendar streak={streak} anchor={pill} onClose={()=>setCalendarOpen(false)}/>}
+          {calendarOpen&&<StreakCalendar streak={streak} anchor={pill} onClose={closeCalendar}/>}
         </div>}
       </div>
-      <DateSearch/>
+      <DateSearch date={pageDate}/>
       <div className="gbaracts">
         {pageActions&&<PageActionButtons page={pageActions}/>}
       </div>
@@ -158,7 +170,7 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
     {intro&&streak&&<StreakIntro streak={streak} target={pill} onDone={()=>{setIntro(false);setBump(true)}}/>}
     <div className="panel">
       {flash&&<p className="flash" role="status">{flash}</p>}
-      <main className={`${gridRoutes.has(route)?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}><PageActionsProvider value={setPageActions}>{children}</PageActionsProvider></SelectionProvider></main>
+      <main className={`${gridRoutes.has(route)?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}><PageActionsProvider value={setPageActions}><PageDateProvider value={setPageDate}>{children}</PageDateProvider></PageActionsProvider></SelectionProvider></main>
     </div>
   </div>;
 }
