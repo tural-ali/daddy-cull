@@ -304,6 +304,10 @@ func main() {
 		mux.Handle("/", webApp(*web, []string{"/year", "/duplicates", "/upgrades", "/shadows", "/screenshots", "/social", "/log", "/bin", "/photos", "/settings"}))
 		// Favourites are saved by this process, so the worker that mirrors them
 		// to Immich runs here too; the private writer has no reason to reach it.
+		// Video tiles show how long each clip runs, read once per file.
+		if mediaRoots.Archive != "" && mediaRoots.FFmpeg != "" {
+			go s.KeepDurations(ctx, mediaRoots)
+		}
 		startImmichSync(ctx, s, catalog.ImmichConfig{URL: *immichURL, Key: os.Getenv("IMMICH_KEY"), PathPrefix: *immichPrefix})
 	}
 	server := &http.Server{Addr: *addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 0, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}

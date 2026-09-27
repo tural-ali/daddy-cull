@@ -1,7 +1,9 @@
 export type Status = 'unreviewed' | 'keep' | 'later' | 'cull';
 export type Asset = { id:number; path:string; capturedAt:number; kind:string; source:string; size:number; status:Status; favourite:boolean; revision:number;alternativeCount:number;relatedCount?:number;
   /** The other half of a RAW+JPEG pair, on the day pages. */
-  pair?:number };
+  pair?:number;
+  /** How long a video runs, in seconds, once the server has read it. */
+  duration?:number };
 export type Page = {assets:Asset[];next:string};
 export type Saved = {revision:number;previousStatus:Status;previousFavourite:boolean};
 /** The frame listens for this and reads its counts again: the Bin badge, the

@@ -22,6 +22,8 @@ type Asset struct {
 	// Pair is the other half of a RAW+JPEG pair, on the pages that show
 	// pairs as one photo.
 	Pair int64 `json:"pair,omitempty"`
+	// Duration is how long a video runs, in seconds, once it has been read.
+	Duration float64 `json:"duration,omitempty"`
 }
 type Cursor struct {
 	Version int    `json:"v"`

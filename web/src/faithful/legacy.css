@@ -795,7 +795,6 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 }
 .bdg .b.dupe { background: color-mix(in oklab, var(--warn) 82%, #000); }
 .bdg .b.keep { background: color-mix(in oklab, var(--good) 78%, #000); }
-.bdg .b.play { font-variant-numeric: tabular-nums; }
 .bdg .b.pair { letter-spacing: .04em; }
 
 /* The badge that counts the files is also the way into the comparison, so it -
@@ -851,12 +850,26 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 .mo:hover .when { opacity: 1; }
 .mo:hover .acts + .when { opacity: 0; }
 
+/* A video says how long it runs in the bottom corner, as Google Photos marks
+   a clip, and gives the corner up to the actions while they show. */
+.mo .dur {
+  position: absolute; bottom: 9px; right: 10px; z-index: 2;
+  display: inline-flex; align-items: center;
+  color: #fff; font-size: 14px; font-weight: 650; line-height: 1; letter-spacing: .01em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .55), 0 0 12px rgba(0, 0, 0, .35);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none; transition: opacity var(--ease);
+}
+.mo .dur .icon, .mo .dur .icon svg { width: 22px; height: 22px; }
+.mo .dur .icon { filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .55)); }
+.mo:hover .dur, .mo:focus-within .dur { opacity: 0; }
+
 /* A culled tile keeps its place in the grid and dims, so the row does not
    reflow under the cursor mid-decision, and Undo is exactly where the eye
    already is. */
 .mo.culled { opacity: .34; }
 .mo.culled img { filter: grayscale(1); }
-.mo.culled .acts, .mo.culled .bdg, .mo.culled .when { display: none; }
+.mo.culled .acts, .mo.culled .bdg, .mo.culled .when, .mo.culled .dur { display: none; }
 .mo .undo {
   position: absolute; inset: auto 0 0 0; z-index: 4;
   display: flex; align-items: center; justify-content: space-between; gap: .5rem;
@@ -1498,7 +1511,11 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   .gal { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
   .gal.tight { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
   .mo .acts { opacity: 1; }
-  .mo .when { opacity: 1; }
+  /* The actions always show here, so the time and the running time sit just
+     above them rather than under the heart. */
+  .mo .when { opacity: 1; bottom: 42px; }
+  .mo .dur, .mo:hover .dur, .mo:focus-within .dur { opacity: 1; bottom: 42px; }
+  .mo .dur ~ .when, .mo .when:has(~ .dur) { left: 10px; right: auto; }
   .kv div { flex-direction: column; gap: .1rem; }
   .kv dt { flex: none; }
   .fbar { flex-wrap: wrap; gap: .5rem; }
