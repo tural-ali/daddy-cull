@@ -43,7 +43,9 @@ func TestActivityStreakCountsConsecutiveReviewDaysInTheViewersZone(t *testing.T)
 	if got, err = s.Activity(ctx, berlin, time.Now()); err != nil || !got.Today || got.Streak < 1 {
 		t.Fatalf("after marking a date today: %+v %v", got, err)
 	}
-	if got, err = s.Activity(ctx, berlin, time.Date(2026, 9, 27, 8, 0, 0, 0, berlin)); err != nil || got.Streak != 0 {
+	// The mark above was stamped with the real clock, so the missed day is
+	// counted from today: nothing tomorrow means no streak the day after.
+	if got, err = s.Activity(ctx, berlin, time.Now().In(berlin).AddDate(0, 0, 2)); err != nil || got.Streak != 0 {
 		t.Fatalf("a missed day ends the streak: %+v %v", got, err)
 	}
 }
