@@ -49,6 +49,17 @@ func (s *Store) Handler() http.Handler {
 		data.Week = CalendarWeek{Days: activity.WeekDays, Seconds: activity.WeekSeconds}
 		writeJSON(w, data)
 	})
+	mux.HandleFunc("GET /api/streak", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		data, err := s.Streak(ctx, viewerLocation(r), time.Now())
+		if err != nil {
+			http.Error(w, "catalogue unavailable", 503)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, data)
+	})
 	mux.HandleFunc("GET /api/today/{md}", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()

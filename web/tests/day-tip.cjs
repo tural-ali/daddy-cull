@@ -26,7 +26,8 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   await page.goto(`${base}/on/09-07`);
   await tip.waitFor();
   const box=await tip.boundingBox();
-  assert.ok(box.x<40&&box.y+box.height>760,`the tip sits in the bottom-left corner, not at ${JSON.stringify(box)}`);
+  const side=await page.locator('#side').boundingBox();
+  assert.ok(box.x>=side.x+side.width&&box.x<side.x+side.width+40&&box.y+box.height>760,`the tip sits in the panel's bottom-left corner, clear of the sidebar, not at ${JSON.stringify(box)}`);
   assert.equal(await page.locator('.fbar').count(),0,'the footer bar is gone');
   // Removing a photo shows no notice: the tile itself says what happened.
   await page.locator('.gal figure').nth(0).locator('.act.cull').click();

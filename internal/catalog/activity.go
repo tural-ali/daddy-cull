@@ -113,3 +113,44 @@ func (s *Store) Activity(ctx context.Context, loc *time.Location, now time.Time)
 	}
 	return activity, nil
 }
+
+// StreakCalendar is the run of review days for the streak calendar: the
+// current run, the longest run ever, and every day with a review.
+type StreakCalendar struct {
+	Streak int      `json:"streak"`
+	Today  bool     `json:"reviewedToday"`
+	Best   int      `json:"best"`
+	Days   []string `json:"days"`
+}
+
+// Streak lists the days with a review, in the viewer's time zone, for the
+// calendar behind the streak in the header.
+func (s *Store) Streak(ctx context.Context, loc *time.Location, now time.Time) (StreakCalendar, error) {
+	result := StreakCalendar{Days: []string{}}
+	times, err := s.reviewTimes(ctx, loc)
+	if err != nil {
+		return result, err
+	}
+	days := reviewDaySet(times)
+	result.Streak, result.Today = currentStreak(days, loc, now)
+	for day := range days {
+		result.Days = append(result.Days, day)
+	}
+	sort.Strings(result.Days)
+	run := 0
+	var previous time.Time
+	for _, day := range result.Days {
+		t, _ := time.ParseInLocation("2006-01-02", day, loc)
+		t = t.Add(12 * time.Hour)
+		if run > 0 && dayKey(previous.AddDate(0, 0, 1)) == day {
+			run++
+		} else {
+			run = 1
+		}
+		previous = t
+		if run > result.Best {
+			result.Best = run
+		}
+	}
+	return result, nil
+}

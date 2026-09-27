@@ -44,6 +44,8 @@
   --on-accent: #0b2e20;
   --good:      #7ed9b2;
   --warn:      #f7c66a;
+  --flame:     #ff9f43;
+  --flame-2:   #ffb14e;
   --bad:       #f0827f;
   --fav:       #f2789d;
 
@@ -99,6 +101,8 @@
   --on-accent: #ffffff;
   --good:      #0f7a52;
   --warn:      #8a5d0d;
+  --flame:     #e8700f;
+  --flame-2:   #f5a524;
   --bad:       #c2402f;
   --fav:       #cf4a75;
   --logo-ink:  #16181d;
@@ -150,13 +154,15 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .gbar {
   grid-column: 1 / -1;
   position: sticky; top: 0; z-index: 30;
-  display: flex; align-items: center; gap: 12px;
+  /* Three columns so the search sits in the middle of the bar whatever the
+     two sides hold: the menu, logo and streak on the left, the page's own
+     actions on the right. */
+  display: grid; grid-template-columns: 1fr minmax(0, 720px) 1fr; align-items: center; column-gap: 12px;
   height: var(--head-h); padding: 0 16px 0 8px;
   background: var(--shell);
 }
-/* The menu button, logo and gap together are the sidebar's width, so the
-   search field starts where the page panel does. */
-.brand { display: flex; align-items: center; flex: none; width: calc(var(--side-w) - 8px - 44px - 24px); padding: 6px 4px; border-radius: 999px; }
+.gbarstart { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.brand { display: flex; align-items: center; flex: none; padding: 6px 8px 6px 4px; border-radius: 999px; }
 .brand:hover { text-decoration: none; }
 .brand svg { display: block; height: 24px; width: auto; }
 .brand .ink { fill: var(--logo-ink); }
@@ -168,7 +174,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .icon svg { width: 24px; height: 24px; fill: currentColor; }
 
 .search {
-  position: relative; flex: 0 1 720px; min-width: 0;
+  position: relative; min-width: 0;
   display: flex; align-items: center; gap: 4px;
   height: 48px; padding: 0 16px 0 6px;
   background: var(--bg-3); border-radius: 999px;
@@ -189,7 +195,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   padding: .5rem .8rem; font-size: 13px; color: var(--text);
   background: var(--bg-4); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,.3);
 }
-.gbaracts { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.gbaracts { justify-self: end; display: flex; align-items: center; gap: 4px; min-width: 0; }
 /* The page's own actions, before the streak and Settings. */
 .pageacts { display: flex; align-items: center; gap: 8px; margin-right: 8px; }
 .pagenote { font-size: 14px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -215,21 +221,104 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .iconbtn.on { color: var(--pill-ink); background: var(--pill); }
 .iconbtn.menu { display: grid; }
 
-/* The review streak, in the logo's amber: quiet until today has a review, then
-   lit, so the first choice of the day visibly keeps the run going. */
-.streak {
-  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 10px;
-  color: var(--muted); font-size: 14px; font-weight: 500; white-space: nowrap;
-  border-radius: 999px; transition: background var(--ease), color var(--ease);
-  font-variant-numeric: tabular-nums;
+/* The review streak beside the logo, as Duolingo keeps it at the top: a flame
+   and the run of days, grey until today has a review and then lit. */
+.streakwrap { position: relative; flex: none; }
+.streakpill {
+  display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 0 12px 0 8px;
+  color: var(--muted); font: inherit; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums;
+  background: none; border: 0; border-radius: 999px; cursor: pointer;
+  transition: background var(--ease), color var(--ease);
 }
-.streak b { font-weight: 700; }
-.streak .icon, .streak .icon svg { width: 22px; height: 22px; }
-.streak.lit { color: var(--warn); background: color-mix(in oklab, var(--warn) 14%, transparent); }
-.sideprogress:hover .streak.lit { background: color-mix(in oklab, var(--warn) 22%, transparent); }
+.streakpill .icon, .streakpill .icon svg { width: 26px; height: 26px; }
+.streakpill:hover, .streakpill[aria-expanded="true"] { background: var(--hover); color: var(--text); }
+.streakpill.lit { color: var(--flame); }
+.streakpill.lit:hover, .streakpill.lit[aria-expanded="true"] { background: color-mix(in oklab, var(--flame) 16%, transparent); color: var(--flame); }
+.streakpill:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
+.streakpill.bump { animation: streakbump 820ms cubic-bezier(.34, 1.56, .64, 1); }
+.streakpill.bump .icon { animation: flamepop 820ms cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes streakbump { 0% { transform: scale(1); } 30% { transform: scale(1.18); background: color-mix(in oklab, var(--flame) 26%, transparent); } 100% { transform: scale(1); } }
+@keyframes flamepop { 0% { transform: none; } 35% { transform: translateY(-3px) rotate(-8deg) scale(1.2); } 70% { transform: rotate(4deg); } 100% { transform: none; } }
+
+/* The calendar the pill opens: the run in large type, then a month of days,
+   each reviewed day a flame disc and each run joined into one band. */
+.streakcal {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
+  width: 336px; padding: 20px 16px 14px;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 24px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .4);
+  transform-origin: 24px 0;
+  animation: calin 220ms cubic-bezier(.2, 0, 0, 1) both;
+  outline: none;
+}
+@keyframes calin { from { opacity: 0; transform: translateY(-6px) scale(.96); } }
+.streakhead { display: flex; align-items: center; gap: 14px; padding: 0 6px 16px; border-bottom: 1px solid var(--line); }
+.streakhead .flame { display: grid; place-items: center; width: 56px; height: 56px; flex: none; border-radius: 18px; color: var(--muted); background: var(--bg-3); }
+.streakhead .flame .icon, .streakhead .flame .icon svg { width: 34px; height: 34px; }
+.streakhead.lit .flame { color: #fff; background: linear-gradient(160deg, var(--flame-2), var(--flame)); box-shadow: 0 6px 18px color-mix(in oklab, var(--flame) 35%, transparent); }
+.streakhead p { margin: 0; }
+.streakhead .big { font-size: 20px; line-height: 26px; }
+.streakhead .big b { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.streakhead.lit .big b { color: var(--flame); }
+.streakhead .sub { margin-top: 2px; font-size: 13px; line-height: 18px; color: var(--muted); }
+.streakmonth { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; margin: 10px 0 6px; }
+.streakmonth p { margin: 0; text-align: center; display: flex; flex-direction: column; font-size: 14px; }
+.streakmonth p span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.streakmonth .iconbtn { width: 40px; height: 40px; }
+.streakmonth .iconbtn:disabled { opacity: .3; cursor: default; background: none; }
+.streakmonth .next .icon { transform: scaleX(-1); }
+.streakgrid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 4px; }
+.streakgrid .dow { height: 24px; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--faint); }
+.streakgrid .d { position: relative; height: 38px; display: grid; place-items: center; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text); }
+.streakgrid .d > span { position: relative; z-index: 1; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 999px; }
+.streakgrid .d.future { color: var(--faint); }
+.streakgrid .d.on > span { color: #fff; font-weight: 700; background: linear-gradient(160deg, var(--flame-2), var(--flame)); }
+/* A run is a band behind the discs, from the centre of its first day to the
+   centre of its last within the week. */
+.streakgrid .d.jl::before, .streakgrid .d.jr::after {
+  content: ""; position: absolute; top: 5px; bottom: 5px; width: 50%;
+  background: color-mix(in oklab, var(--flame) 38%, transparent);
+}
+.streakgrid .d.jl::before { left: 0; }
+.streakgrid .d.jr::after { right: 0; }
+.streakgrid .d.today > span { box-shadow: inset 0 0 0 2px var(--text); }
+.streakgrid .d.today.on > span { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .85); }
+.streakfoot { margin: 12px 6px 0; font-size: 13px; color: var(--muted); }
+.streakfoot b { color: var(--text); font-weight: 600; }
+
+/* The opening moment: the page blurs away, the flame springs up with the
+   count beneath it, and at the end both fly into the pill. */
+.streakintro { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; cursor: pointer; }
+.streakintro .introscrim {
+  position: absolute; inset: 0;
+  background: color-mix(in oklab, var(--bg) 62%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2);
+  animation: cheerin 380ms cubic-bezier(.2, 0, 0, 1) both;
+}
+.streakintro .confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+.introhero { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; text-align: center; transform-origin: center; will-change: transform; }
+.introflame {
+  display: grid; place-items: center; width: 168px; height: 168px;
+  color: var(--flame);
+  filter: drop-shadow(0 12px 36px color-mix(in oklab, var(--flame) 55%, transparent));
+  animation: flamein 760ms cubic-bezier(.34, 1.56, .64, 1) both;
+}
+.introflame .icon, .introflame .icon svg { width: 168px; height: 168px; }
+.introflame .icon svg { animation: flicker 1600ms ease-in-out 760ms infinite; transform-origin: 50% 85%; }
+.introhero.landed .introflame .icon svg { animation: flicker 1600ms ease-in-out infinite, flamepop 700ms cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes flamein { from { opacity: 0; transform: translateY(40px) scale(.3); } }
+@keyframes flicker { 0%, 100% { transform: scale(1, 1) rotate(0); } 25% { transform: scale(1.03, .97) rotate(-2deg); } 50% { transform: scale(.98, 1.04) rotate(1.5deg); } 75% { transform: scale(1.02, .98) rotate(-1deg); } }
+.introcount { margin: 0; line-height: 1; animation: risein 520ms cubic-bezier(.2, 0, 0, 1) 220ms both; }
+.introcount b { font-size: 112px; font-weight: 700; letter-spacing: -.04em; font-variant-numeric: tabular-nums; color: var(--text); }
+.introhero.landed .introcount b { animation: countpop 480ms cubic-bezier(.34, 1.56, .64, 1); display: inline-block; }
+@keyframes countpop { 40% { transform: scale(1.12); color: var(--flame); } }
+.introunit { margin: 8px 0 0; font-size: 22px; font-weight: 500; animation: risein 520ms cubic-bezier(.2, 0, 0, 1) 380ms both; }
+.introsub { margin: 10px 0 0; font-size: 15px; color: var(--muted); animation: risein 520ms cubic-bezier(.2, 0, 0, 1) 520ms both; }
+@keyframes risein { from { opacity: 0; transform: translateY(16px); } }
 @media (max-width: 600px) {
-  .streak { padding: 0 10px 0 8px; gap: 4px; }
-  .streak .unit { display: none; }
+  .introflame, .introflame .icon, .introflame .icon svg { width: 128px; height: 128px; }
+  .introcount b { font-size: 84px; }
+  .streakcal { position: fixed; top: calc(var(--head-h) + 4px); left: 8px; right: 8px; width: auto; }
 }
 
 /* Sidebar folded from the menu button: as in Google Photos it becomes a rail
@@ -310,13 +399,9 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .sideprogress .meter > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
 .sideprogressnote { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sideprogressfoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; }
-.sideprogressfoot .streak { height: 32px; padding: 0 12px 0 9px; font-size: 13.5px; }
-.sideprogressfoot .streak .icon, .sideprogressfoot .streak .icon svg { width: 20px; height: 20px; }
-.sideprogressfoot .streak .unit { display: inline; }
-/* With no run yet the flame alone asks for one; its title says so. */
-.sideprogressfoot .streak.none { padding: 0 6px; }
-.sideprogressfoot .streak.none .unit { display: none; }
-.sideprogress:hover .streak:not(.lit) { color: var(--text); }
+/* Settings closes the sidebar, below the review meter, as Google Photos
+   keeps it out of the destinations. */
+.sidefoot { margin-top: 8px; }
 
 .panel {
   min-width: 0; min-height: calc(100vh - var(--head-h));
@@ -346,6 +431,10 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   .panel { margin-right: 0; border-radius: 20px 20px 0 0; }
 }
 @media (max-width: 600px) {
+  .gbar { display: flex; }
+  .search { flex: 1 1 auto; }
+  .gbaracts { margin-left: auto; }
+  .streakpill { padding: 0 8px 0 4px; font-size: 15px; }
   .brand svg { height: 20px; }
   .search { height: 44px; padding-right: 10px; }
   .search input { font-size: 15px; }
@@ -987,7 +1076,6 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   margin-right: 8px; padding: 0 4px;
   color: #c4c7c5; font-size: 14px; font-weight: 500; letter-spacing: .08em; line-height: 24px;
 }
-.rvformat .icon, .rvformat .icon svg { width: 22px; height: 22px; }
 .rvstage.zoom {
   padding: 0; overflow: auto; cursor: grab;
   align-items: flex-start; justify-content: flex-start;
@@ -1249,7 +1337,13 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 }
 .snack b { font-weight: 600; }
 @keyframes snackin { from { opacity: 0; transform: translateY(12px); } }
-@media (prefers-reduced-motion: reduce) { .snack { animation: none; } }
+/* Beside the sidebar they sit in the panel's corner, clear of Settings at
+   the sidebar's foot. */
+@media (min-width: 1001px) {
+  .shell .snacks { left: calc(var(--side-w) + 24px); max-width: min(680px, calc(100vw - var(--side-w) - 48px)); }
+  .shell.side-hidden .snacks { left: calc(var(--rail-w) + 24px); }
+}
+@media (prefers-reduced-motion: reduce) { .snack, .streakpill.bump, .streakpill.bump .icon, .streakcal { animation: none; } }
 .toast {
   position: fixed; left: 1.1rem; bottom: 1.1rem;
   z-index: 200;

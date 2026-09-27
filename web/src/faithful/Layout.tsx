@@ -4,6 +4,7 @@ import {Logo} from '../Logo';
 import {pathForDate} from './goto';
 import {SelectionBar,SelectionProvider,type Selection} from './selection';
 import {PageActionButtons,PageActionsProvider,type PageActions} from './pageActions';
+import {StreakCalendar,StreakIntro,StreakPill,introDue} from './Streak';
 
 export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'log'|'bin'|'settings';
 type Item={href:string;route:LegacyRoute;label:string;icon:IconName};
@@ -58,25 +59,13 @@ function DateSearch(){
   </form>;
 }
 
-/** The app's frame: a top bar with the logo, date search and Settings, a
- * sidebar of destinations, and the page on a raised panel beside it. Below
- * tablet width the sidebar becomes a drawer behind the menu button. */
+/** The app's frame: a top bar with the logo, the review streak and date
+ * search, a sidebar of destinations ending in Settings, and the page on a
+ * raised panel beside it. Below tablet width the sidebar becomes a drawer
+ * behind the menu button. */
 const narrowQuery='(max-width: 1000px)';
 const sideKey='cull-side';
 function readSideHidden(){try{return localStorage.getItem(sideKey)==='hidden'}catch{return false}}
-
-/** The run of days in a row with a review, kept in view to keep it going. It
- * is lit once today counts, and asks for today's review until then. */
-function Streak({days,today}:{days:number;today:boolean}){
-  const unit=days===1?'day':'days';
-  const title=today?`${days} ${unit} in a row with a review, today included`
-    :days>0?`${days} ${unit} in a row. Review something today to keep it going`
-    :'Review something today to start a streak';
-  // It sits inside the Reviewed link, which already opens the calendar.
-  return <span className={`streak${today?' lit':''}${days>0?'':' none'}`} title={title} aria-label={title}>
-    <Icon name="local_fire_department" filled={today}/>{days>0?<span><b>{days.toLocaleString()}</b><span className="unit"> {unit}</span></span>:<span className="unit">Start a streak</span>}
-  </span>;
-}
 
 export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:LegacyRoute;binFiles:number;reviewed?:{done:number;total:number};streak?:{days:number;today:boolean};flash?:string;children:ReactNode}){
   const [drawer,setDrawer]=useState(false);
@@ -110,14 +99,34 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
     return()=>window.removeEventListener('keydown',close);
   },[drawer]);
   const share=reviewed&&reviewed.total>0?reviewed.done/reviewed.total:0;
+  // The streak: its pill beside the logo, the calendar it opens, the opening
+  // animation once a day, and a bump when today's first review lights it.
+  const pill=useRef<HTMLButtonElement>(null);
+  const [calendarOpen,setCalendarOpen]=useState(false);
+  const [intro,setIntro]=useState(false);
+  const [bump,setBump]=useState(false);
+  const introChecked=useRef(false);
+  const litBefore=useRef<boolean|null>(null);
+  useEffect(()=>{
+    if(!streak)return;
+    if(!introChecked.current){introChecked.current=true;if(introDue(streak))setIntro(true)}
+    if(litBefore.current===false&&streak.today)setBump(true);
+    litBefore.current=streak.today;
+  },[streak]);
+  useEffect(()=>{if(!bump)return;const timer=setTimeout(()=>setBump(false),900);return()=>clearTimeout(timer)},[bump]);
   return <div className={`shell${drawer?' drawer-open':''}${sideHidden?' side-hidden':''}`}>
     {selection?<SelectionBar selection={selection}/>:<header className="gbar">
-      <button type="button" className="iconbtn menu" aria-label={narrow?(drawer?'Close the menu':'Open the menu'):(sideHidden?'Expand the menu':'Collapse the menu')} title="Main menu" aria-expanded={menuOpen} aria-controls="side" onClick={toggleMenu}><Icon name={narrow&&drawer?'close':'menu'}/></button>
-      <a className="brand" href="/" title="Today"><Logo/></a>
+      <div className="gbarstart">
+        <button type="button" className="iconbtn menu" aria-label={narrow?(drawer?'Close the menu':'Open the menu'):(sideHidden?'Expand the menu':'Collapse the menu')} title="Main menu" aria-expanded={menuOpen} aria-controls="side" onClick={toggleMenu}><Icon name={narrow&&drawer?'close':'menu'}/></button>
+        <a className="brand" href="/" title="Today"><Logo/></a>
+        {streak&&<div className="streakwrap">
+          <StreakPill streak={streak} pill={pill} open={calendarOpen} bump={bump} onToggle={()=>setCalendarOpen(open=>!open)}/>
+          {calendarOpen&&<StreakCalendar streak={streak} anchor={pill} onClose={()=>setCalendarOpen(false)}/>}
+        </div>}
+      </div>
       <DateSearch/>
       <div className="gbaracts">
         {pageActions&&<PageActionButtons page={pageActions}/>}
-        <a className={`iconbtn${route==='settings'?' on':''}`} href="/settings" aria-label="Settings" title="Settings" aria-current={route==='settings'?'page':undefined}><Icon name="settings" filled={route==='settings'}/></a>
       </div>
     </header>}
     <aside id="side" className="side">
@@ -134,13 +143,19 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
         </div>)}
       </nav>
       {reviewed&&reviewed.total>0&&<a className="sideprogress" href="/year" style={{'--share':Math.min(1,share)} as CSSProperties}
-        title={rail?`Reviewed ${reviewed.done.toLocaleString()} of ${reviewed.total.toLocaleString()} dates${streak&&streak.days>0?` · ${streak.days.toLocaleString()} ${streak.days===1?'day':'days'} in a row`:''}`:'Open the calendar'}>
+        title={rail?`Reviewed ${reviewed.done.toLocaleString()} of ${reviewed.total.toLocaleString()} dates`:'Open the calendar'}>
         <span className="sideprogresshead"><Icon name="task_alt"/><span className="sidelabel">Reviewed</span></span>
         <span className="meter" role="progressbar" aria-label="Calendar dates reviewed" aria-valuemin={0} aria-valuemax={reviewed.total} aria-valuenow={reviewed.done}><span style={{width:`${Math.min(100,share*100)}%`}}/></span>
-        <span className="sideprogressfoot"><span className="sideprogressnote">{reviewed.done.toLocaleString()} of {reviewed.total.toLocaleString()} dates</span>{streak&&<Streak days={streak.days} today={streak.today}/>}</span>
+        <span className="sideprogressfoot"><span className="sideprogressnote">{reviewed.done.toLocaleString()} of {reviewed.total.toLocaleString()} dates</span></span>
       </a>}
+      <nav className="sidefoot" aria-label="Settings">
+        <a href="/settings" className={route==='settings'?'on':undefined} aria-current={route==='settings'?'page':undefined} title={rail?'Settings':undefined}>
+          <Icon name="settings" filled={route==='settings'}/><span className="sidelabel">Settings</span>
+        </a>
+      </nav>
     </aside>
     <button type="button" className="scrim" tabIndex={-1} aria-hidden="true" onClick={()=>setDrawer(false)}/>
+    {intro&&streak&&<StreakIntro streak={streak} target={pill} onDone={()=>{setIntro(false);setBump(true)}}/>}
     <div className="panel">
       {flash&&<p className="flash" role="status">{flash}</p>}
       <main className={`${gridRoutes.has(route)?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}><PageActionsProvider value={setPageActions}>{children}</PageActionsProvider></SelectionProvider></main>

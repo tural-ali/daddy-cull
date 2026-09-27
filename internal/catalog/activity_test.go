@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -47,5 +48,29 @@ func TestActivityStreakCountsConsecutiveReviewDaysInTheViewersZone(t *testing.T)
 	// counted from today: nothing tomorrow means no streak the day after.
 	if got, err = s.Activity(ctx, berlin, time.Now().In(berlin).AddDate(0, 0, 2)); err != nil || got.Streak != 0 {
 		t.Fatalf("a missed day ends the streak: %+v %v", got, err)
+	}
+}
+
+func TestStreakListsReviewDaysAndTheLongestRun(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.write.Exec(`INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(1,'/archive/2020/2020-09/2020-09-25/A.jpg',1,'image',1,'archive')`); err != nil {
+		t.Fatal(err)
+	}
+	// Three days in a row in early September, a gap, then two in a row up to
+	// yesterday, with two reviews on one day counted once.
+	for i, at := range []string{"2026-09-01 10:00:00", "2026-09-02 10:00:00", "2026-09-03 10:00:00", "2026-09-03 11:00:00", "2026-09-23 10:00:00", "2026-09-24 10:00:00"} {
+		if _, err := s.write.Exec(`INSERT INTO decision_events(request_id,asset_id,expected_revision,status,favourite,previous_status,previous_favourite,created_at) VALUES(?,1,0,'keep',0,'unreviewed',0,?)`, "s"+string(rune('a'+i)), at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	london, _ := time.LoadLocation("Europe/London")
+	got, err := s.Streak(ctx, london, time.Date(2026, 9, 25, 9, 0, 0, 0, london))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"2026-09-01", "2026-09-02", "2026-09-03", "2026-09-23", "2026-09-24"}
+	if got.Streak != 2 || got.Today || got.Best != 3 || strings.Join(got.Days, ",") != strings.Join(want, ",") {
+		t.Fatalf("%+v", got)
 	}
 }

@@ -218,7 +218,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     <div className="rvtop" onMouseUp={event=>(event.target as HTMLElement).closest('button')?.blur()}>
       <button type="button" className="rvact rvback" aria-label="Back to the grid" title="Back (Esc)" onClick={leave}><Icon name="arrow_back"/></button>
       <div className="rvacts">
-        {format(current)&&<span className="rvformat" title={name.split('.').pop()?.toUpperCase()}>{current.kind==='raw'&&<Icon name="raw_on"/>}{format(current)}</span>}
+        {format(current)&&<span className="rvformat" title={name.split('.').pop()?.toUpperCase()}>{format(current)}</span>}
         {(current.relatedCount??0)>0&&<button type="button" className="rvact cmp" aria-label="Compare similar photos" title="Compare (C)" onClick={()=>void openCompare()}><Icon name="compare"/></button>}
         <button type="button" className="rvact zoom" aria-label="Zoom" aria-pressed={zoom} title="Zoom (Z)" onClick={()=>setZoom(value=>!value)}><Icon name="zoom_in" filled={zoom}/></button>
         <button type="button" className="rvact infobtn" aria-label="Info" aria-pressed={info} title="Info (I)" onClick={()=>setInfo(value=>!value)}><Icon name="info" filled={info}/></button>

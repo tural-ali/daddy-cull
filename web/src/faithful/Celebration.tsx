@@ -9,7 +9,7 @@ const confettiTime=3200;
 function easeOut(t:number){return 1-(1-t)**3}
 
 /** A number that climbs from nought to its value as the card settles. */
-function useCountUp(value:number,run:boolean){
+export function useCountUp(value:number,run:boolean){
   const [shown,setShown]=useState(run?0:value);
   useEffect(()=>{
     if(!run){setShown(value);return}
@@ -26,11 +26,11 @@ function useCountUp(value:number,run:boolean){
   return shown;
 }
 
-function stillMotion(){return matchMedia('(prefers-reduced-motion: reduce)').matches}
+export function stillMotion(){return matchMedia('(prefers-reduced-motion: reduce)').matches}
 
 /** Paper falling over the page: a burst from the top centre in the logo's
  * colours, drawn on a canvas for as long as it takes to settle. */
-function Confetti(){
+export function Confetti(){
   const canvas=useRef<HTMLCanvasElement>(null);
   useEffect(()=>{
     const element=canvas.current;
