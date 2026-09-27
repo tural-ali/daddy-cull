@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {binChanged,type Asset,type Status} from '../api';
 import {Media} from '../Media';
 import {useDecisionQueue} from '../useDecisionQueue';
@@ -333,6 +333,15 @@ export function Today({initial}:{initial:TodayData}){
     done:dateDone,years:years.length,yearsDone:doneYears,previous:initial.previous,next:initial.next});
   // A link to a RAW that shows behind its JPEG opens the pair.
   const viewing=viewer===null?null:[...behind].find(([,raw])=>raw.id===viewer)?.[0]??viewer;
+  // The viewer walks the files the grid showed when it opened. A choice that
+  // takes a file out of the filter keeps it in the walk until the viewer
+  // closes, so the next file is the grid's next, and nothing the filter hid
+  // (a file removed earlier, say) ever comes up.
+  const walk=useRef<ReadonlySet<number>|'all'|null>(null);
+  if(viewing===null)walk.current=null;
+  else if(walk.current===null)walk.current=filters.size>0&&shownIDs.has(viewing)?shownIDs:'all';
+  const frozen=walk.current;
+  const walked=useMemo(()=>frozen===null||frozen==='all'?tiles:tiles.filter(asset=>frozen.has(asset.id)),[tiles,frozen]);
   usePageActions(assets.length>0&&doneYears<years.length?{actions:[{label:`Mark ${initial.label} reviewed`,short:'Mark reviewed',icon:'task_alt',disabled:saving||queue.pending>0,onClick:()=>void markDate()}]}:null);
   return <>
     <h1 className="vh">{pageLabel}</h1>
@@ -377,7 +386,7 @@ export function Today({initial}:{initial:TodayData}){
       {tip&&assets.length>0&&<div className="snack" role="status">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>{undoKeys.undo}</b> undo, <b>{undoKeys.redo}</b> redo, <b>?</b> for the rest</div>}
     </div>}
     {cheer&&<Celebration tally={cheer} nextHref={`/on/${initial.next}`} nextLabel={calendarLabel(initial.next)} onClose={()=>setCheer(null)}/>}
-    {viewing!==null&&<Viewer assets={shownIDs.has(viewing)?shown:tiles} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset} onRecord={history.record}
+    {viewing!==null&&<Viewer assets={walked} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset} onRecord={history.record}
       rawOf={asset=>behind.get(asset.id)} onUnpair={(photo,raw)=>void pairing(raw.id,photo.id,false)}/>}
   </>;
 }

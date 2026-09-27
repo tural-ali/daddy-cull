@@ -172,7 +172,10 @@ func (s *Store) serveMedia(w http.ResponseWriter, r *http.Request, roots MediaRo
 		s.servePoster(w, r, source.posterID, roots.Posters)
 		return
 	}
-	if mode == "original" && !playableVideo[extension] && !viewableImage[extension] {
+	// A clip the browser cannot play is played from an MP4 copy made on the
+	// way; anything else it cannot show is refused.
+	convert := mode == "original" && !playableVideo[extension] && videoContainer[extension] && roots.FFmpeg != "" && roots.Cache != ""
+	if mode == "original" && !playableVideo[extension] && !viewableImage[extension] && !convert {
 		http.Error(w, "this format cannot be shown without a transcode", 415)
 		return
 	}
@@ -195,6 +198,25 @@ func (s *Store) serveMedia(w http.ResponseWriter, r *http.Request, roots MediaRo
 		return
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	if convert {
+		copyPath, convertErr := playableCopy(r.Context(), roots.FFmpeg, file, roots.Cache, source.subject, info.Size(), info.ModTime().Unix())
+		if convertErr != nil {
+			log.Printf("playable %s: %v", source.subject, convertErr)
+			http.Error(w, "this clip could not be converted for the browser", 415)
+			return
+		}
+		playable, openErr := os.Open(copyPath)
+		if openErr != nil {
+			http.Error(w, "converted clip unavailable", 503)
+			return
+		}
+		defer playable.Close()
+		w.Header().Set("Content-Type", "video/mp4")
+		w.Header().Set("Cache-Control", "private, max-age=3600")
+		http.ServeContent(w, r, "clip.mp4", info.ModTime(), playable)
+		return
+	}
 
 	if rawPreviewWanted || stillPreviewWanted {
 		// The viewer asks for the large size; a grid asks for a tile.
