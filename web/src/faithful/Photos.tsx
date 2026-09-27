@@ -12,7 +12,8 @@ type PhotosAsset={id:string;name:string;created:string;favourite:boolean;thumb?:
 type Row={id:string;action:'delete'|'favourite';keys:string[];name:string;day:string;original:string;kind:string;ext:string;state?:'marked'|'bin'|'purged';preview?:string;how:'exact'|'near';photos:PhotosAsset[];outcome?:'deleted'|'not-deleted'|'favourited'|'failed';outcomeError?:string};
 type Held={name:string;day:string;kept:string};
 type Result={nothing?:boolean;deleted:number;notDeleted:number;favourited:number;favouriteFailed:number;note?:string};
-type Job=Summary&{created:string;updated:string;toCheck:number;delete:Row[];favourite:Row[];missing:{action:string;name:string;day:string}[];held:Held[];undated:number;selected:string[];skipped:number;result?:Result};
+type Missing={action:string;name:string;day:string;why?:'shared-album'|'other-day'};
+type Job=Summary&{created:string;updated:string;toCheck:number;delete:Row[];favourite:Row[];missing:Missing[];held:Held[];undated:number;selected:string[];skipped:number;result?:Result};
 type Restored={key:string;name:string;day:string;syncedAt:string};
 type Overview={delete:number;favourite:number;held:number;undated:number;restored:Restored[];synced:{deleted:number;favourited:number;last:string}};
 
@@ -59,10 +60,19 @@ function ago(value:string|undefined,now:string){
   return `on ${when(value)}`;
 }
 
+// Files Cull Sync did not find, grouped by what it saw instead, so a reviewer
+// who knows a photograph is in Photos learns why it was not offered.
+const missingGroups:{why:string;title:(n:number)=>string;hint:string}[]=[
+  {why:'',title:n=>`${plural(n,'file')} not in this Mac's Photos library`,hint:'Cull Sync can only change the library signed in on this Mac. These may be in another family member\'s library, or already deleted from Photos.'},
+  {why:'shared-album',title:n=>`${plural(n,'file')} only in a shared album`,hint:'Cull Sync never changes a shared album. To remove one, delete it from the album in Photos.'},
+  {why:'other-day',title:n=>`${plural(n,'file')} not found: Photos has the name only on another day`,hint:'Cameras reuse file numbers, so that is a different photograph and is left alone.'},
+];
+
 function progress(job:Summary,deletes:number):{label:string;state:'connecting'|'searching'|'working'|'listening'|'solving'}{
   if(job.state==='queued_check')return {label:'Waiting for Cull Sync on the Mac to pick this up…',state:'connecting'};
   if(job.state==='queued_apply')return {label:'Waiting for Cull Sync on the Mac to pick up the changes…',state:'connecting'};
   if(job.state==='checking'){
+    if(job.stage==='shared')return {label:'Reading shared albums on the Mac…',state:'searching'};
     if(job.stage==='matching')return {label:'Finding each photograph in Photos…',state:'searching'};
     if(job.stage==='thumbnails')return {label:'Fetching previews from Photos…',state:'searching'};
     return {label:'Reading the Photos library on the Mac…',state:'searching'};
@@ -332,7 +342,10 @@ export function Photos(){
       <RowGroup title="Delete from Photos" hint="Left: the file in the archive. Right: what Cull Sync found in Photos. Each goes to Recently Deleted." rows={rows(view.delete)} chosen={chosen} editable={planned} onToggle={toggle} onAll={all}/>
       <RowGroup title="Mark as favourite in Photos" hint="Favourites in Cull that Photos has not been given yet. A heart on the right means Photos already has it as a favourite." rows={rows(view.favourite)} chosen={chosen} editable={planned} onToggle={toggle} onAll={all}/>
       {(view.missing.length>0||view.held.length>0||view.undated>0)&&<section className="psec quiet">
-        {view.missing.length>0&&<details className="pmore"><summary>{plural(view.missing.length,'file')} not found in Photos</summary><p className="hint">Nothing to do for these: Photos has no photograph of that name on that day.</p><ul className="plain">{view.missing.slice(0,300).map((item,index)=><li key={index}><span className="mono">{item.name}</span> · {day(item.day)}{item.action==='favourite'&&' · favourite'}</li>)}</ul>{view.missing.length>300&&<p>and {(view.missing.length-300).toLocaleString()} more.</p>}</details>}
+        {missingGroups.map(group=>{
+          const items=view.missing.filter(item=>(item.why??'')===group.why);
+          return items.length>0&&<details className="pmore" key={group.why} data-why={group.why||'none'}><summary>{group.title(items.length)}</summary><p className="hint">{group.hint}</p><ul className="plain">{items.slice(0,300).map((item,index)=><li key={index}><span className="mono">{item.name}</span> · {day(item.day)}{item.action==='favourite'&&' · favourite'}</li>)}</ul>{items.length>300&&<p>and {(items.length-300).toLocaleString()} more.</p>}</details>;
+        })}
         {view.held.length>0&&<details className="pmore"><summary>{view.held.length.toLocaleString()} not deleted from Photos: you kept another copy of {view.held.length===1?'it':'each'}, such as the JPG of a HEIC</summary><ul className="plain">{view.held.slice(0,300).map((item,index)=><li key={index}><span className="mono">{item.name}</span> · {day(item.day)} · kept as <span className="mono">{item.kept}</span></li>)}</ul>{view.held.length>300&&<p>and {(view.held.length-300).toLocaleString()} more.</p>}</details>}
         {view.undated>0&&<p className="hint">{plural(view.undated,'removed file')} {view.undated===1?'has':'have'} no date to match on and {view.undated===1?'is':'are'} left alone.</p>}
       </section>}

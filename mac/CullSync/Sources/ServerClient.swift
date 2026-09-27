@@ -39,6 +39,8 @@ struct Heartbeat: Encodable, Sendable {
 struct MatchReport: Encodable, Sendable {
     var matches: [ReportedMatch] = []
     var missing: [String] = []
+    /// Why some of missing were not found, as MissReason raw values.
+    var reasons: [String: String] = [:]
 }
 
 struct ReportedMatch: Encodable, Sendable {

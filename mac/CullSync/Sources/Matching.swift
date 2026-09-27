@@ -138,4 +138,30 @@ struct LibraryIndex: Sendable {
         }
         return .missing
     }
+
+    /// Whether the library holds this name and type, but on no asset dated the
+    /// given day.
+    func holdsOnlyOnOtherDays(stem: String, ext: String, day: String) -> Bool {
+        !(byName[Self.key(stem, ext)] ?? []).isEmpty && (byKey[Self.key(stem, ext, day)] ?? []).isEmpty
+    }
+}
+
+/// Why an entry was not found, sent so the page can tell a reviewer who knows
+/// the photograph is in Photos what the helper saw instead. The values mirror
+/// photosWhySharedAlbum and photosWhyOtherDay on the server.
+enum MissReason: String, Sendable {
+    /// A Shared Album holds it. That is not the library, and Cull Sync never
+    /// changes an album.
+    case sharedAlbum = "shared-album"
+    /// The library has the name on another day only. Camera numbers repeat, so
+    /// that is another photograph.
+    case otherDay = "other-day"
+
+    /// Nil when nothing the helper can read has the name at all: the file is in
+    /// someone else's library, or was deleted from Photos long ago.
+    static func explain(stem: String, ext: String, day: String, library: LibraryIndex, shared: LibraryIndex) -> MissReason? {
+        if shared.match(stem: stem, ext: ext, day: day) != .missing { return .sharedAlbum }
+        if library.holdsOnlyOnOtherDays(stem: stem, ext: ext, day: day) { return .otherDay }
+        return nil
+    }
 }

@@ -229,14 +229,24 @@ actor Agent {
                 await self.progress("reading", done, total, activity: "Reading the Photos library… \(done.formatted()) of \(total.formatted())")
             }
             if cancelled { throw Stopped() }
+            await progress("shared", activity: "Reading shared albums…")
+            let shared = await library.sharedIndex { done, total in
+                await self.progress("shared", done, total, activity: "Reading shared albums… \(done.formatted()) of \(total.formatted())")
+            }
+            if cancelled { throw Stopped() }
 
             var found: [(entry: TaskEntry, how: String, assets: [LibraryAsset])] = []
             var missing: [String] = []
+            var reasons: [String: String] = [:]
             for (position, entry) in entries.enumerated() {
                 switch index.match(stem: entry.stem, ext: entry.ext, day: entry.day) {
                 case .exact(let assets): found.append((entry, "exact", assets))
                 case .near(let asset): found.append((entry, "near", [asset]))
-                case .missing: missing.append(entry.id)
+                case .missing:
+                    missing.append(entry.id)
+                    if let why = MissReason.explain(stem: entry.stem, ext: entry.ext, day: entry.day, library: index, shared: shared) {
+                        reasons[entry.id] = why.rawValue
+                    }
                 }
                 if position % 200 == 0 {
                     await progress("matching", position, entries.count, activity: "Finding photographs in Photos…")
@@ -245,7 +255,9 @@ actor Agent {
             await progress("matching", entries.count, entries.count, activity: "Finding photographs in Photos…")
 
             for chunk in stride(from: 0, to: missing.count, by: 1000).map({ Array(missing[$0..<min($0 + 1000, missing.count)]) }) {
-                try await deliver(attempts: 3) { try await client.matches(task.jobId, MatchReport(missing: chunk)) }
+                let ids = Set(chunk)
+                let report = MatchReport(missing: chunk, reasons: reasons.filter { ids.contains($0.key) })
+                try await deliver(attempts: 3) { try await client.matches(task.jobId, report) }
             }
 
             // Matches go in small batches, so progress moves steadily and no one

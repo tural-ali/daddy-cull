@@ -125,6 +125,28 @@ do {
     }
 }
 
+// A file not found says what the helper saw instead, so a reviewer who knows
+// it is in Photos is not left guessing.
+do {
+    let library = LibraryIndex([
+        asset("DNG", "IMG_8156.DNG", "2025-04-08T17:20:00Z"),
+        asset("OLD", "IMG_0412.MOV", "2019-07-01T10:00:00Z"),
+        asset("TWIN1", "IMG_0500.JPG", "2021-05-05T10:00:00Z"),
+        asset("TWIN2", "IMG_0500.JPG", "2022-05-05T10:00:00Z"),
+    ], zone: utc)
+    let shared = LibraryIndex([asset("S", "IMG_8190.MOV", "2025-04-08T18:00:00Z")], zone: utc)
+    func why(_ stem: String, _ ext: String, _ day: String) -> MissReason? {
+        MissReason.explain(stem: stem, ext: ext, day: day, library: library, shared: shared)
+    }
+    expect(why("IMG_8190", "mov", "2025-04-08") == .sharedAlbum, "a clip in a Shared Album says so")
+    expect(why("IMG_0412", "mov", "2024-12-25") == .otherDay, "the name on another day says so")
+    expect(why("IMG_0500", "jpg", "2021-05-06") == .otherDay, "an ambiguous name a day off is another day")
+    expect(why("IMG_8157", "mov", "2025-04-08") == nil, "a clip nothing here holds has no reason")
+    expect(why("IMG_8156", "mov", "2025-04-08") == nil, "a raw of the same number is not the clip")
+    expect(why("IMG_8190", "mov", "2025-04-20") == nil, "a Shared Album clip on another day is not it")
+    expect(MissReason.sharedAlbum.rawValue == "shared-album" && MissReason.otherDay.rawValue == "other-day", "the server's spelling")
+}
+
 // sync.conf
 do {
     let config = SyncConfig.parse("""

@@ -9,6 +9,9 @@ actor PhotoLibrary {
     /// part of indexing a large library, and a name never changes, so the second
     /// check onwards reads only what is new.
     private var names: [String: String] = [:]
+    /// The same for Shared Albums, kept apart so a shared asset can never be
+    /// taken for one in the library.
+    private var sharedNames: [String: String] = [:]
 
     static let thumbnailPixels = 240
     /// The server keeps nothing larger, so a bigger JPEG would only be dropped.
@@ -67,7 +70,25 @@ actor PhotoLibrary {
     /// Every asset in the library, indexed for matching. Progress is reported
     /// as it goes, because a first read of a large library takes a while.
     func index(progress: @Sendable (Int, Int) async -> Void) async -> LibraryIndex {
-        let result = PHAsset.fetchAssets(with: Self.options())
+        let (assets, seen) = await Self.read(Self.options(), known: names, progress: progress)
+        names = seen
+        return LibraryIndex(assets, zone: .current)
+    }
+
+    /// Every photograph in the Shared Albums this Mac subscribes to. These are
+    /// only read, to say why a file was not found: nothing is ever matched,
+    /// deleted or favourited from here.
+    func sharedIndex(progress: @Sendable (Int, Int) async -> Void) async -> LibraryIndex {
+        let options = PHFetchOptions()
+        options.includeHiddenAssets = true
+        options.includeAssetSourceTypes = [.typeCloudShared]
+        let (assets, seen) = await Self.read(options, known: sharedNames, progress: progress)
+        sharedNames = seen
+        return LibraryIndex(assets, zone: .current)
+    }
+
+    private static func read(_ options: PHFetchOptions, known: [String: String], progress: @Sendable (Int, Int) async -> Void) async -> ([LibraryAsset], [String: String]) {
+        let result = PHAsset.fetchAssets(with: options)
         let total = result.count
         var assets: [LibraryAsset] = []
         assets.reserveCapacity(total)
@@ -76,14 +97,13 @@ actor PhotoLibrary {
         for position in 0..<total {
             let asset = result.object(at: position)
             let id = asset.localIdentifier
-            let name = names[id] ?? Self.name(of: asset)
+            let name = known[id] ?? name(of: asset)
             seen[id] = name
             assets.append(LibraryAsset(id: id, name: name, created: asset.creationDate, favourite: asset.isFavorite))
             if position % 250 == 0 { await progress(position, total) }
         }
-        names = seen
         await progress(total, total)
-        return LibraryIndex(assets, zone: .current)
+        return (assets, seen)
     }
 
     /// A small JPEG of one asset, or nil if Photos has none to hand. Only what

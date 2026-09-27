@@ -25,10 +25,14 @@ async function mock(page,videoMuted=true){
 }
 
 const state=page=>page.locator('.rv video').evaluate(v=>({muted:v.muted,volume:Math.round(v.volume*100)/100}));
+// A clip with its sound on plays against the audio clock, so a Mac with no
+// speaker to hand (lid shut, nothing plugged in) would leave it stuck at 0:00.
+// A fake audio sink keeps the test about the page, not the Mac.
+const launch={channel:'chrome',headless:true,args:['--autoplay-policy=no-user-gesture-required','--disable-audio-output']};
 async function playing(page){await page.waitForFunction(()=>{const v=document.querySelector('.rv video');return v&&!v.paused&&v.currentTime>0})}
 
 (async()=>{
-  const browser=await chromium.launch({channel:'chrome',headless:true,args:['--autoplay-policy=no-user-gesture-required']});
+  const browser=await chromium.launch(launch);
   const context=await browser.newContext({viewport:{width:1280,height:800}});
   const page=await context.newPage();
   await mock(page);
@@ -68,7 +72,7 @@ async function playing(page){await page.waitForFunction(()=>{const v=document.qu
 
   // Settings can make sound the default. A tab that then mutes a clip stays
   // quiet, and choosing "Start muted" again forgets that tab's choice.
-  const chosen=await chromium.launch({channel:'chrome',headless:true,args:['--autoplay-policy=no-user-gesture-required']});
+  const chosen=await chromium.launch(launch);
   const loud=await (await chosen.newContext()).newPage();
   await mock(loud,false);
   await loud.goto(`${base}/on/09-07/photo/1`);

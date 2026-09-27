@@ -127,12 +127,15 @@ type photosJob struct {
 	undated          int
 	matches          map[string]photosMatch
 	reported         map[string]bool
-	thumbs           [][]byte
-	thumbBytes       int
-	selected         []string
-	skipped          int
-	outcomes         map[string]photosOutcome
-	result           *PhotosResult
+	// why says, for an entry Photos does not hold, what the helper saw
+	// instead: photosWhySharedAlbum or photosWhyOtherDay, or nothing at all.
+	why        map[string]string
+	thumbs     [][]byte
+	thumbBytes int
+	selected   []string
+	skipped    int
+	outcomes   map[string]photosOutcome
+	result     *PhotosResult
 	// checked is set once the helper has said it looked at every entry, so an
 	// entry it never mentioned can be called not in Photos.
 	checked bool
@@ -304,7 +307,7 @@ func (h *PhotosHub) StartCheck(ctx context.Context) (PhotosJobView, error) {
 	j := &photosJob{
 		id: newPhotosJobID(), state: "queued_check", created: now, updated: now,
 		byID: map[string]int{}, held: plan.Held, undated: plan.Undated,
-		matches: map[string]photosMatch{}, reported: map[string]bool{}, outcomes: map[string]photosOutcome{},
+		matches: map[string]photosMatch{}, reported: map[string]bool{}, why: map[string]string{}, outcomes: map[string]photosOutcome{},
 	}
 	j.entries = append(append(j.entries, plan.Delete...), plan.Favourite...)
 	for i, entry := range j.entries {
@@ -541,7 +544,19 @@ type PhotosHeartbeat struct {
 type PhotosMatchReport struct {
 	Matches []PhotosReportedMatch `json:"matches"`
 	Missing []string              `json:"missing"`
+	// Reasons says, for some of Missing, what Photos holds instead, so the page
+	// can tell a reviewer why a file they know is in Photos was not offered.
+	Reasons map[string]string `json:"reasons,omitempty"`
 }
+
+// The reasons a helper gives for not finding an entry. A photograph in a
+// Shared Album is not in the library, and Cull Sync never changes an album; a
+// name found only on another day is another photograph, since camera numbers
+// repeat.
+const (
+	photosWhySharedAlbum = "shared-album"
+	photosWhyOtherDay    = "other-day"
+)
 
 // PhotosReportedMatch is one entry and the Photos assets that answer to it.
 type PhotosReportedMatch struct {
@@ -580,8 +595,15 @@ func (h *PhotosHub) Matches(jobID string, report PhotosMatchReport) error {
 			}
 		}
 	}
+	missing := make(map[string]bool, len(report.Missing))
 	for _, id := range report.Missing {
 		if _, ok := j.byID[id]; !ok {
+			return ErrInvalid
+		}
+		missing[id] = true
+	}
+	for id, why := range report.Reasons {
+		if !missing[id] || (why != photosWhySharedAlbum && why != photosWhyOtherDay) {
 			return ErrInvalid
 		}
 	}
@@ -601,11 +623,17 @@ func (h *PhotosHub) Matches(jobID string, report PhotosMatchReport) error {
 		}
 		j.matches[match.ID] = stored
 		j.reported[match.ID] = true
+		delete(j.why, match.ID)
 	}
 	for _, id := range report.Missing {
 		h.dropThumbsLocked(j, id)
 		delete(j.matches, id)
 		j.reported[id] = true
+		if why := report.Reasons[id]; why != "" {
+			j.why[id] = why
+		} else {
+			delete(j.why, id)
+		}
 	}
 	j.rev++
 	return nil
@@ -879,6 +907,9 @@ type PhotosMissing struct {
 	Action string `json:"action"`
 	Name   string `json:"name"`
 	Day    string `json:"day"`
+	// Why is what Photos holds instead, when the helper saw something: see
+	// photosWhySharedAlbum and photosWhyOtherDay.
+	Why string `json:"why,omitempty"`
 }
 
 // Job returns the full view of a job.
@@ -909,7 +940,7 @@ func (h *PhotosHub) viewLocked(j *photosJob) PhotosJobView {
 		match, found := j.matches[entry.ID]
 		if !found {
 			if j.reported[entry.ID] || j.checked {
-				view.Missing = append(view.Missing, PhotosMissing{Action: entry.Action, Name: entry.Name, Day: entry.Day})
+				view.Missing = append(view.Missing, PhotosMissing{Action: entry.Action, Name: entry.Name, Day: entry.Day, Why: j.why[entry.ID]})
 			}
 			continue
 		}

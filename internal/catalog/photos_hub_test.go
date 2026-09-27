@@ -329,6 +329,9 @@ func TestPhotosReportsAreValidated(t *testing.T) {
 		"no assets":     {Matches: []PhotosReportedMatch{{ID: id, How: "exact"}}},
 		"empty id":      {Matches: []PhotosReportedMatch{{ID: id, How: "exact", Photos: []PhotosReportedAsset{{ID: ""}}}}},
 		"unknown miss":  {Missing: []string{"favourite:asset:1"}},
+		"reason for a match": {Matches: []PhotosReportedMatch{{ID: id, How: "exact", Photos: []PhotosReportedAsset{{ID: "A"}}}},
+			Reasons: map[string]string{id: photosWhySharedAlbum}},
+		"unknown reason": {Missing: []string{id}, Reasons: map[string]string{id: "deleted"}},
 	} {
 		if err := h.Matches(view.ID, report); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%s: %v", name, err)
@@ -353,6 +356,54 @@ func TestPhotosReportsAreValidated(t *testing.T) {
 	}
 	if h.job.thumbBytes != len(fakeJPEG) {
 		t.Fatalf("thumbnail bytes %d after a retry", h.job.thumbBytes)
+	}
+}
+
+// A file the helper did not find says what it saw instead, so a reviewer who
+// knows the photograph is in Photos learns why it was not offered. A retried
+// report replaces what the first one said.
+func TestPhotosMissSaysWhy(t *testing.T) {
+	h, _, _ := photosHubFixture(t)
+	view, _ := h.StartCheck(context.Background())
+	task := claimNow(t, h)
+	ids := map[string]string{}
+	for _, entry := range task.Entries {
+		ids[entry.Name] = entry.ID
+	}
+	shared, other, found := ids["IMG_1001.HEIC"], ids["IMG_6748.PNG"], ids["IMG_3000.JPG"]
+	if shared == "" || other == "" || found == "" {
+		t.Fatalf("entries %v", ids)
+	}
+	if err := h.Matches(view.ID, PhotosMatchReport{Missing: []string{shared, other, found}, Reasons: map[string]string{
+		shared: photosWhySharedAlbum, other: photosWhyOtherDay, found: photosWhyOtherDay,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	// The retry finds one of them and no longer sees the other day's file.
+	if err := h.Matches(view.ID, PhotosMatchReport{
+		Matches: []PhotosReportedMatch{{ID: found, How: "exact", Photos: []PhotosReportedAsset{{ID: "A", Thumb: fakeJPEG}}}},
+		Missing: []string{shared, other},
+		Reasons: map[string]string{shared: photosWhySharedAlbum},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	h.Checked(view.ID)
+	view, _ = h.Job(view.ID)
+	got := map[string]string{}
+	for _, miss := range view.Missing {
+		got[miss.Name] = miss.Why
+	}
+	if got["IMG_1001.HEIC"] != photosWhySharedAlbum {
+		t.Fatalf("the shared album is not named: %v", got)
+	}
+	if reason, ok := got["IMG_6748.PNG"]; !ok || reason != "" {
+		t.Fatalf("a retried miss keeps its old reason: %q %v", reason, ok)
+	}
+	if _, ok := got["IMG_3000.JPG"]; ok {
+		t.Fatalf("a matched file is still listed as missing: %v", got)
+	}
+	if len(h.job.why) != 1 {
+		t.Fatalf("reasons left behind: %v", h.job.why)
 	}
 }
 
