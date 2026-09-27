@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // serveMedia drives the handler the way the mux does, since the route values are
@@ -272,6 +273,20 @@ func TestLocalMediaScalesGalleryTiles(t *testing.T) {
 	}
 	if again := serveMedia(t, handler, "1", "preview", nil); !bytes.Equal(again.Body.Bytes(), tile.Body.Bytes()) {
 		t.Fatal("cached tile differs from the generated one")
+	}
+	// A browser holding a tile drawn before the last change to how tiles are
+	// drawn revalidates with the file's own time, and must get the new tile
+	// rather than being told to keep the old one.
+	old := tileRevision.Add(-time.Hour)
+	if err = os.Chtimes(filepath.Join(root, "big.png"), old, old); err != nil {
+		t.Fatal(err)
+	}
+	redrawn := serveMedia(t, handler, "1", "preview", http.Header{"If-Modified-Since": {old.UTC().Format(http.TimeFormat)}})
+	if redrawn.Code != 200 {
+		t.Fatalf("a tile older than the renderer revalidated with %d", redrawn.Code)
+	}
+	if kept := serveMedia(t, handler, "1", "preview", http.Header{"If-Modified-Since": {redrawn.Header().Get("Last-Modified")}}); kept.Code != 304 {
+		t.Fatalf("a current tile revalidated with %d, wanted 304", kept.Code)
 	}
 	// Asking for the large view still gets the untouched original.
 	request := httptest.NewRequest("GET", "/api/media/1/preview?size=large", nil)
@@ -676,7 +691,12 @@ func TestVideoFrameToneMapsAnHDRClip(t *testing.T) {
 	for _, c := range []struct {
 		transfer string
 		toneMap  bool
-	}{{"arib-std-b67", true}, {"smpte2084", true}, {"bt709", false}, {"", false}} {
+	}{
+		{"arib-std-b67", true}, {"smpte2084", true}, {"bt709", false}, {"", false},
+		// An iPhone clip carries Dolby Vision side data, and the prober then
+		// ends the line with an empty field: this is its real output.
+		{"arib-std-b67,", true}, {"bt709,", false},
+	} {
 		if err := os.WriteFile(filepath.Join(tools, "transfer"), []byte(c.transfer+"\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}

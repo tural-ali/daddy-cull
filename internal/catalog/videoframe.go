@@ -29,9 +29,10 @@ func videoFrame(ctx context.Context, tool string, file *os.File, cacheDir, subje
 	if tool == "" {
 		return nil, fmt.Errorf("no frame extractor configured")
 	}
-	// The kind names the second generation of frames: the first was cut
-	// without tone mapping, so an HDR clip's frame came out grey.
-	return cachedBytes(cacheDir, "frame2", subject, size, mtime, func() ([]byte, error) {
+	// The kind names the generation of frames. The first was cut without tone
+	// mapping, so an HDR clip's frame came out grey; the second missed every
+	// iPhone clip with Dolby Vision data, whose probe line ends in a comma.
+	return cachedBytes(cacheDir, "frame3", subject, size, mtime, func() ([]byte, error) {
 		return withWorker(ctx, func() ([]byte, error) {
 			hdr := isHDR(ctx, probeTool(tool), file)
 			// A second past the start avoids the black or half-faded opening
@@ -126,7 +127,14 @@ func isHDR(ctx context.Context, probe string, file *os.File) bool {
 	if err != nil {
 		return false
 	}
-	return hdrTransfers[strings.TrimSpace(string(out))]
+	// The line can carry empty trailing fields, as it does for an iPhone clip
+	// with Dolby Vision side data ("arib-std-b67,"), so each field is read.
+	for _, field := range strings.FieldsFunc(string(out), func(r rune) bool { return r == ',' || r == '\n' || r == '\r' || r == ' ' }) {
+		if hdrTransfers[field] {
+			return true
+		}
+	}
+	return false
 }
 
 // runFrameExtractor decodes one frame to JPEG on standard output. seconds is the

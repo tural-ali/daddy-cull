@@ -101,7 +101,18 @@ func downscale(source image.Image, max int) image.Image {
 	return target
 }
 
-// thumbnailModTime is the timestamp reported for a generated tile. The tile is
-// derived from the file, so the file's own time is what a conditional request
-// should be validated against.
-func thumbnailModTime(info os.FileInfo) time.Time { return info.ModTime() }
+// tileRevision is when the way tiles are drawn last changed. A tile is
+// derived from its file and from this code, so a browser holding a tile drawn
+// before it must not be told nothing has changed. Move it forward whenever a
+// change to decoding, tone mapping or sizing alters existing tiles.
+var tileRevision = time.Date(2026, 9, 27, 0, 0, 0, 0, time.UTC)
+
+// thumbnailModTime is the timestamp reported for a generated tile: the later
+// of the file's own time and the last change to how tiles are drawn, so a
+// conditional request revalidates against both.
+func thumbnailModTime(info os.FileInfo) time.Time {
+	if modified := info.ModTime(); modified.After(tileRevision) {
+		return modified
+	}
+	return tileRevision
+}
