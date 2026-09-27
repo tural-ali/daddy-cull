@@ -1,4 +1,4 @@
-import {Fragment,useMemo,useState} from 'react';
+import {Fragment,useMemo,useRef,useState} from 'react';
 import {decide,type Asset,type Status} from '../api';
 import {Media} from '../Media';
 import {Busy} from '../Busy';
@@ -28,13 +28,21 @@ function verb(event:HistoryEvent):[string,string]{
   return ['Decision cleared',''];
 }
 
+/** How many choices the Log reads at a time; the first page is read by the app. */
+export const logPage=200;
+
 export function Log({initial}:{initial:HistoryEvent[]}){
   const [events,setEvents]=useState(initial);
+  // Older choices are read a page at a time, back to the very first.
+  const [more,setMore]=useState(initial.length>=logPage);
+  const [loading,setLoading]=useState(false);
+  const known=useRef(events);
+  known.current=events;
   const [undone,setUndone]=useState<Set<string>>(new Set());
   // The choice being undone, so only its tile says it is working.
   const [busy,setBusy]=useState('');
   const [message,setMessage]=useState('');
-  const photo=usePhotoURL(id=>initial.some(event=>String(event.asset.id)===id));
+  const photo=usePhotoURL(id=>known.current.some(event=>String(event.asset.id)===id));
   const viewing=photo.open===null?null:Number(photo.open);
   // The viewer steps through photographs, not events: a file chosen twice is
   // one frame, at the place of its latest choice.
@@ -56,6 +64,18 @@ export function Log({initial}:{initial:HistoryEvent[]}){
       setMessage(`${event.asset.path.split('/').pop()} is back to how it was. The undo is saved as a new choice.`);
     }catch(error){setMessage((error as Error).message)}finally{setBusy('')}
   }
+  async function older(){
+    setLoading(true);
+    try{
+      const response=await fetch(`/api/log?limit=${logPage}&offset=${events.length}`);
+      if(!response.ok)throw new Error('Earlier choices could not be read. Check that the local service is running.');
+      const page:HistoryEvent[]=await response.json();
+      // A choice saved since the page opened shifts the pages by one, so a
+      // choice already shown is not shown twice.
+      setEvents(current=>{const seen=new Set(current.map(event=>event.requestId));return [...current,...page.filter(event=>!seen.has(event.requestId))]});
+      setMore(page.length>=logPage);
+    }catch(error){setMessage((error as Error).message)}finally{setLoading(false)}
+  }
   // A choice made in the viewer is saved like any other; the grid shows it once
   // the page is next opened, since the Log lists what was saved, in order.
   function decideInViewer(asset:Asset,status:Status,favourite?:boolean){
@@ -66,9 +86,7 @@ export function Log({initial}:{initial:HistoryEvent[]}){
     return true;
   }
   return <>
-    <section className="dupehead"><h1>Log</h1><p className="ysum"><b>{events.length.toLocaleString()}</b> latest saved choices</p><p className="hint">Every tile is a saved choice. Opening a photo and leaving it alone is not recorded. Click a tile to look at it again.</p>{message&&<p className="flash" role="status">{message}</p>}</section>
-    <Deleting/>
-    {events.length>0&&<h2 className="logtitle">Saved choices</h2>}
+    <section className="dupehead"><h1>Log</h1><p className="ysum"><b>{events.length.toLocaleString()}</b> saved choice{events.length===1?'':'s'}, newest first</p><p className="hint">Every tile is a saved choice. Opening a photo and leaving it alone is not recorded. Click a tile to look at it again.</p>{message&&<p className="flash" role="status">{message}</p>}</section>
     {events.length===0?<p className="note">Nothing recorded yet.</p>:<div className="loggrid">{events.map((event,index)=>{
       const [label,tone]=verb(event);
       const at=new Date(event.createdAt);
@@ -85,6 +103,8 @@ export function Log({initial}:{initial:HistoryEvent[]}){
         </figure>
       </Fragment>;
     })}</div>}
+    {more&&<p className="logmore"><button type="button" className="btn" disabled={loading} onClick={()=>void older()}>{loading?<Busy label="Reading earlier choices…" state="working"/>:'Show earlier choices'}</button></p>}
+    <Deleting/>
     {viewing!==null&&<Viewer assets={assets} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={decideInViewer} onPatch={patch} dayOf={dayOf}/>}
   </>;
 }

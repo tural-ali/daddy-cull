@@ -17,12 +17,22 @@ func TestHistoryReturnsDurableDecisionEventsNewestFirst(t *testing.T) {
 	if _, err := s.Decide(ctx, Decision{AssetID: 1, Status: "keep", ExpectedRevision: 1, RequestID: "history-request-2"}); err != nil {
 		t.Fatal(err)
 	}
-	events, err := s.History(ctx, 20)
+	events, err := s.History(ctx, 20, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(events) != 2 || events[0].Status != "keep" || events[0].PreviousStatus != "cull" || events[0].Asset.Revision != 2 {
 		t.Fatalf("unexpected history: %+v", events)
+	}
+	older, err := s.History(ctx, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(older) != 1 || older[0].RequestID != "history-request-1" {
+		t.Fatalf("the second page should hold the first choice: %+v", older)
+	}
+	if _, err = s.History(ctx, 1, -1); err != ErrInvalid {
+		t.Fatalf("a negative offset should be refused, got %v", err)
 	}
 }
 
@@ -41,7 +51,7 @@ func TestHistoryTimesAreOneUnambiguousUTCForm(t *testing.T) {
 		('live',1,0,'cull',0,'keep',0,'2026-09-15 13:16:20')`); err != nil {
 		t.Fatal(err)
 	}
-	events, err := s.History(ctx, 20)
+	events, err := s.History(ctx, 20, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +81,7 @@ func TestHistoryIsInTheOrderThingsHappened(t *testing.T) {
 		('newest',1,0,'cull',0,'keep',0,'2026-09-15 13:16:20')`); err != nil {
 		t.Fatal(err)
 	}
-	events, err := s.History(ctx, 20)
+	events, err := s.History(ctx, 20, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

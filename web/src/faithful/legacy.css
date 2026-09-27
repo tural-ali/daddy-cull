@@ -1974,8 +1974,9 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
 .mo button.shot { padding: 0; border: 0; background: none; font: inherit; color: inherit; }
 .mo button.shot:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-.deletinghead { margin-top: .4rem; }
-.deletinghead h2, .logtitle { margin: 1.6rem 0 .3rem; font-size: 17px; }
+.deletinghead { margin-top: 2rem; padding-top: 1.2rem; border-top: 1px solid var(--line); }
+.logmore { display: flex; justify-content: center; margin: 1.4rem 0 .4rem; }
+.deletinghead h2 { margin: 0 0 .3rem; font-size: 17px; }
 .deletinghead + .flash, .deletinghead ~ .bingal { margin-bottom: 1.2rem; }
 
 .loggrid {

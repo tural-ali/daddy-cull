@@ -6,7 +6,7 @@ import {Year,type YearData} from './Year';
 import {Duplicates,type DuplicateGroup,type DuplicateReport} from './Duplicates';
 import {Settings,type Stats} from './Settings';
 import {setVideoSoundPreference} from '../SessionVideo';
-import {Log,type HistoryEvent} from './Log';
+import {Log,logPage,type HistoryEvent} from './Log';
 import {Bin} from './Bin';
 import {Screenshots,type ScreenshotPage} from './Screenshots';
 import {Shadows} from './Shadows';
@@ -110,7 +110,7 @@ export function App(){
       // groups because nothing was ever hashed.
       if(path==='/duplicates')return {route,content:<Duplicates report={await json<DuplicateReport>('/api/duplicate-report?limit=1000')}/>} as PageState;
       if(path==='/upgrades')return {route,content:<Upgrades initial={await json<UpgradePage>('/api/upgrades')}/>} as PageState;
-      if(path==='/log')return {route,content:<Log initial={await json<HistoryEvent[]>('/api/log?limit=200')}/>} as PageState;
+      if(path==='/log')return {route,content:<Log initial={await json<HistoryEvent[]>(`/api/log?limit=${logPage}`)}/>} as PageState;
       if(path==='/photos')return {route,content:<Photos/>} as PageState;
       if(path==='/bin')return {route,content:<Bin onCount={count=>setStats(current=>current&&{...current,bin:count})}/>} as PageState;
       if(path==='/settings')return {route,content:<Settings stats={await json<Stats>(`/api/stats?tz=${zone}`)}/>} as PageState;

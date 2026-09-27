@@ -21,11 +21,13 @@ func eventTime(column string) string {
 	return "COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ'," + column + ")," + column + ")"
 }
 
-func (s *Store) History(ctx context.Context, limit int) ([]HistoryEvent, error) {
-	if limit < 1 || limit > 500 {
+// History lists saved choices newest first, a page at a time: offset skips
+// that many of the newest, so the Log can read back to the very first.
+func (s *Store) History(ctx context.Context, limit, offset int) ([]HistoryEvent, error) {
+	if limit < 1 || limit > 500 || offset < 0 {
 		return nil, ErrInvalid
 	}
-	rows, err := s.read.QueryContext(ctx, `SELECT a.id,a.relative_path,a.captured_at,a.kind,a.size_bytes,COALESCE(d.status,'unreviewed'),COALESCE(d.favourite,0),COALESCE(d.revision,0),a.source_id,(SELECT count(*) FROM assets alt WHERE alt.anchor_id=a.id),`+relatedCount+`,e.request_id,e.status,e.favourite,e.previous_status,e.previous_favourite,`+eventTime("e.created_at")+` FROM decision_events e JOIN assets a ON a.id=e.asset_id LEFT JOIN decisions d ON d.asset_id=a.id ORDER BY `+eventTime("e.created_at")+` DESC, e.rowid DESC LIMIT ?`, limit)
+	rows, err := s.read.QueryContext(ctx, `SELECT a.id,a.relative_path,a.captured_at,a.kind,a.size_bytes,COALESCE(d.status,'unreviewed'),COALESCE(d.favourite,0),COALESCE(d.revision,0),a.source_id,(SELECT count(*) FROM assets alt WHERE alt.anchor_id=a.id),`+relatedCount+`,e.request_id,e.status,e.favourite,e.previous_status,e.previous_favourite,`+eventTime("e.created_at")+` FROM decision_events e JOIN assets a ON a.id=e.asset_id LEFT JOIN decisions d ON d.asset_id=a.id ORDER BY `+eventTime("e.created_at")+` DESC, e.rowid DESC LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		return nil, err
 	}

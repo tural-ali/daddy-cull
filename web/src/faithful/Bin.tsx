@@ -178,7 +178,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
 
   const summary=items===null?<Busy label={mode==='bin'?'Reading the Bin…':'Reading deleted files…'}/>:<><b>{list.length.toLocaleString()}</b> file{list.length===1?'':'s'} · <b>{bytes(totalBytes)}</b>{chosen.length>0&&<span className="dim"> · {bytes(chosenBytes)} selected</span>}</>;
   const hint=mode==='bin'
-    ?(report===null?'':grace>0?<>Deleted files stay on disk for {grace} more day{grace===1?'':'s'}, restorable from the <a href="/log">Log</a>, then are deleted automatically. <a href="/settings#bin">Change</a></>:<>Deleting from the Bin is immediate and cannot be undone. <a href="/settings#bin">Keep deleted files for a while instead</a></>)
+    ?(report===null?'':grace>0?<>Deleted files stay on disk for {grace} more day{grace===1?'':'s'}, restorable from the foot of the <a href="/log">Log</a>, then are deleted automatically. <a href="/settings#bin">Change</a></>:<>Deleting from the Bin is immediate and cannot be undone. <a href="/settings#bin">Keep deleted files for a while instead</a></>)
     :(report===null?'':<>Deleted from the Bin, still on disk. Each is deleted automatically {grace} day{grace===1?'':'s'} after it was deleted, checked every {report.checkIntervalMinutes} minutes. <a href="/settings#bin">Change</a></>);
   // On the Log the waiting list only exists while something is waiting; once the
   // last file is restored or deleted, only the sentence saying so remains.

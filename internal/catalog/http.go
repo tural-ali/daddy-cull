@@ -142,7 +142,16 @@ func (s *Store) Handler() http.Handler {
 			}
 			limit = parsed
 		}
-		events, err := s.History(ctx, limit)
+		offset := 0
+		if value := r.URL.Query().Get("offset"); value != "" {
+			parsed, err := strconv.Atoi(value)
+			if err != nil {
+				http.Error(w, "invalid offset", 400)
+				return
+			}
+			offset = parsed
+		}
+		events, err := s.History(ctx, limit, offset)
 		if err != nil {
 			status := 503
 			if errors.Is(err, ErrInvalid) {
