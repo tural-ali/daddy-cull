@@ -31,7 +31,10 @@ type fakeImmich struct {
 	searches int
 	updates  []fakeImmichUpdate
 	onSearch func()
-	server   *httptest.Server
+	// refuse lists assets the key may find but not change, as Immich answers
+	// for an asset in another user's library.
+	refuse map[string]bool
+	server *httptest.Server
 }
 
 type fakeImmichUpdate struct {
@@ -113,6 +116,24 @@ func (f *fakeImmich) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		f.updates = append(f.updates, update)
+		if f.refuse[update.IDs[0]] {
+			f.mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]any{"message": "Not found or no asset.update access", "statusCode": 400})
+			return
+		}
+		known := false
+		for i := range f.assets {
+			known = known || f.assets[i].ID == update.IDs[0]
+		}
+		if !known {
+			f.mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]any{"message": "Not found or no asset.update access", "statusCode": 400})
+			return
+		}
 		for i := range f.assets {
 			if f.assets[i].ID == update.IDs[0] {
 				f.assets[i].IsFavorite = *update.IsFavorite
@@ -658,5 +679,63 @@ func TestImmichKeepsImmichsReasonForARefusal(t *testing.T) {
 	}
 	if strings.Contains(row.lastError, fakeImmichKey) {
 		t.Fatalf("the key leaked into the stored error: %s", row.lastError)
+	}
+}
+
+// A file in another Immich user's library is found by path but cannot be
+// changed with Cull's key. Asking again cannot help, so the heart is set aside,
+// not retried every day and at every restart, until it changes.
+func TestImmichPhotoOfAnotherUserIsNotRetried(t *testing.T) {
+	f := newFakeImmich(t, immichAsset{ID: "im-70", OriginalPath: "/mnt/family-archive/2024/IMG_6419.MOV"})
+	f.refuse = map[string]bool{"im-70": true}
+	s, y, clock := immichFixture(t, f)
+	withClock(y, clock)
+	addImmichTestAsset(t, s, 70, "/archive/2024/IMG_6419.MOV", "archive")
+	heart(t, s, 70, true)
+	drainNow(t, y)
+	row := queueRow(t, s, 70)
+	if row.state != "refused" || row.next != 0 || !strings.Contains(row.lastError, "another Immich user") {
+		t.Fatalf("not set aside: %+v", row)
+	}
+	before := f.requestCount()
+	clock.advance(48 * time.Hour)
+	if _, err := s.QueueImmichBackfill(context.Background(), clock.now()); err != nil {
+		t.Fatal(err)
+	}
+	drainNow(t, y)
+	if got := f.requestCount(); got != before {
+		t.Fatalf("a set-aside heart was asked about again: %d requests", got-before)
+	}
+	if _, _, _, refused := s.ImmichQueueCounts(context.Background()); refused != 1 {
+		t.Fatalf("refused count %d", refused)
+	}
+	// A new heart is a new request, and is tried once more.
+	heart(t, s, 70, false)
+	heart(t, s, 70, true)
+	if row := queueRow(t, s, 70); row.state != "pending" {
+		t.Fatalf("a new heart did not queue again: %+v", row)
+	}
+}
+
+// Immich gives a file a new id when it is scanned in again. Clearing a
+// favourite Cull set then looks the file up again instead of failing on the
+// id it remembered.
+func TestImmichUnfavouriteFollowsANewID(t *testing.T) {
+	f := newFakeImmich(t, immichAsset{ID: "im-80", OriginalPath: "/mnt/family-archive/k.jpg"})
+	s, y, clock := immichFixture(t, f)
+	withClock(y, clock)
+	addImmichTestAsset(t, s, 80, "/archive/k.jpg", "archive")
+	heart(t, s, 80, true)
+	drainNow(t, y)
+	f.set(func(f *fakeImmich) {
+		f.assets = []immichAsset{{ID: "im-81", OriginalPath: "/mnt/family-archive/k.jpg", IsFavorite: true}}
+	})
+	heart(t, s, 80, false)
+	drainNow(t, y)
+	if row := queueRow(t, s, 80); row.state != "done" || row.immichID != "im-81" || row.setByCull {
+		t.Fatalf("the new id was not followed: %+v", row)
+	}
+	if f.favourite("im-81") {
+		t.Fatal("the favourite was not cleared under the new id")
 	}
 }

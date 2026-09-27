@@ -197,11 +197,13 @@ func (s *Store) QueueImmichBackfill(ctx context.Context, now time.Time) (int64, 
 
 // ImmichQueueCounts is the read-only summary shown in Settings: favourites
 // Immich shows because of Cull or already had, hearts still waiting, and hearts
-// Immich could not take.
-func (s *Store) ImmichQueueCounts(ctx context.Context) (synced, pending, failed int) {
+// Immich could not take, and hearts on photos that belong to another Immich
+// user.
+func (s *Store) ImmichQueueCounts(ctx context.Context) (synced, pending, failed, refused int) {
 	synced = countQuery(ctx, s.read, "SELECT count(*) FROM immich_favourites WHERE state='done' AND desired=1")
 	pending = countQuery(ctx, s.read, "SELECT count(*) FROM immich_favourites WHERE state='pending'")
 	failed = countQuery(ctx, s.read, "SELECT count(*) FROM immich_favourites WHERE state='failed'")
+	refused = countQuery(ctx, s.read, "SELECT count(*) FROM immich_favourites WHERE state='refused'")
 	return
 }
 
@@ -293,8 +295,21 @@ func (y *ImmichSync) apply(ctx context.Context, row immichRow) error {
 			}
 			id = asset.ID
 		}
-		if err := y.setFavourite(ctx, id, false); err != nil {
-			return err
+		err := y.setFavourite(ctx, id, false)
+		if refusedAccess(err) && row.immichID != "" {
+			// The remembered id may be stale, from before Immich scanned the
+			// file again. Only a fresh lookup tells a new id from a refusal.
+			var asset immichAsset
+			if asset, err = y.lookup(ctx, row.path); err != nil {
+				return err
+			}
+			if asset.ID != id {
+				id = asset.ID
+				err = y.setFavourite(ctx, id, false)
+			}
+		}
+		if err != nil {
+			return refusal(err)
 		}
 		return y.s.recordImmichOwner(ctx, row.assetID, id, false, y.now())
 	}
@@ -308,7 +323,27 @@ func (y *ImmichSync) apply(ctx context.Context, row immichRow) error {
 	if err = y.s.recordImmichOwner(ctx, row.assetID, asset.ID, true, y.now()); err != nil {
 		return err
 	}
-	return y.setFavourite(ctx, asset.ID, true)
+	return refusal(y.setFavourite(ctx, asset.ID, true))
+}
+
+// immichNoAccess is what Immich says when the key may see an asset but not
+// change it. The asset was found a moment ago, so it is not missing: it belongs
+// to another Immich user, whose library holds the same file.
+const immichNoAccess = "no asset.update access"
+
+func refusedAccess(err error) bool {
+	var failure *immichError
+	return errors.As(err, &failure) && failure.status == http.StatusBadRequest && strings.Contains(failure.reason, immichNoAccess)
+}
+
+// refusal turns Immich's refusal to change an asset it has just shown into a
+// state that is not retried: asking again changes nothing until someone gives
+// Cull's key rights over that user's photos, or the heart changes.
+func refusal(err error) error {
+	if !refusedAccess(err) {
+		return err
+	}
+	return &immichError{permanent: true, refused: true, message: "Immich will not let Cull change this photo: it belongs to another Immich user"}
 }
 
 // recordImmichOwner is written whatever has happened to the wanted state in the
@@ -335,8 +370,16 @@ func (y *ImmichSync) finish(ctx context.Context, row immichRow, syncErr error) e
 		state, delay = "failed", immichFailedRetry
 	}
 	message := y.redact(syncErr.Error())
-	log.Printf("immich: asset %d, attempt %d: %s; next try in %s", row.assetID, attempts, message, delay)
-	_, err := y.s.write.ExecContext(ctx, "UPDATE immich_favourites SET state=?,attempts=?,last_error=?,next_attempt_at=?,updated_at=? WHERE asset_id=? AND desired=?", state, attempts, message, now.Add(delay).Unix(), stamp, row.assetID, row.desired)
+	next := now.Add(delay).Unix()
+	if failure != nil && failure.refused {
+		// Not due again: a new heart, or the backfill finding the heart
+		// changed, makes the row pending once more.
+		state, next = "refused", 0
+		log.Printf("immich: asset %d: %s; not retried", row.assetID, message)
+	} else {
+		log.Printf("immich: asset %d, attempt %d: %s; next try in %s", row.assetID, attempts, message, delay)
+	}
+	_, err := y.s.write.ExecContext(ctx, "UPDATE immich_favourites SET state=?,attempts=?,last_error=?,next_attempt_at=?,updated_at=? WHERE asset_id=? AND desired=?", state, attempts, message, next, stamp, row.assetID, row.desired)
 	return err
 }
 
@@ -445,7 +488,7 @@ func (y *ImmichSync) call(ctx context.Context, method, endpoint string, body []b
 		// Immich being busy, restarting or behind a failing proxy passes;
 		// a refused key or a rejected request does not pass by retrying.
 		transient := response.StatusCode == http.StatusRequestTimeout || response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500
-		return &immichError{permanent: !transient, message: fmt.Sprintf("Immich answered %s %s with %d%s", method, endpoint, response.StatusCode, said)}
+		return &immichError{permanent: !transient, status: response.StatusCode, reason: strings.TrimPrefix(said, ": "), message: fmt.Sprintf("Immich answered %s %s with %d%s", method, endpoint, response.StatusCode, said)}
 	}
 	if out == nil {
 		io.Copy(io.Discard, io.LimitReader(response.Body, immichMaxResponse))
@@ -467,10 +510,15 @@ func (y *ImmichSync) redact(message string) string {
 	return strings.ReplaceAll(message, y.key, "[redacted]")
 }
 
-// An immichError is permanent when retrying cannot help.
+// An immichError is permanent when retrying cannot help, and refused when
+// Immich will not let Cull's key change the asset at all.
 type immichError struct {
 	permanent bool
-	message   string
+	refused   bool
+	// status and reason are Immich's answer, when there was one.
+	status  int
+	reason  string
+	message string
 }
 
 func (e *immichError) Error() string { return e.message }

@@ -42,7 +42,7 @@ func Open(path string) (*Store, error) {
 	if err = w.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return fail(err)
 	}
-	if version > 8 {
+	if version > 9 {
 		return fail(fmt.Errorf("catalogue schema is newer than this application"))
 	}
 	if err = w.QueryRow("SELECT count(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'").Scan(&tables); err != nil {
@@ -59,10 +59,15 @@ func Open(path string) (*Store, error) {
 			return fail(err)
 		}
 	}
+	if app == applicationID && version < 9 {
+		if err = allowRefusedImmichState(w); err != nil {
+			return fail(err)
+		}
+	}
 	if _, err = w.Exec(fmt.Sprintf(`
 BEGIN IMMEDIATE;
 PRAGMA application_id=%d;
-PRAGMA user_version=8;
+PRAGMA user_version=9;
 CREATE TABLE IF NOT EXISTS sources (
  id TEXT PRIMARY KEY,
  label TEXT NOT NULL,
@@ -250,7 +255,7 @@ CREATE TABLE IF NOT EXISTS immich_favourites (
  desired INTEGER NOT NULL CHECK(desired IN (0,1)),
  immich_id TEXT NOT NULL DEFAULT '',
  set_by_cull INTEGER NOT NULL DEFAULT 0 CHECK(set_by_cull IN (0,1)),
- state TEXT NOT NULL CHECK(state IN ('pending','done','failed')),
+ state TEXT NOT NULL CHECK(state IN ('pending','done','failed','refused')),
  attempts INTEGER NOT NULL DEFAULT 0,
  last_error TEXT NOT NULL DEFAULT '',
  next_attempt_at INTEGER NOT NULL DEFAULT 0,
@@ -296,6 +301,41 @@ COMMIT;`, applicationID)); err != nil {
 		return fail(err)
 	}
 	return &Store{read: r, write: w, immichWake: make(chan struct{}, 1)}, nil
+}
+
+// allowRefusedImmichState is the version 9 change: a heart on a photo that
+// belongs to another Immich user is set aside as 'refused'. SQLite cannot widen
+// a CHECK in place, so the small queue table is copied into its new shape in one
+// transaction. A catalogue that never had the table gets it from the schema.
+func allowRefusedImmichState(w *sql.DB) error {
+	var exists int
+	if err := w.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='immich_favourites'").Scan(&exists); err != nil || exists == 0 {
+		return err
+	}
+	_, err := w.Exec(`
+BEGIN IMMEDIATE;
+CREATE TABLE immich_favourites_v9 (
+ asset_id INTEGER PRIMARY KEY REFERENCES assets(id),
+ desired INTEGER NOT NULL CHECK(desired IN (0,1)),
+ immich_id TEXT NOT NULL DEFAULT '',
+ set_by_cull INTEGER NOT NULL DEFAULT 0 CHECK(set_by_cull IN (0,1)),
+ state TEXT NOT NULL CHECK(state IN ('pending','done','failed','refused')),
+ attempts INTEGER NOT NULL DEFAULT 0,
+ last_error TEXT NOT NULL DEFAULT '',
+ next_attempt_at INTEGER NOT NULL DEFAULT 0,
+ updated_at TEXT NOT NULL
+);
+INSERT INTO immich_favourites_v9(asset_id,desired,immich_id,set_by_cull,state,attempts,last_error,next_attempt_at,updated_at)
+ SELECT asset_id,desired,immich_id,set_by_cull,state,attempts,last_error,next_attempt_at,updated_at FROM immich_favourites;
+DROP TABLE immich_favourites;
+ALTER TABLE immich_favourites_v9 RENAME TO immich_favourites;
+CREATE INDEX IF NOT EXISTS immich_favourites_due ON immich_favourites(state,next_attempt_at);
+PRAGMA user_version=9;
+COMMIT;`)
+	if err != nil {
+		w.Exec("ROLLBACK")
+	}
+	return err
 }
 
 func (s *Store) Close() error {

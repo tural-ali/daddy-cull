@@ -622,7 +622,7 @@ func (s *Store) Handler() http.Handler {
 		if items, err := s.Trash(ctx); err == nil {
 			bin = len(items)
 		}
-		immichSynced, immichPending, immichFailed := s.ImmichQueueCounts(ctx)
+		immichSynced, immichPending, immichFailed, immichRefused := s.ImmichQueueCounts(ctx)
 		// Progress is counted in calendar dates, as on the Year page: a date is
 		// reviewed when every year filed under it is.
 		var dates CalendarProgress
@@ -631,7 +631,7 @@ func (s *Store) Handler() http.Handler {
 		}
 		activity, _ := s.Activity(ctx, viewerLocation(r), time.Now())
 		videoMuted, _ := s.VideoMuted(ctx)
-		json.NewEncoder(w).Encode(map[string]any{"total": n, "synthetic": library != "real", "snapshotAt": snapshot, "candidates": candidates, "calendarDays": calendarDays, "reviewedDays": reviewedDays, "decisions": decisions, "favourites": favourites, "evidence": evidence, "fullHashes": fullHashes, "marked": marked, "legacyBin": legacyBin, "shadowGroups": shadowGroups, "screenshots": screenshots, "social": social, "upgradesAccepted": upgradesAccepted, "upgradeCandidates": upgradeCandidates, "bin": bin, "immichSynced": immichSynced, "immichPending": immichPending, "immichFailed": immichFailed, "calendarDates": dates.Dates, "reviewedDates": dates.Done, "streak": activity.Streak, "reviewedToday": activity.Today, "videoMuted": videoMuted})
+		json.NewEncoder(w).Encode(map[string]any{"total": n, "synthetic": library != "real", "snapshotAt": snapshot, "candidates": candidates, "calendarDays": calendarDays, "reviewedDays": reviewedDays, "decisions": decisions, "favourites": favourites, "evidence": evidence, "fullHashes": fullHashes, "marked": marked, "legacyBin": legacyBin, "shadowGroups": shadowGroups, "screenshots": screenshots, "social": social, "upgradesAccepted": upgradesAccepted, "upgradeCandidates": upgradeCandidates, "bin": bin, "immichSynced": immichSynced, "immichPending": immichPending, "immichFailed": immichFailed, "immichRefused": immichRefused, "calendarDates": dates.Dates, "reviewedDates": dates.Done, "streak": activity.Streak, "reviewedToday": activity.Today, "videoMuted": videoMuted})
 	})
 	return mux
 }
