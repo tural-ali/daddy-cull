@@ -1,4 +1,5 @@
 import {useMemo,useState,type CSSProperties} from 'react';
+import {SessionVideo} from '../SessionVideo';
 import type {DuplicateGroup} from './Today';
 import {binChanged} from '../api';
 import {Busy} from '../Busy';
@@ -111,7 +112,7 @@ function Tile({member,previewID,size,label,keeper,disabled,onKeep}:{member:Dupli
     <div className="dupecell" style={ratio>1?{aspectRatio:String(ratio)}:undefined}>
       <figure className={`dupefig${ratio||playing?' ready':''}`} style={shape}>
         {playing
-          ? <video src={`/api/media/${member.id}/original`} controls autoPlay playsInline onEnded={()=>setPlaying(false)} onError={()=>{setPlaying(false);setFailed(true)}}/>
+          ? <SessionVideo src={`/api/media/${member.id}/original`} controls autoPlay playsInline onEnded={()=>setPlaying(false)} onError={()=>{setPlaying(false);setFailed(true)}}/>
           : failed
             ? <div className="media-missing"><span>No preview</span><small>{member.kind.toUpperCase()}</small></div>
             : <img src={`/api/media/${previewID}/preview`} alt="" loading="lazy" decoding="async"

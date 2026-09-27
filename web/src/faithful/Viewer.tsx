@@ -1,4 +1,5 @@
 import {useEffect,useLayoutEffect,useMemo,useRef,useState,type MouseEvent} from 'react';
+import {SessionVideo} from '../SessionVideo';
 import {Icon} from '../Icon';
 import {binChanged,type Asset,type Status} from '../api';
 
@@ -140,7 +141,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove}:{a
     <div className={`rvstage${zoom?' zoom':''}${current.kind==='video'?' hasvideo':''}`} onClick={event=>{if((event.target as HTMLElement).tagName==='IMG')setBare(value=>!value)}}>
       <button type="button" className="rvnav prev" aria-label="Previous" onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
       {broken?.id===current.id?<div className="rvgone" role="status"><b>{broken.gone?'This file is no longer in the archive':'This file could not be shown'}</b><span>{broken.gone?'It was moved or removed on the server since the last scan. It leaves review at the next nightly scan.':'Try again in a moment.'}</span></div>
-        :current.kind==='video'?<video ref={media} key={current.id} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onError={()=>failed(current.id)}/>:<img ref={media} key={current.id} src={preview(current)} alt={name} onError={()=>failed(current.id)}/>}
+        :current.kind==='video'?<SessionVideo ref={media} key={current.id} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onError={()=>failed(current.id)}/>:<img ref={media} key={current.id} src={preview(current)} alt={name} onError={()=>failed(current.id)}/>}
       {corner&&!zoom&&format(current)&&<span className="rvformat" style={{left:corner.left+12,top:corner.top+12}} title={name.split('.').pop()?.toUpperCase()}>{format(current)}</span>}
       <button type="button" className="rvnav next" aria-label="Next" onClick={event=>{event.stopPropagation();step(1)}}>›</button>
     </div>

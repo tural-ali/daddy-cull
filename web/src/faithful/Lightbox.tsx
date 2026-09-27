@@ -1,4 +1,5 @@
 import {useEffect,useState,type MouseEvent,type ReactNode} from 'react';
+import {SessionVideo} from '../SessionVideo';
 import {Icon} from '../Icon';
 import {dayName} from './goto';
 
@@ -46,7 +47,7 @@ export function Lightbox({items,initialKey,onClose,actions,onMove}:{items:Lightb
     <div className="rvtop"><span className="rvday">{current.name}</span>{current.detail&&<span className="rvwhen">{current.detail}</span>}{current.day&&<a className="rvdaylink" href={current.day} target="_blank" rel="noopener" title="See what else is filed on this day, in a new tab">{dayName(current.day)}<Icon name="open_in_new"/></a>}<span className="rvpos">{at+1} / {items.length}</span><button type="button" className="rvx" aria-label="Close preview" title="Close (Esc)" onClick={onClose}>×</button></div>
     <div className={`rvstage${current.kind==='video'?' hasvideo':''}`}>
       {items.length>1&&<button type="button" className="rvnav prev" aria-label="Previous" onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>}
-      {current.kind==='video'?<video key={current.key} controls autoPlay playsInline poster={still} src={`${current.base}/original`}/>:<img key={current.key} src={still} alt={current.name}/>}
+      {current.kind==='video'?<SessionVideo key={current.key} controls autoPlay playsInline poster={still} src={`${current.base}/original`}/>:<img key={current.key} src={still} alt={current.name}/>}
       {items.length>1&&<button type="button" className="rvnav next" aria-label="Next" onClick={event=>{event.stopPropagation();step(1)}}>›</button>}
     </div>
     {actions&&<div className="rvbot">{actions(current)}</div>}

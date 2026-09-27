@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import {SessionVideo} from './SessionVideo';
 import type {Asset} from './api';
 
 // FilePreview draws a still for one file served by a media route, and falls
@@ -11,7 +12,7 @@ export function FilePreview({base,name,kind,large=false,onReady}:{base:string;na
  const [play,setPlay]=useState(false);
  const preview=`${base}/preview?size=${large?'large':'grid'}`;
  if(failed)return <div className="media-missing"><span>Preview unavailable</span><small>{kind.toUpperCase()} · Original untouched</small>{large&&<button onClick={()=>{setFailed(false);setPlay(false)}}>Retry preview</button>}</div>;
- if(large&&play)return <video className="actual-media" controls autoPlay playsInline poster={preview} src={`${base}/original`} onError={()=>setFailed(true)}/>;
+ if(large&&play)return <SessionVideo className="actual-media" controls autoPlay playsInline poster={preview} src={`${base}/original`} onError={()=>setFailed(true)}/>;
  return <><img className="actual-media" src={preview} alt={name||'Family memory'} loading={large?'eager':'lazy'} decoding={large?"sync":"async"} onLoad={e=>{const img=e.currentTarget;void img.decode().catch(()=>{}).then(()=>onReady?.())}} onError={()=>setFailed(true)}/>{large&&kind==='video'&&<button className="play-video" onClick={()=>setPlay(true)}>Play video</button>}{!large&&kind==='video'&&<span className="video-badge">▶ Video</span>}</>;
 }
 
