@@ -18,6 +18,7 @@ const fixture=()=>[
   const posts=[];
   await page.route('**/api/**',async route=>{
     const request=route.request(),url=new URL(request.url());
+    if(url.pathname==='/api/catalogue')return route.fulfill({json:{generation:1}});
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:10,synthetic:false,snapshotAt:'',candidates:0,calendarDays:0,reviewedDays:0,decisions:0,favourites:0,evidence:0,fullHashes:0,marked:1,bin:bin.length}});
     if(url.pathname==='/api/trash')return route.fulfill({json:bin});
     if(url.pathname==='/api/trash/deleting')return route.fulfill({json:{graceDays:grace,items:[],lastRun:'',lastDeleted:0,lastError:'',checkIntervalMinutes:15}});

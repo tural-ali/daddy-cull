@@ -1469,7 +1469,16 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   font-size: 14px; line-height: 20px;
   animation: snackin 240ms cubic-bezier(.2, 0, 0, 1) both;
 }
+.snacks:empty { display: none; }
 .snack b { font-weight: 600; }
+/* A snackbar's one action, after its text, as Google Photos sets it. */
+.snackact {
+  margin: -6px -8px -6px 16px; padding: 6px 8px;
+  border: 0; border-radius: 4px; background: none;
+  color: inherit; font: inherit; font-weight: 600; cursor: pointer;
+}
+.snackact:hover { background: color-mix(in oklab, var(--bg) 14%, transparent); }
+.snackact:focus-visible { outline: 2px solid var(--bg); outline-offset: 1px; }
 @keyframes snackin { from { opacity: 0; transform: translateY(12px); } }
 /* Beside the sidebar they sit in the panel's corner, clear of Settings at
    the sidebar's foot. */

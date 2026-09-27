@@ -299,6 +299,13 @@ CREATE TABLE IF NOT EXISTS phone_deletions (
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS stats (id INTEGER PRIMARY KEY CHECK(id=1), total INTEGER NOT NULL);
 INSERT OR IGNORE INTO stats VALUES(1,0);
+-- Goes up whenever the catalogue gains or loses a file, or a file is marked
+-- by something other than a person on a page, so an open page can tell it is
+-- showing yesterday's archive; see catalogue_generation.go.
+CREATE TABLE IF NOT EXISTS catalogue_generation (id INTEGER PRIMARY KEY CHECK(id=1), value INTEGER NOT NULL);
+INSERT OR IGNORE INTO catalogue_generation VALUES(1,0);
+CREATE TRIGGER IF NOT EXISTS assets_added_to_catalogue AFTER INSERT ON assets BEGIN UPDATE catalogue_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS assets_removed_from_catalogue AFTER DELETE ON assets BEGIN UPDATE catalogue_generation SET value=value+1 WHERE id=1; END;
 COMMIT;`, applicationID)); err != nil {
 		return fail(err)
 	}

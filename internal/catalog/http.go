@@ -587,6 +587,20 @@ func (s *Store) Handler() http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		json.NewEncoder(w).Encode(p)
 	})
+	// Cheap enough to ask every minute: an open page compares it with the
+	// value it loaded with to learn that the archive changed under it.
+	mux.HandleFunc("GET /api/catalogue", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		generation, e := s.CatalogueGeneration(ctx)
+		if e != nil {
+			http.Error(w, "catalogue unavailable", 503)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		json.NewEncoder(w).Encode(map[string]int64{"generation": generation})
+	})
 	mux.HandleFunc("GET /api/stats", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()

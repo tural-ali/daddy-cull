@@ -150,6 +150,9 @@ func (s *Store) markPhoneDeletion(ctx context.Context, d phoneDeletion, result *
 		if _, err = decideTx(ctx, tx, Decision{RequestID: "phone-deletion:" + hex.EncodeToString(sum[:16]), AssetID: assetID.Int64, ExpectedRevision: revision, Status: "cull"}); err != nil {
 			return err
 		}
+		if err = bumpCatalogueGeneration(ctx, tx); err != nil {
+			return err
+		}
 		outcome, result.Marked = "marked", result.Marked+1
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO phone_deletions(zone,rel_path,size_bytes,reported_at,asset_id,outcome,handled_at) VALUES(?,?,?,?,?,?,?)",

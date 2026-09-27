@@ -15,6 +15,7 @@ import {requestID,sendDecisions} from './decisions';
 import {historyKey,undoKeys,useHistory,type HistoryEntry,type Snapshot} from './history';
 import {pairLabel,rawsBehind,setPaired} from './pairs';
 import {usePageFilters} from './SearchFilters';
+import {Snacks} from './Snacks';
 
 export type TodayYear={day:string;year:number;files:number;bytes:number;status:'pending'|'done';assets:Asset[]};
 export type TodayData={md:string;label:string;previous:string;next:string;years:TodayYear[];memories:number;bytes:number};
@@ -393,10 +394,10 @@ export function Today({initial}:{initial:TodayData}){
         {asset.status==='cull'&&<div className="undo"><span>Removed</span><button type="button" className="act" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,'unreviewed')}}>Undo</button></div>}
       </figure>)}</div>}
     </section>})}
-    {(message||(tip&&assets.length>0))&&<div className="snacks">
+    {(message||(tip&&assets.length>0))&&<Snacks>
       {message&&<div className="snack" role="status">{saving?<Busy label={message} state="working"/>:message}</div>}
       {tip&&assets.length>0&&<div className="snack" role="status">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>{undoKeys.undo}</b> undo, <b>{undoKeys.redo}</b> redo, <b>?</b> for the rest</div>}
-    </div>}
+    </Snacks>}
     {cheer&&<Celebration tally={cheer} nextHref={`/on/${initial.next}`} nextLabel={calendarLabel(initial.next)} onClose={()=>setCheer(null)}/>}
     {viewing!==null&&<Viewer assets={walked} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset} onRecord={history.record}
       rawOf={asset=>behind.get(asset.id)} onUnpair={(photo,raw)=>void pairing(raw.id,photo.id,false)}/>}

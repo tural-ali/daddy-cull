@@ -1,4 +1,4 @@
-import {useEffect,useState,type ReactNode} from 'react';
+import {Fragment,useCallback,useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import {Layout,type LegacyRoute} from './Layout';
 import {dayName} from './goto';
 import {Today,type TodayData} from './Today';
@@ -17,6 +17,8 @@ import {recoverPending} from '../recoverPending';
 import {BIN_CHANGED} from '../api';
 import {pagePath} from './photoURL';
 import {Busy} from '../Busy';
+import {Snacks} from './Snacks';
+import {CATALOGUE_CHANGED,catalogueGeneration,quietEnough,watchCatalogue} from './catalogueWatch';
 
 type PageState={route:LegacyRoute;content:ReactNode};
 
@@ -65,6 +67,15 @@ export function App(){
   const [page,setPage]=useState<PageState>({route:routeFor(initialPath),content:<Busy size={64} label="Opening the catalogue…"/>});
   const [error,setError]=useState('');
   const [recovered,setRecovered]=useState(false);
+  // The archive as the page was read: the catalogue's generation then, and
+  // whether anyone has done anything on the page since, which a fresh read
+  // would take away with its undo history.
+  const generation=useRef<number|null>(null);
+  const touched=useRef(false);
+  const announced=useRef<number|null>(null);
+  const [version,setVersion]=useState(0);
+  const [notice,setNotice]=useState<'refreshed'|'stale'|null>(null);
+  const keepScroll=useRef<number|null>(null);
   useEffect(()=>{if(location.pathname==='/')history.replaceState(null,'',initialPath)},[initialPath]);
   useEffect(()=>{document.title=`${titleFor(path)} · Daddy, Cull!`},[path]);
   useEffect(()=>{
@@ -82,17 +93,14 @@ export function App(){
       clearTimeout(timer);
       timer=window.setTimeout(()=>{json<Stats>(`/api/stats?tz=${zone}`).then(setStats).catch(()=>{})},250);
     };
+    const worked=()=>{touched.current=true};
     window.addEventListener(BIN_CHANGED,reread);
-    return()=>{controller.abort();clearTimeout(timer);window.removeEventListener(BIN_CHANGED,reread)};
+    window.addEventListener(BIN_CHANGED,worked);
+    window.addEventListener(CATALOGUE_CHANGED,reread);
+    return()=>{controller.abort();clearTimeout(timer);window.removeEventListener(BIN_CHANGED,reread);window.removeEventListener(BIN_CHANGED,worked);window.removeEventListener(CATALOGUE_CHANGED,reread)};
   },[recovered]);
-  useEffect(()=>{
-    // A decision replayed from a closed tab changes what the page should show,
-    // so nothing loads until recovery has finished, and then it loads once.
-    if(!recovered)return;
-    let active=true;
-    setError('');
+  const load=useCallback(async()=>{
     const route=routeFor(path);
-    async function load(){
       if(path.startsWith('/on/')){
         const md=path.slice(4);
         const data=await json<TodayData>(`/api/today/${md}`);
@@ -124,9 +132,72 @@ export function App(){
         return {route,content:<Screenshots page={await json<ScreenshotPage>(`/api/screenshots?kind=${encodeURIComponent(filter)}&review=${review}&from=${from}`)} filter={filter} review={review} from={from}/>} as PageState;
       }
       throw new Error('This legacy workflow has not been connected yet.');
-    }
-    load().then(result=>{if(active)setPage(result)}).catch(reason=>{if(active)setError((reason as Error).message)});
+  },[path]);
+  useEffect(()=>{
+    // A decision replayed from a closed tab changes what the page should show,
+    // so nothing loads until recovery has finished, and then it loads once.
+    if(!recovered)return;
+    let active=true;
+    setError('');
+    // The generation is read before the page, so a change that lands while
+    // the page loads is caught at the next check rather than missed.
+    catalogueGeneration().then(async next=>{
+      generation.current=next;
+      const result=await load();
+      if(active)setPage(result);
+    }).catch(reason=>{if(active)setError((reason as Error).message)});
     return()=>{active=false};
-  },[path,recovered]);
-  return <Layout route={page.route} binFiles={stats?.bin??stats?.marked??0} reviewed={stats?.calendarDates?{done:stats.reviewedDates??0,total:stats.calendarDates}:undefined} streak={stats?.streak!==undefined?{days:stats.streak,today:!!stats.reviewedToday}:undefined}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:page.content}</Layout>;
+  },[load,recovered]);
+
+  // Read the page again in place, where it was scrolled to. A read that fails
+  // leaves the page as it was, and the next check tries again.
+  const refresh=useCallback(async(next:number)=>{
+    let result:PageState;
+    try{result=await load()}catch{return}
+    generation.current=next;
+    touched.current=false;
+    keepScroll.current=window.scrollY;
+    setPage(result);
+    setVersion(current=>current+1);
+    setNotice(document.hidden?null:'refreshed');
+  },[load]);
+  useLayoutEffect(()=>{
+    if(keepScroll.current===null)return;
+    window.scrollTo(0,keepScroll.current);
+    keepScroll.current=null;
+  },[version]);
+  useEffect(()=>{
+    if(!recovered)return;
+    let checking=false;
+    const check=async()=>{
+      if(checking)return;
+      checking=true;
+      try{
+        const next=await catalogueGeneration();
+        if(next===null)return;
+        if(generation.current===null){generation.current=next;return}
+        if(next===generation.current)return;
+        if(announced.current!==next){announced.current=next;window.dispatchEvent(new Event(CATALOGUE_CHANGED))}
+        // Someone has been working on this page: a fresh read would take
+        // their undo history away, so it waits for them to ask.
+        if(touched.current){setNotice('stale');return}
+        // A photo open, a dialog or a half-typed date: the next check tries again.
+        if(!quietEnough())return;
+        await refresh(next);
+      }finally{checking=false}
+    };
+    return watchCatalogue(()=>{void check()});
+  },[recovered,refresh]);
+  useEffect(()=>{
+    if(notice!=='refreshed')return;
+    const timer=setTimeout(()=>setNotice(null),6000);
+    return()=>clearTimeout(timer);
+  },[notice]);
+  const refreshNow=async()=>{
+    const next=await catalogueGeneration();
+    if(next!==null)await refresh(next);
+  };
+  return <Layout route={page.route} binFiles={stats?.bin??stats?.marked??0} reviewed={stats?.calendarDates?{done:stats.reviewedDates??0,total:stats.calendarDates}:undefined} streak={stats?.streak!==undefined?{days:stats.streak,today:!!stats.reviewedToday}:undefined}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:<Fragment key={version}>{page.content}</Fragment>}
+    {notice&&<Snacks><div className="snack" role="status">{notice==='refreshed'?'Updated with new files from the archive.':<>New files arrived in the archive. <button type="button" className="snackact" onClick={()=>void refreshNow()}>Refresh</button></>}</div></Snacks>}
+  </Layout>;
 }

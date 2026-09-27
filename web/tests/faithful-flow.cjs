@@ -16,6 +16,7 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
   await page.route('**/api/**',async route=>{
     const request=route.request(),url=new URL(request.url());
     fetched.push(url.pathname);
+    if(url.pathname==='/api/catalogue')return route.fulfill({json:{generation:1}});
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:61208,synthetic:false,snapshotAt:'2026-09-06 01:49:00',candidates:1,calendarDays:2749,reviewedDays:0,decisions:80,favourites:2,evidence:4277,fullHashes:1357,marked:2}});
     if(url.pathname==='/api/today/09-07')return route.fulfill({json:{md:'09-07',label:'7 September',previous:'09-06',next:'09-08',years:[{day:'2000-09-07',year:2000,files:1,bytes:100,status:'pending',assets:[first]},{day:'2010-09-07',year:2010,files:3,bytes:300,status:'pending',assets:[copy,third,fourth]}],memories:4,bytes:400}});
     if(url.pathname==='/api/duplicates')return route.fulfill({json:[{hash:'abcdef0123456789abcdef0123456789',size:100,reclaimable:100,members:[first,copy]}]});

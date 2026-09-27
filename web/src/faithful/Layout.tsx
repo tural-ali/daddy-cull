@@ -211,6 +211,7 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
     <div className="panel">
       {flash&&<p className="flash" role="status">{flash}</p>}
       <main className={`${gridRoutes.has(route)?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}><PageActionsProvider value={setPageActions}><PageDateProvider value={setPageDate}><PageFiltersProvider value={setPageFilters}>{children}</PageFiltersProvider></PageDateProvider></PageActionsProvider></SelectionProvider></main>
+      <div className="snacks" id="snacks"/>
     </div>
   </div>;
 }
