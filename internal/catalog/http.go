@@ -258,6 +258,35 @@ func (s *Store) Handler() http.Handler {
 		}
 		writeJSON(w, report)
 	})
+	// A RAW+JPEG pair shows as one photo until the reviewer splits it. Only
+	// the catalogue changes: both files stay where they are.
+	mux.HandleFunc("POST /api/pairs", func(w http.ResponseWriter, r *http.Request) {
+		if !sameOriginJSON(w, r) {
+			return
+		}
+		var input struct {
+			RawID     int64 `json:"rawId"`
+			PartnerID int64 `json:"partnerId"`
+			Paired    *bool `json:"paired"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil || input.Paired == nil || input.RawID <= 0 || input.PartnerID <= 0 {
+			http.Error(w, "rawId, partnerId and paired required", 400)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		if err := s.SetPaired(ctx, input.RawID, input.PartnerID, *input.Paired); err != nil {
+			if errors.Is(err, ErrInvalid) {
+				http.Error(w, "these files are not a pair", 400)
+				return
+			}
+			http.Error(w, "the pair could not be saved", 503)
+			return
+		}
+		writeJSON(w, map[string]bool{"paired": *input.Paired})
+	})
 	// The grace period is a setting, not a file operation, so this process saves
 	// it; the writer reads it each time its reaper runs.
 	mux.HandleFunc("POST /api/settings/bin", func(w http.ResponseWriter, r *http.Request) {

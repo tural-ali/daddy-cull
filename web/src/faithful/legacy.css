@@ -744,6 +744,7 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 .bdg .b.dupe { background: color-mix(in oklab, var(--warn) 82%, #000); }
 .bdg .b.keep { background: color-mix(in oklab, var(--good) 78%, #000); }
 .bdg .b.play { font-variant-numeric: tabular-nums; }
+.bdg .b.pair { letter-spacing: .04em; }
 
 /* The badge that counts the files is also the way into the comparison, so it -
    and only it - takes pointer events back from the container above. Everything
@@ -1129,6 +1130,21 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   margin-right: 8px; padding: 0 4px;
   color: #c4c7c5; font-size: 14px; font-weight: 500; letter-spacing: .08em; line-height: 24px;
 }
+/* A RAW+JPEG pair names both formats as a two-way switch in the same place,
+   so the RAW is one press away from the photo that stands for it. */
+.rvpair {
+  display: flex; gap: 2px; margin-right: 8px; padding: 2px;
+  border-radius: 999px; background: rgba(255, 255, 255, .08);
+}
+.rvpair button {
+  min-width: 52px; height: 28px; padding: 0 12px;
+  border: 0; border-radius: 999px; background: transparent;
+  color: #c4c7c5; font: inherit; font-size: 13px; font-weight: 500; letter-spacing: .08em;
+  cursor: pointer;
+}
+.rvpair button:hover:not([aria-pressed="true"]) { background: rgba(255, 255, 255, .08); color: #eceef2; }
+.rvpair button[aria-pressed="true"] { background: #e3e3e3; color: #1f1f1f; }
+.rvpair button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .rvstage.zoom {
   padding: 0; overflow: auto; cursor: grab;
   align-items: flex-start; justify-content: flex-start;
@@ -1442,6 +1458,20 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   .rvact { width: 44px; height: 44px; }
   .rvacts { gap: 0; }
   .tally { gap: 1.1rem; }
+}
+/* A phone has room for the back arrow and seven actions, no more. The format
+   is in Info, and a pair's switch floats just under the bar, clear of the
+   notices that rise from the foot of the screen. */
+@media (max-width: 480px) {
+  .rvformat { display: none; }
+  .rvpair {
+    position: fixed; left: 50%; top: 72px; z-index: 3;
+    transform: translateX(-50%); margin: 0;
+    background: rgba(32, 33, 36, .82); backdrop-filter: blur(8px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .4);
+  }
+  .rvpair button { height: 36px; min-width: 64px; }
+  .rv.info .rvpair { display: none; }
 }
 
 /* ====================================================== SECONDARY VIEWS == */

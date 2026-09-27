@@ -36,9 +36,21 @@ const flightTime=320;
  * pages that show files from many days. */
 /** `onMove` hears which photo is showing, so the address can follow it. */
 /** `onRecord`, when given, hears a group choice so the page can undo it. */
-export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onRecord}:{assets:Asset[];initialID:number;onClose:()=>void;onSave:(asset:Asset,status:Status,favourite?:boolean)=>boolean;onPatch:(id:number,change:Partial<Asset>)=>void;dayOf?:(asset:Asset)=>string;onMove?:(id:number)=>void;onRecord?:(entry:HistoryEntry)=>void}){
+/** `rawOf` names the RAW behind a photo that stands for a RAW+JPEG pair, and
+ * `onUnpair` splits the pair when the two turn out not to belong together. */
+export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onRecord,rawOf,onUnpair}:{assets:Asset[];initialID:number;onClose:()=>void;onSave:(asset:Asset,status:Status,favourite?:boolean)=>boolean;onPatch:(id:number,change:Partial<Asset>)=>void;dayOf?:(asset:Asset)=>string;onMove?:(id:number)=>void;onRecord?:(entry:HistoryEntry)=>void;rawOf?:(asset:Asset)=>Asset|undefined;onUnpair?:(photo:Asset,raw:Asset)=>void}){
   const initialIndex=Math.max(0,assets.findIndex(asset=>asset.id===initialID));
   const [at,setAt]=useState(initialIndex);
+  // The file the reviewer is on, or moving to. When the list changes under
+  // the viewer (a pair split, or a choice that takes a file out of a filtered
+  // list), the viewer stays with it rather than with a position.
+  const anchor=useRef(initialID);
+  useLayoutEffect(()=>{
+    const index=assets.findIndex(asset=>asset.id===anchor.current);
+    if(index>=0)setAt(index);
+  },[assets]);
+  // Which half of a pair is on the stage.
+  const [side,setSide]=useState<'photo'|'raw'>('photo');
   // Info stays open from photo to photo, and from one visit to the next.
   const [info,setInfoState]=useState(()=>{try{return localStorage.getItem('cull-info')==='open'}catch{return false}});
   function setInfo(change:boolean|((open:boolean)=>boolean)){
@@ -60,6 +72,9 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   // starts clean. A file moved off the archive between scans answers 404.
   const [broken,setBroken]=useState<{id:number;gone:boolean}|null>(null);
   const current=assets[Math.min(at,Math.max(0,assets.length-1))];
+  const raw=current?rawOf?.(current):undefined;
+  // What the stage draws: the photo, or the RAW behind it when asked for.
+  const onStage=side==='raw'&&raw?raw:current;
   const capture=current?.capturedAt?new Date(current.capturedAt*1000):null;
   const name=current?.path.split('/').pop()??'';
   const folder=current?.path.split('/').slice(0,-1).join('/')??'';
@@ -122,7 +137,14 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   function failed(id:number){
     void fetch(`/api/media/${id}/original`,{method:'HEAD'}).then(response=>response.status===404,()=>false).then(gone=>setBroken({id,gone}));
   }
-  function step(change:number){if(assets.length)setAt(index=>(index+change+assets.length)%assets.length);setZoom(false);setBare(false);setRelated(null);setMenu(false)}
+  function step(change:number){
+    if(assets.length){
+      const next=(Math.min(at,assets.length-1)+change+assets.length)%assets.length;
+      anchor.current=assets[next].id;
+      setAt(next);
+    }
+    setZoom(false);setBare(false);setRelated(null);setMenu(false);setSide('photo');
+  }
   function choose(status:Status,favourite?:boolean,advance=false){if(!current)return;if(onSave(current,status,favourite)&&advance)step(1)}
   // K and X each undo themselves and stay on the photo. A heart on a removed
   // photo brings it back, since the Bin never holds a favourite.
@@ -133,8 +155,10 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     if(!current)return;
     navigator.clipboard.writeText(current.path).then(()=>{setCopied(true);window.setTimeout(()=>setCopied(false),1500)},()=>setError('The path could not be copied.'));
   }
+  // A pair's own RAW is not a similar photo to compare with.
+  const similar=(current?.relatedCount??0)-(raw?1:0);
   async function openCompare(){
-    if(!current||(current.relatedCount??0)<1)return;
+    if(!current||similar<1)return;
     setError('');
     try{
       const response=await fetch(`/api/assets/${current.id}/related`);
@@ -179,7 +203,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     function key(event:KeyboardEvent){
       if(event.ctrlKey||event.metaKey||event.altKey||event.target instanceof HTMLInputElement)return;
       const key=event.key.toLowerCase();
-      if(['arrowright','arrowleft','x','k','f','i','z','c','g','escape',' ','?','1','2','3','4','5','6','7','8','9'].includes(key))event.preventDefault();
+      if(['arrowright','arrowleft','x','k','f','i','z','c','r','g','escape',' ','?','1','2','3','4','5','6','7','8','9'].includes(key))event.preventDefault();
       if(menu){if(key==='escape')setMenu(false);return}
       if(related){
         if(/^[1-9]$/.test(key))setFocus(Math.min(Number(key)-1,related.length-1));
@@ -195,6 +219,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       else if(key==='i')setInfo(value=>!value);
       else if(key==='z')setZoom(value=>!value);
       else if(key==='c')void openCompare();
+      else if(key==='r'&&raw)setSide(value=>value==='raw'?'photo':'raw');
       else if(key==='?')setHelp(value=>!value);
       else if(key==='g'||key==='escape'||key===' ')leave();
     }
@@ -218,8 +243,11 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     <div className="rvtop" onMouseUp={event=>(event.target as HTMLElement).closest('button')?.blur()}>
       <button type="button" className="rvact rvback" aria-label="Back to the grid" title="Back (Esc)" onClick={leave}><Icon name="arrow_back"/></button>
       <div className="rvacts">
-        {format(current)&&<span className="rvformat" title={name.split('.').pop()?.toUpperCase()}>{format(current)}</span>}
-        {(current.relatedCount??0)>0&&<button type="button" className="rvact cmp" aria-label="Compare similar photos" title="Compare (C)" onClick={()=>void openCompare()}><Icon name="compare"/></button>}
+        {raw?<div className="rvpair" role="group" aria-label="Show which file of the pair (R)">
+          <button type="button" aria-pressed={side==='photo'} title={name} onClick={()=>setSide('photo')}>{format(current)}</button>
+          <button type="button" aria-pressed={side==='raw'} title={raw.path.split('/').pop()} onClick={()=>setSide('raw')}>RAW</button>
+        </div>:format(current)&&<span className="rvformat" title={name.split('.').pop()?.toUpperCase()}>{format(current)}</span>}
+        {similar>0&&<button type="button" className="rvact cmp" aria-label="Compare similar photos" title="Compare (C)" onClick={()=>void openCompare()}><Icon name="compare"/></button>}
         <button type="button" className="rvact zoom" aria-label="Zoom" aria-pressed={zoom} title="Zoom (Z)" onClick={()=>setZoom(value=>!value)}><Icon name="zoom_in" filled={zoom}/></button>
         <button type="button" className="rvact infobtn" aria-label="Info" aria-pressed={info} title="Info (I)" onClick={()=>setInfo(value=>!value)}><Icon name="info" filled={info}/></button>
         <button type="button" className={`rvact fav${current.favourite?' on':''}`} aria-label={current.favourite?'Favourited':'Favourite'} aria-pressed={current.favourite} title={current.favourite?'Favourited. Press F again to undo':'Favourite (F)'} onClick={favourite}><Icon name="favorite" filled={current.favourite}/></button>
@@ -229,14 +257,15 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
         {menu&&<div className="rvmenu" role="menu" onClick={event=>event.stopPropagation()}>
           {dayOf&&<a role="menuitem" href={dayOf(current)} target="_blank" rel="noopener" onClick={()=>setMenu(false)}><Icon name="open_in_new"/>Open this day in a new tab</a>}
           <button type="button" role="menuitem" onClick={()=>{setMenu(false);copyPath()}}><Icon name="content_copy"/>Copy file path</button>
+          {raw&&onUnpair&&<button type="button" role="menuitem" onClick={()=>{setMenu(false);setSide('photo');onUnpair(current,raw)}}><Icon name="link_off"/>Unpair the RAW and {format(current)}</button>}
           <button type="button" role="menuitem" onClick={()=>{setMenu(false);setHelp(true)}}><Icon name="keyboard"/>Keyboard shortcuts<kbd>?</kbd></button>
         </div>}
       </div>
     </div>
     <div ref={stage} className={`rvstage${zoom?' zoom':''}${current.kind==='video'?' hasvideo':''}`} onClick={event=>{if((event.target as HTMLElement).tagName==='IMG')setBare(value=>!value)}}>
       <button type="button" className="rvnav prev" aria-label="Previous" onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
-      {broken?.id===current.id?<div className="rvgone" role="status"><b>{broken.gone?'This file is no longer in the archive':'This file could not be shown'}</b><span>{broken.gone?'It was moved or removed on the server since the last scan. It leaves review at the next nightly scan.':'Try again in a moment.'}</span></div>
-        :current.kind==='video'?<SessionVideo ref={media} key={current.id} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onLoadedData={()=>setShown(current.id)} onError={()=>failed(current.id)}/>:<img ref={media} key={current.id} src={preview(current)} alt={name} onLoad={()=>setShown(current.id)} onError={()=>failed(current.id)}/>}
+      {broken?.id===onStage.id?<div className="rvgone" role="status"><b>{broken.gone?'This file is no longer in the archive':'This file could not be shown'}</b><span>{broken.gone?'It was moved or removed on the server since the last scan. It leaves review at the next nightly scan.':'Try again in a moment.'}</span></div>
+        :current.kind==='video'?<SessionVideo ref={media} key={current.id} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onLoadedData={()=>setShown(current.id)} onError={()=>failed(current.id)}/>:<img ref={media} key={onStage.id} src={preview(onStage)} alt={onStage.path.split('/').pop()} onLoad={()=>setShown(current.id)} onError={()=>failed(onStage.id)}/>}
       <button type="button" className="rvnav next" aria-label="Next" onClick={event=>{event.stopPropagation();step(1)}}>›</button>
     </div>
     <aside className="rvinfo" aria-label="Info">
@@ -244,11 +273,12 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       <h4>Details</h4>
       <div className="irow"><Icon name="calendar_month"/><div><b>{date}</b><span>{weekday}{weekday&&time?', ':''}{time}</span></div></div>
       <div className="irow"><Icon name={mediaIcon}/><div><b>{name}</b><span>{(current.size/1048576).toFixed(1)} MB · {format(current)||current.kind.toUpperCase()}</span></div></div>
+      {raw&&<div className="irow"><Icon name="raw_on"/><div><b>{raw.path.split('/').pop()}</b><span>{(raw.size/1048576).toFixed(1)} MB · RAW, kept or removed with this photo</span></div></div>}
       <div className="irow"><Icon name={decision.icon}/><div><b>{decision.text}</b><span>{current.favourite?'Favourite · ':''}<span className="rvpos">{at+1} / {assets.length}</span> in this review</span></div></div>
       <div className="irow"><Icon name="folder"/><div><b>{folder.split('/').pop()||folder}</b><span className="mono">{current.path}</span></div><button type="button" className="rvact copy" aria-label="Copy file path" title={copied?'Copied':'Copy file path'} onClick={copyPath}><Icon name={copied?'check':'content_copy'}/></button></div>
     </aside>
     {related&&<div className="rvcmp"><div className="ctop"><b>Similar photos</b><span className="cpos">{focus+1} / {related.length}</span><span className="hint">1–9 focus a frame · X marks it · C back</span><button type="button" className="rvx cmpx" aria-label="Close compare" onClick={()=>setRelated(null)}>×</button></div><div className="cgrid">{compareFiles.map((asset,index)=><figure className={index===focus?'on':''} key={asset.id} onClick={()=>setFocus(index)}><img src={preview(asset)} alt={asset.path.split('/').pop()}/><span className="pick">{index+1}</span><figcaption>{asset.path.split('/').pop()} · {asset.status}</figcaption></figure>)}</div><div className="cfacts"><div className="verdict tied"><b>Possible copies or companion files</b><ul><li>Inspect before choosing</li><li>No file moves from this screen</li></ul></div></div><div className="cbot"><button type="button" className="rvbtn" onClick={()=>void saveGroup('keep-all')}>Keep all</button><button type="button" className="rvbtn cull" onClick={()=>void saveGroup('keep-focus')}>Keep the focused one, remove the rest</button><button type="button" className="rvbtn cull cmpall" onClick={()=>void saveGroup('cull-all')}>Remove all</button></div></div>}
-    {help&&<div className="rvkeys" onClick={()=>setHelp(false)}><table><tbody><tr><td>→ ←</td><td>next / previous</td></tr><tr><td>K</td><td>keep and continue, again to undo</td></tr><tr><td>X</td><td>remove (clears keep and favourite), again to undo</td></tr><tr><td>F</td><td>favourite</td></tr><tr><td>I</td><td>info panel</td></tr><tr><td>Z</td><td>zoom</td></tr><tr><td>C</td><td>compare a group</td></tr><tr><td>{undoKeys.undo} / {undoKeys.redo}</td><td>{onRecord?'undo / redo the last choice':'undo / redo, on the day page'}</td></tr><tr><td>G / Esc / Space</td><td>back to the grid</td></tr><tr><td>?</td><td>this list</td></tr></tbody></table></div>}
+    {help&&<div className="rvkeys" onClick={()=>setHelp(false)}><table><tbody><tr><td>→ ←</td><td>next / previous</td></tr><tr><td>K</td><td>keep and continue, again to undo</td></tr><tr><td>X</td><td>remove (clears keep and favourite), again to undo</td></tr><tr><td>F</td><td>favourite</td></tr><tr><td>I</td><td>info panel</td></tr><tr><td>Z</td><td>zoom</td></tr><tr><td>C</td><td>compare a group</td></tr>{raw&&<tr><td>R</td><td>show the RAW of this pair</td></tr>}<tr><td>{undoKeys.undo} / {undoKeys.redo}</td><td>{onRecord?'undo / redo the last choice':'undo / redo, on the day page'}</td></tr><tr><td>G / Esc / Space</td><td>back to the grid</td></tr><tr><td>?</td><td>this list</td></tr></tbody></table></div>}
     {error&&<div className="toast err">{error}</div>}
     </div>
     {flight&&<img ref={flyer} className="rvfly" src={flight.src} alt="" style={{left:flight.from.left,top:flight.from.top,width:flight.from.width,height:flight.from.height,borderRadius:flight.mode==='open'?flight.radius:0}}/>}

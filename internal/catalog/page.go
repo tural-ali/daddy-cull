@@ -19,6 +19,9 @@ type Asset struct {
 	Revision         int64  `json:"revision"`
 	Source           string `json:"source"`
 	AlternativeCount int    `json:"alternativeCount"`
+	// Pair is the other half of a RAW+JPEG pair, on the pages that show
+	// pairs as one photo.
+	Pair int64 `json:"pair,omitempty"`
 }
 type Cursor struct {
 	Version int    `json:"v"`

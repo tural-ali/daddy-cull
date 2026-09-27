@@ -5,7 +5,8 @@ import type {Status} from '../api';
 export type Snapshot={id:number;status:Status;favourite:boolean};
 export type HistoryEntry=
   |{kind:'decisions';label:string;before:Snapshot[];after:Snapshot[]}
-  |{kind:'progress';label:string;days:string[];before:'pending'|'done';after:'pending'|'done';kept?:number[]};
+  |{kind:'progress';label:string;days:string[];before:'pending'|'done';after:'pending'|'done';kept?:number[]}
+  |{kind:'pair';label:string;raw:number;partner:number;before:boolean;after:boolean};
 
 /** How far back a day's review can be unwound. */
 export const HISTORY_LIMIT=100;

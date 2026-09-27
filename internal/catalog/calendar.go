@@ -260,7 +260,13 @@ func (s *Store) Today(ctx context.Context, md string) (TodayData, error) {
 			return data, queryErr
 		}
 	}
-	return data, nil
+	var all []*Asset
+	for index := range data.Years {
+		for i := range data.Years[index].Assets {
+			all = append(all, &data.Years[index].Assets[i])
+		}
+	}
+	return data, s.markPairs(ctx, all)
 }
 
 func (s *Store) SetDayProgress(ctx context.Context, change DayProgressChange) (DayProgressResult, error) {
