@@ -9,6 +9,7 @@ import {Busy} from '../Busy';
 import {Icon,type IconName} from '../Icon';
 import {Celebration,type Tally} from './Celebration';
 import {usePageActions} from './pageActions';
+import {requestID,sendDecisions} from './decisions';
 import {historyKey,undoKeys,useHistory,type HistoryEntry,type Snapshot} from './history';
 
 export type TodayYear={day:string;year:number;files:number;bytes:number;status:'pending'|'done';assets:Asset[]};
@@ -16,7 +17,6 @@ export type TodayData={md:string;label:string;previous:string;next:string;years:
 export type DuplicateMember=Asset&{day:string};
 export type DuplicateGroup={hash:string;size:number;reclaimable:number;members:DuplicateMember[]};
 
-function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
 function currentMD(){const now=new Date();return `${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`}
 function bytes(value:number){
   if(value<1024)return `${value} B`;
@@ -36,6 +36,16 @@ function describe(asset:Asset,status:Status,favourite:boolean){
   if(status==='keep')return `kept ${name}`;
   if(asset.status==='cull')return `brought back ${name}`;
   return `cleared ${name}`;
+}
+
+type DateReviewed={days:string[];kept:{id:number;revision:number}[];tally:{total:number;removed:number;bytes:number;kept:number;favourites:number}};
+/** Finishes a calendar date on the server in one step: every file still
+ * undecided is kept, every year not yet reviewed is marked, and what the date
+ * came to is counted from the catalogue, the Bin's emptied files included. */
+async function reviewDate(md:string):Promise<DateReviewed>{
+  const response=await fetch(`/api/dates/${md}/reviewed`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:requestID()})});
+  if(!response.ok)throw new Error(response.status===409?'A file on this date changed in another session. Reload before marking it reviewed.':'The review could not be saved.');
+  return response.json();
 }
 
 async function setProgress(day:string,status:'pending'|'done'){
@@ -176,10 +186,23 @@ export function Today({initial}:{initial:TodayData}){
       const status=entry[direction];
       if(status==='pending')setCheer(null);
       setSaving(true);
-      Promise.all(entry.days.map(day=>setProgress(day,status))).then(()=>{
+      (async()=>{
+        if(status==='done'&&entry.kept){
+          // Redo finishes the date again, keeping whatever is undecided.
+          applyReviewed(await reviewDate(initial.md));
+          return;
+        }
+        await Promise.all(entry.days.map(day=>setProgress(day,status)));
         setYears(current=>current.map(year=>entry.days.includes(year.day)?{...year,status}:year));
+        // Undo also takes back the keeps the mark made, on files nobody has
+        // decided differently since.
+        const kept=assets.filter(asset=>entry.kept?.includes(asset.id)&&asset.status==='keep');
+        if(status==='pending'&&kept.length>0){
+          const saved=await sendDecisions(kept.map(asset=>({assetId:asset.id,status:'unreviewed',favourite:asset.favourite,expectedRevision:asset.revision,requestId:requestID()})));
+          kept.forEach((asset,index)=>patchAsset(asset.id,{status:'unreviewed',revision:saved[index].revision}));
+        }
         binChanged();
-      }).catch(error=>setMessage((error as Error).message)).finally(()=>setSaving(false));
+      })().catch(error=>setMessage((error as Error).message)).finally(()=>setSaving(false));
       return true;
     }
     for(const target of entry[direction]){
@@ -199,18 +222,20 @@ export function Today({initial}:{initial:TodayData}){
     if(!taken){setMessage('Nothing to redo.');return}
     if(restore(taken.entry,'after'))setMessage(`Redone: ${taken.entry.label}.`);else taken.keep();
   }
+  function applyReviewed(result:DateReviewed){
+    const revisions=new Map(result.kept.map(item=>[item.id,item.revision]));
+    setYears(current=>current.map(year=>({...year,status:'done',assets:year.assets.map(asset=>revisions.has(asset.id)?{...asset,status:'keep',revision:revisions.get(asset.id)!}:asset)})));
+    binChanged();
+    return result;
+  }
   async function markDate(){
-    if(saving)return;
+    // A choice still on its way to the server would race the keeps.
+    if(saving||queue.pending>0)return;
     setSaving(true);
-    setMessage('Saving…');
     try{
-      const open=years.filter(year=>year.status!=='done').map(year=>year.day);
-      await Promise.all(open.map(day=>setProgress(day,'done')));
-      setYears(current=>current.map(year=>({...year,status:'done'})));
-      history.record({kind:'progress',label:`marked ${initial.label} reviewed`,days:open,before:'pending',after:'done'});
-      binChanged();
-      const removed=assets.filter(asset=>asset.status==='cull');
-      setCheer({label:initial.label,total:assets.length,removed:removed.length,bytes:removed.reduce((sum,asset)=>sum+asset.size,0),favourites:assets.filter(asset=>asset.favourite).length});
+      const result=applyReviewed(await reviewDate(initial.md));
+      history.record({kind:'progress',label:`marked ${initial.label} reviewed`,days:result.days,before:'pending',after:'done',kept:result.kept.map(item=>item.id)});
+      setCheer({label:initial.label,total:result.tally.total,removed:result.tally.removed,bytes:result.tally.bytes,favourites:result.tally.favourites});
     }catch(error){setMessage((error as Error).message)}finally{setSaving(false)}
   }
 
@@ -259,7 +284,7 @@ export function Today({initial}:{initial:TodayData}){
     return()=>controller.abort();
   },[initial.md]);
 
-  usePageActions(assets.length>0&&doneYears<years.length?{actions:[{label:`Mark ${initial.label} reviewed`,short:'Mark reviewed',icon:'task_alt',disabled:saving,onClick:()=>void markDate()}]}:null);
+  usePageActions(assets.length>0&&doneYears<years.length?{actions:[{label:`Mark ${initial.label} reviewed`,short:'Mark reviewed',icon:'task_alt',disabled:saving||queue.pending>0,onClick:()=>void markDate()}]}:null);
   return <>
     <div className="dhead">
       <a className="step" data-nav="prev" href={`/on/${initial.previous}`}>← {calendarLabel(initial.previous)}</a>

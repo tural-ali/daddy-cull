@@ -12,13 +12,15 @@ const pick=({assetId,status,favourite})=>({assetId,status,favourite});
   const page=await browser.newPage({viewport:{width:1280,height:800}});
   await page.clock.setFixedTime(new Date('2026-09-07T10:00:00'));
   const writes=[];
-  const progress=[];
+  const progress=[],reviews=[],batches=[];
   await page.route('**/api/**',route=>{
     const request=route.request(),url=new URL(request.url());
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:3,synthetic:false,snapshotAt:'2026-09-06 01:49:00',candidates:0,calendarDays:1,reviewedDays:0,decisions:0,favourites:0,evidence:0,fullHashes:0,marked:0}});
     if(url.pathname==='/api/today/09-07')return route.fulfill({json:{md:'09-07',label:'7 September',previous:'09-06',next:'09-08',years:[{day:'2010-09-07',year:2010,files:3,bytes:300,status:'pending',assets:[photo(1,'ONE.JPG'),photo(2,'TWO.JPG'),photo(3,'THREE.JPG')]}],memories:3,bytes:300}});
     if(url.pathname==='/api/decisions'){const body=request.postDataJSON();writes.push(body);return route.fulfill({json:{revision:body.expectedRevision+1,previousStatus:'unreviewed',previousFavourite:false}})}
     if(url.pathname==='/api/day-progress'){progress.push(request.postDataJSON());return route.fulfill({json:{}})}
+    if(url.pathname==='/api/dates/09-07/reviewed'){reviews.push(request.postDataJSON());return route.fulfill({json:{days:['2010-09-07'],kept:[1,2,3].map(id=>({id,revision:50+reviews.length})),tally:{total:3,removed:0,bytes:0,kept:3,favourites:0}}})}
+    if(url.pathname==='/api/decisions/batch'){const body=request.postDataJSON();batches.push(body);return route.fulfill({json:body.map(change=>({revision:change.expectedRevision+1,previousStatus:'keep',previousFavourite:false}))})}
     if(url.pathname.startsWith('/api/duplicates'))return route.fulfill({json:[]});
     if(url.pathname.startsWith('/api/media/'))return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#526b52"/></svg>'});
     return route.fulfill({status:404,json:{error:'not mocked'}});
@@ -71,15 +73,23 @@ const pick=({assetId,status,favourite})=>({assetId,status,favourite});
   await page.keyboard.press('Meta+z');
   assert.deepEqual(pick(await settled(11)),{assetId:2,status:'unreviewed',favourite:false},'⌘Z in the grid brings it back');
   await page.locator('.gal figure').nth(1).locator('.undo').waitFor({state:'hidden'});
+  // Marking the date reviewed keeps every undecided photo in one step; ⌘Z
+  // unmarks the year and takes the keeps back, ⌘U does both again.
+  const seen=()=>page.locator('.gal figure.seen').count();
   await page.getByRole('button',{name:'Mark 7 September reviewed'}).click();
   await page.locator('.yr.settled').waitFor();
-  assert.deepEqual(progress.map(p=>[p.day,p.status]),[['2010-09-07','done']]);
+  assert.equal(reviews.length,1);
+  assert.equal(await seen(),3,'every undecided photo is kept');
+  await page.keyboard.press('Escape');
   await page.keyboard.press('Meta+z');
   await page.locator('.yr:not(.settled)').waitFor();
-  assert.deepEqual(progress.map(p=>[p.day,p.status]),[['2010-09-07','done'],['2010-09-07','pending']],'⌘Z unmarks the year');
+  assert.deepEqual(progress.map(p=>[p.day,p.status]),[['2010-09-07','pending']],'⌘Z unmarks the year');
+  await page.waitForFunction(()=>document.querySelectorAll('.gal figure.seen').length===0);
+  assert.deepEqual(batches[0].map(change=>[change.assetId,change.status,change.expectedRevision]),[[1,'unreviewed',51],[2,'unreviewed',51],[3,'unreviewed',51]],'and takes the keeps back');
   await page.keyboard.press('Meta+u');
   await page.locator('.yr.settled').waitFor();
-  assert.equal(progress.length,3,'⌘U marks it again');
+  assert.equal(reviews.length,2,'⌘U marks it again');
+  assert.equal(await seen(),3);
 
   // The history is a hundred actions deep: after 101 hearts on one photo, a
   // hundred undos take it back to the state after the first, and no further.

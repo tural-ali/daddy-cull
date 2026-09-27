@@ -345,6 +345,34 @@ func (s *Store) Handler() http.Handler {
 		}
 		writeJSON(w, result)
 	})
+	mux.HandleFunc("POST /api/dates/{md}/reviewed", func(w http.ResponseWriter, r *http.Request) {
+		if !sameOriginJSON(w, r) {
+			return
+		}
+		var body struct {
+			RequestID string `json:"requestId"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&body); err != nil {
+			http.Error(w, "invalid request", 400)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		result, err := s.MarkDateReviewed(ctx, r.PathValue("md"), body.RequestID)
+		if err != nil {
+			status := 503
+			if errors.Is(err, ErrInvalid) {
+				status = 400
+			} else if errors.Is(err, ErrConflict) {
+				status = 409
+			}
+			http.Error(w, http.StatusText(status), status)
+			return
+		}
+		writeJSON(w, result)
+	})
 	mux.HandleFunc("POST /api/reindex", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Content-Type") != "application/json" {
 			http.Error(w, "JSON required", 415)

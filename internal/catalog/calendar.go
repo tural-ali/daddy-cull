@@ -272,13 +272,23 @@ func (s *Store) SetDayProgress(ctx context.Context, change DayProgressChange) (D
 		return DayProgressResult{}, err
 	}
 	defer tx.Rollback()
+	result, err := setDayProgressTx(ctx, tx, change)
+	if err != nil {
+		return result, err
+	}
+	return result, tx.Commit()
+}
+
+// setDayProgressTx records one year's day as reviewed or not, idempotently by
+// request id, inside a transaction the caller commits.
+func setDayProgressTx(ctx context.Context, tx *sql.Tx, change DayProgressChange) (DayProgressResult, error) {
 	var existing DayProgressResult
-	err = tx.QueryRowContext(ctx, "SELECT day,status,previous_status FROM day_progress_events WHERE request_id=?", change.RequestID).Scan(&existing.Day, &existing.Status, &existing.PreviousStatus)
+	err := tx.QueryRowContext(ctx, "SELECT day,status,previous_status FROM day_progress_events WHERE request_id=?", change.RequestID).Scan(&existing.Day, &existing.Status, &existing.PreviousStatus)
 	if err == nil {
 		if existing.Day != change.Day || existing.Status != change.Status {
 			return DayProgressResult{}, ErrConflict
 		}
-		return existing, tx.Commit()
+		return existing, nil
 	}
 	if err != sql.ErrNoRows {
 		return DayProgressResult{}, err
@@ -304,6 +314,5 @@ func (s *Store) SetDayProgress(ctx context.Context, change DayProgressChange) (D
 	if _, err = tx.ExecContext(ctx, "INSERT INTO day_progress_events(request_id,day,status,previous_status) VALUES(?,?,?,?)", change.RequestID, change.Day, change.Status, previous); err != nil {
 		return DayProgressResult{}, err
 	}
-	result := DayProgressResult{Day: change.Day, Status: change.Status, PreviousStatus: previous}
-	return result, tx.Commit()
+	return DayProgressResult{Day: change.Day, Status: change.Status, PreviousStatus: previous}, nil
 }
