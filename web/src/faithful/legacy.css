@@ -510,15 +510,13 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 .yr { margin: 0 0 2rem; }
 .yr.settled { opacity: .62; }
 .yr.settled:hover { opacity: 1; }
-.yhead {
-  display: flex; align-items: baseline; gap: .7rem;
-  padding: 0 0 .5rem; margin-bottom: .7rem;
-  border-bottom: 1px solid var(--line);
-}
-.yhead h2 { margin: 0; font-size: 19px; font-variant-numeric: tabular-nums; }
-.yhead .ymeta { font-size: 12.5px; color: var(--muted); }
-.yact { display: flex; align-items: center; gap: .8rem; margin: .7rem 0 0; font-size: 12.5px; }
-.yact form { margin: 0; }
+/* Set like a month in Google Photos: a light, large heading with the date
+   line under it, and no rule between them and the photographs. */
+.yhead { display: flex; flex-direction: column; gap: 10px; padding: 8px 0 20px; }
+.yhead h2 { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 28px; font-weight: 400; line-height: 36px; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.yhead .ymeta { display: flex; flex-wrap: wrap; gap: 0 16px; margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--text); }
+.yhead .ymeta .dim { font-weight: 400; color: var(--muted); }
+.yhead .ymeta a.dim:hover { color: var(--text); }
 
 /* --------------------------------------------------------------- gallery -- */
 /* 4-6 columns on a desktop, by viewport rather than by media query: the tile

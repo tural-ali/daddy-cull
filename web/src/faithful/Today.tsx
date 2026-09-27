@@ -7,6 +7,7 @@ import {Viewer} from './Viewer';
 import {usePhotoURL} from './photoURL';
 import {Busy} from '../Busy';
 import {usePageActions} from './pageActions';
+import {historyKey,undoKeys,useHistory,type HistoryEntry,type Snapshot} from './history';
 
 export type TodayYear={day:string;year:number;files:number;bytes:number;status:'pending'|'done';assets:Asset[]};
 export type TodayData={md:string;label:string;previous:string;next:string;years:TodayYear[];memories:number;bytes:number};
@@ -23,6 +24,18 @@ function bytes(value:number){
 }
 function captureTime(timestamp:number){return timestamp?new Date(timestamp*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):null}
 
+function snapshot(asset:Asset):Snapshot{return {id:asset.id,status:asset.status,favourite:asset.favourite}}
+function fileName(asset:Asset){return asset.path.split('/').pop()??''}
+/** What a single decision did, for the undo message. */
+function describe(asset:Asset,status:Status,favourite:boolean){
+  const name=fileName(asset);
+  if(status==='cull')return `removed ${name}`;
+  if(favourite!==asset.favourite)return favourite?`favourited ${name}`:`unfavourited ${name}`;
+  if(status==='keep')return `kept ${name}`;
+  if(asset.status==='cull')return `brought back ${name}`;
+  return `cleared ${name}`;
+}
+
 async function setProgress(day:string,status:'pending'|'done'){
   const response=await fetch('/api/day-progress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({day,status,requestId:requestID()})});
   if(!response.ok)throw new Error('The review marker could not be saved.');
@@ -35,6 +48,7 @@ export function Today({initial}:{initial:TodayData}){
   const [message,setMessage]=useState('');
   const [duplicateGroups,setDuplicateGroups]=useState<DuplicateGroup[]>([]);
   const [keepers,setKeepers]=useState<Record<string,number>>({});
+  const history=useHistory();
   const photo=usePhotoURL(id=>initial.years.some(year=>year.assets.some(asset=>String(asset.id)===id)));
   const viewer=photo.open===null?null:Number(photo.open);
   const assets=useMemo(()=>years.flatMap(year=>year.assets),[years]);
@@ -60,15 +74,17 @@ export function Today({initial}:{initial:TodayData}){
       const results:{revision:number}[]=await response.json();
       binChanged();
       group.members.forEach((asset,index)=>patchAsset(asset.id,{status:asset.id===keeperID?'keep':'cull',favourite:asset.id===keeperID&&asset.favourite,revision:results[index].revision}));
+      history.record({kind:'decisions',label:`resolved ${group.members.length} copies`,before:group.members.map(snapshot),after:changes.map(change=>({id:change.assetId,status:change.status as Status,favourite:change.favourite}))});
 	  setDuplicateGroups(current=>current.filter(item=>item.hash!==group.hash||item.size!==group.size));
       setMessage(`${group.members.length-1} verified ${group.members.length===2?'copy':'copies'} marked for the Bin. No original has moved.`);
     }catch(error){setMessage((error as Error).message)}finally{setSaving(false)}
   }
   const queue=useDecisionQueue((job,result)=>{
     patchAsset(job.asset.id,{status:job.status,favourite:job.favourite,revision:result.revision});
-    setMessage(job.status==='cull'?'Marked for the Bin. The original has not moved.':'Saved.');
+    // An undo's own message stays up while its saves are confirmed.
+    setMessage(current=>/^(Undone|Redone):/.test(current)?current:job.status==='cull'?'Marked for the Bin. The original has not moved.':'Saved.');
   });
-  function save(asset:Asset,status:Status,favourite=asset.favourite){
+  function save(asset:Asset,status:Status,favourite=asset.favourite,remember=true){
     if(status==='cull')favourite=false;
     const before={status:asset.status,favourite:asset.favourite};
     patchAsset(asset.id,{status,favourite});
@@ -77,32 +93,69 @@ export function Today({initial}:{initial:TodayData}){
       setMessage(queue.error||'Review is paused until the pending choice is confirmed.');
       return false;
     }
-    setMessage('Saving…');
+    if(remember){
+      history.record({kind:'decisions',label:describe(asset,status,favourite),before:[snapshot(asset)],after:[{id:asset.id,status,favourite}]});
+      setMessage('Saving…');
+    }
     return true;
   }
-  async function markYear(day:string){
-    if(saving)return;
-    setSaving(true);
-    setMessage('Saving…');
-    try{
-      await setProgress(day,'done');
-      setYears(current=>current.map(year=>year.day===day?{...year,status:'done'}:year));
-      binChanged();
-      setMessage(`${day.slice(0,4)} marked reviewed.`);
-    }catch(error){setMessage((error as Error).message)}finally{setSaving(false)}
+  // Undo puts every file of the last action back as it was, through the same
+  // queue as any choice, so it is journaled and confirmed the same way. A file
+  // already back in that state (undone by hand) is left alone.
+  function restore(entry:HistoryEntry,direction:'before'|'after'){
+    if(entry.kind==='progress'){
+      const status=entry[direction];
+      setSaving(true);
+      Promise.all(entry.days.map(day=>setProgress(day,status))).then(()=>{
+        setYears(current=>current.map(year=>entry.days.includes(year.day)?{...year,status}:year));
+        binChanged();
+      }).catch(error=>setMessage((error as Error).message)).finally(()=>setSaving(false));
+      return true;
+    }
+    for(const target of entry[direction]){
+      const asset=assets.find(item=>item.id===target.id);
+      if(!asset||(asset.status===target.status&&asset.favourite===target.favourite))continue;
+      if(!save(asset,target.status,target.favourite,false))return false;
+    }
+    return true;
+  }
+  function undo(){
+    const taken=history.takeUndo();
+    if(!taken){setMessage('Nothing to undo.');return}
+    if(restore(taken.entry,'before'))setMessage(`Undone: ${taken.entry.label}.`);else taken.keep();
+  }
+  function redo(){
+    const taken=history.takeRedo();
+    if(!taken){setMessage('Nothing to redo.');return}
+    if(restore(taken.entry,'after'))setMessage(`Redone: ${taken.entry.label}.`);else taken.keep();
   }
   async function markDate(){
     if(saving)return;
     setSaving(true);
     setMessage('Saving…');
     try{
-      await Promise.all(years.filter(year=>year.status!=='done').map(year=>setProgress(year.day,'done')));
+      const open=years.filter(year=>year.status!=='done').map(year=>year.day);
+      await Promise.all(open.map(day=>setProgress(day,'done')));
       setYears(current=>current.map(year=>({...year,status:'done'})));
+      history.record({kind:'progress',label:`marked ${initial.label} reviewed`,days:open,before:'pending',after:'done'});
       binChanged();
       setMessage(`${initial.label} marked reviewed.`);
     }catch(error){setMessage((error as Error).message)}finally{setSaving(false)}
   }
 
+  // Undo and redo work wherever the day is being reviewed, in the grid or in
+  // the viewer, which leaves modifier keys alone.
+  useEffect(()=>{
+    function key(event:KeyboardEvent){
+      const action=historyKey(event);
+      if(!action)return;
+      event.preventDefault();
+      if(event.repeat||saving)return;
+      if(action==='undo')undo();else redo();
+    }
+    window.addEventListener('keydown',key);
+    return()=>window.removeEventListener('keydown',key);
+  });
   useEffect(()=>{
     function key(event:KeyboardEvent){
       if(viewer!==null||event.ctrlKey||event.metaKey||event.altKey||event.target instanceof HTMLButtonElement)return;
@@ -164,7 +217,7 @@ export function Today({initial}:{initial:TodayData}){
       </div>)}
     </section>}
     {years.map(year=><section className={`yr${year.status==='done'?' settled':''}`} key={year.day}>
-      <div className="yhead"><h2>{year.year}</h2><span className="ymeta">{year.assets.length.toLocaleString()} {year.assets.length===1?'memory':'memories'}{year.assets.length!==year.files&&<span className="dim"> from {year.files.toLocaleString()} files</span>} <span className="dim">· {bytes(year.bytes)}</span></span>{year.status==='done'&&<span className="tag done">reviewed</span>}</div>
+      <div className="yhead"><h2>{year.year}{year.status==='done'&&<span className="tag done">reviewed</span>}</h2><p className="ymeta"><span>{year.assets.length.toLocaleString()} {year.assets.length===1?'memory':'memories'}{year.assets.length!==year.files&&<span className="dim"> from {year.files.toLocaleString()} files</span>}</span><span className="dim">{bytes(year.bytes)}</span><a className="dim" href={`/day/${year.day}`}>Open {year.day} on its own</a></p></div>
       {year.assets.length===0?<p className="note">Nothing left in this folder.</p>:<div className="gal">{year.assets.map(asset=><figure className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}`} key={asset.id} onClick={()=>{setSelected(asset.id);photo.show(asset.id)}} tabIndex={0}>
         <Media asset={asset}/>
         <div className="bdg">{(asset.relatedCount??0)>0&&<span className="b dupe">duplicate</span>}{asset.kind==='video'&&<span className="b play">▶</span>}</div>
@@ -172,9 +225,8 @@ export function Today({initial}:{initial:TodayData}){
         {captureTime(asset.capturedAt)&&<div className="when">{captureTime(asset.capturedAt)}</div>}
         {asset.status==='cull'&&<div className="undo"><span>Removed</span><button type="button" className="act" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,'unreviewed')}}>Undo</button></div>}
       </figure>)}</div>}
-      {year.status!=='done'&&year.assets.length>0&&<p className="yact"><button className="btn small" disabled={saving} onClick={()=>void markYear(year.day)}>Mark {year.year} reviewed</button><a className="dim" href={`/day/${year.day}`}>Open {year.day} on its own</a></p>}
     </section>)}
-    {assets.length>0&&<footer className="fbar keys"><span className="fleft"><span className="hint">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>?</b> for the rest</span></span></footer>}
-    {viewer!==null&&<Viewer assets={assets} initialID={viewer} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset}/>} 
+    {assets.length>0&&<footer className="fbar keys"><span className="fleft"><span className="hint">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>{undoKeys.undo}</b> undo, <b>{undoKeys.redo}</b> redo, <b>?</b> for the rest</span></span></footer>}
+    {viewer!==null&&<Viewer assets={assets} initialID={viewer} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset} onRecord={history.record}/>} 
   </>;
 }

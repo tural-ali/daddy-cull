@@ -2,6 +2,7 @@ import {useEffect,useLayoutEffect,useMemo,useRef,useState,type MouseEvent} from 
 import {SessionVideo} from '../SessionVideo';
 import {Icon} from '../Icon';
 import {binChanged,type Asset,type Status} from '../api';
+import {undoKeys,type HistoryEntry} from './history';
 
 function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
 function preview(asset:Asset){return `/api/media/${asset.id}/preview?size=large`}
@@ -15,7 +16,8 @@ function format(asset:Asset){
 /** `dayOf`, when given, turns the date into a link to the file's own day, for
  * pages that show files from many days. */
 /** `onMove` hears which photo is showing, so the address can follow it. */
-export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove}:{assets:Asset[];initialID:number;onClose:()=>void;onSave:(asset:Asset,status:Status,favourite?:boolean)=>boolean;onPatch:(id:number,change:Partial<Asset>)=>void;dayOf?:(asset:Asset)=>string;onMove?:(id:number)=>void}){
+/** `onRecord`, when given, hears a group choice so the page can undo it. */
+export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onRecord}:{assets:Asset[];initialID:number;onClose:()=>void;onSave:(asset:Asset,status:Status,favourite?:boolean)=>boolean;onPatch:(id:number,change:Partial<Asset>)=>void;dayOf?:(asset:Asset)=>string;onMove?:(id:number)=>void;onRecord?:(entry:HistoryEntry)=>void}){
   const initialIndex=Math.max(0,assets.findIndex(asset=>asset.id===initialID));
   const [at,setAt]=useState(initialIndex);
   // Info stays open from photo to photo, and from one visit to the next.
@@ -88,6 +90,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove}:{a
       const results:{revision:number}[]=await response.json();
       binChanged();
       jobs.forEach((job,index)=>onPatch(job.assetId,{status:job.status as Status,favourite:job.favourite,revision:results[index].revision}));
+      onRecord?.({kind:'decisions',label:`chose among ${related.length} similar photos`,before:related.map(asset=>({id:asset.id,status:asset.status,favourite:asset.favourite})),after:jobs.map(job=>({id:job.assetId,status:job.status as Status,favourite:job.favourite}))});
       localStorage.removeItem(journal);setRelated(null);step(1);
     }catch(reason){setError((reason as Error).message)}
   }
@@ -152,7 +155,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove}:{a
     <div className="rvbot"><button type="button" className="rvbtn cull" onClick={remove}><span className="ico">{current.status==='cull'?'↶':'🗑'}</span>{current.status==='cull'?'Undo remove':'Remove'} <kbd>X</kbd></button><button type="button" className={`rvbtn keep${current.status==='keep'?' on':''}`} aria-pressed={current.status==='keep'} title={current.status==='keep'?'Kept. Press K again to undo':undefined} onClick={keep}><span className="ico">✓</span>{current.status==='keep'?'Kept':'Keep'} <kbd>K</kbd></button><button type="button" className={`rvbtn fav${current.favourite?' on':''}`} aria-pressed={current.favourite} onClick={favourite}><span className="ico">{current.favourite?'★':'☆'}</span>{current.favourite?'Favourited':'Favourite'} <kbd>F</kbd></button>{(current.relatedCount??0)>0&&<button type="button" className="rvbtn cmp" onClick={()=>void openCompare()}>Compare <kbd>C</kbd></button>}<button type="button" className="rvbtn" onClick={()=>setInfo(value=>!value)}>Info <kbd>I</kbd></button></div>
     <aside className="rvinfo"><h3>Info</h3><dl><div><dt>File</dt><dd>{name}</dd></div><div><dt>Captured</dt><dd>{date} {time}</dd></div><div><dt>Type</dt><dd>{current.kind.toUpperCase()}</dd></div><div><dt>Size</dt><dd>{(current.size/1048576).toFixed(2)} MB</dd></div><div><dt>Decision</dt><dd>{current.status}</dd></div><div><dt>Path</dt><dd className="mono">{current.path}</dd></div></dl></aside>
     {related&&<div className="rvcmp"><div className="ctop"><b>Similar photos</b><span className="cpos">{focus+1} / {related.length}</span><span className="hint">1–9 focus a frame · X marks it · C back</span><button type="button" className="rvx cmpx" aria-label="Close compare" onClick={()=>setRelated(null)}>×</button></div><div className="cgrid">{compareFiles.map((asset,index)=><figure className={index===focus?'on':''} key={asset.id} onClick={()=>setFocus(index)}><img src={preview(asset)} alt={asset.path.split('/').pop()}/><span className="pick">{index+1}</span><figcaption>{asset.path.split('/').pop()} · {asset.status}</figcaption></figure>)}</div><div className="cfacts"><div className="verdict tied"><b>Possible copies or companion files</b><ul><li>Inspect before choosing</li><li>No file moves from this screen</li></ul></div></div><div className="cbot"><button type="button" className="rvbtn" onClick={()=>void saveGroup('keep-all')}>Keep all</button><button type="button" className="rvbtn cull" onClick={()=>void saveGroup('keep-focus')}>Keep the focused one, remove the rest</button><button type="button" className="rvbtn cull cmpall" onClick={()=>void saveGroup('cull-all')}>Remove all</button></div></div>}
-    {help&&<div className="rvkeys" onClick={()=>setHelp(false)}><table><tbody><tr><td>→ ←</td><td>next / previous</td></tr><tr><td>K</td><td>keep and continue, again to undo</td></tr><tr><td>X</td><td>remove (clears keep and favourite), again to undo</td></tr><tr><td>F</td><td>favourite</td></tr><tr><td>I</td><td>info panel</td></tr><tr><td>Z</td><td>zoom</td></tr><tr><td>C</td><td>compare a group</td></tr><tr><td>G / Esc / Space</td><td>back to the grid</td></tr><tr><td>?</td><td>this list</td></tr></tbody></table></div>}
+    {help&&<div className="rvkeys" onClick={()=>setHelp(false)}><table><tbody><tr><td>→ ←</td><td>next / previous</td></tr><tr><td>K</td><td>keep and continue, again to undo</td></tr><tr><td>X</td><td>remove (clears keep and favourite), again to undo</td></tr><tr><td>F</td><td>favourite</td></tr><tr><td>I</td><td>info panel</td></tr><tr><td>Z</td><td>zoom</td></tr><tr><td>C</td><td>compare a group</td></tr><tr><td>{undoKeys.undo} / {undoKeys.redo}</td><td>{onRecord?'undo / redo the last choice':'undo / redo, on the day page'}</td></tr><tr><td>G / Esc / Space</td><td>back to the grid</td></tr><tr><td>?</td><td>this list</td></tr></tbody></table></div>}
     {error&&<div className="toast err">{error}</div>}
   </div>;
 }
