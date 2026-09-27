@@ -215,7 +215,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     :{icon:'schedule' as IconName,text:'Not decided yet'};
   return <div className={`rv on${bare?' bare':''}${info?' info':''}${related?' cmp':''}${flight?` flight ${flight.mode}`:''}`} role="dialog" aria-modal="true" aria-label="Photo review" onClick={outside}>
     <div className="rvbody">
-    <div className="rvtop">
+    <div className="rvtop" onMouseUp={event=>(event.target as HTMLElement).closest('button')?.blur()}>
       <button type="button" className="rvact rvback" aria-label="Back to the grid" title="Back (Esc)" onClick={leave}><Icon name="arrow_back"/></button>
       <div className="rvacts">
         {format(current)&&<span className="rvformat" title={name.split('.').pop()?.toUpperCase()}>{current.kind==='raw'&&<Icon name="raw_on"/>}{format(current)}</span>}

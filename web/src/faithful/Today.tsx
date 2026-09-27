@@ -6,6 +6,8 @@ import {calendarLabel} from './Year';
 import {Viewer} from './Viewer';
 import {usePhotoURL} from './photoURL';
 import {Busy} from '../Busy';
+import {Icon,type IconName} from '../Icon';
+import {Celebration,type Tally} from './Celebration';
 import {usePageActions} from './pageActions';
 import {historyKey,undoKeys,useHistory,type HistoryEntry,type Snapshot} from './history';
 
@@ -41,6 +43,35 @@ async function setProgress(day:string,status:'pending'|'done'){
   if(!response.ok)throw new Error('The review marker could not be saved.');
 }
 
+/** The chips over the grid. One from a group narrows the day to it; two from
+ * the same group widen it to either; groups combine. */
+type Filter='favourites'|'videos'|'photos'|'undecided'|'kept'|'removed';
+const filterChips:{id:Filter;label:string;icon:IconName}[]=[
+  {id:'favourites',label:'Favourites',icon:'favorite'},
+  {id:'videos',label:'Videos',icon:'videocam'},
+  {id:'photos',label:'Photos',icon:'image'},
+  {id:'undecided',label:'Undecided',icon:'schedule'},
+  {id:'kept',label:'Kept',icon:'check_circle'},
+  {id:'removed',label:'Removed',icon:'delete'},
+];
+const filterKey='cull.day-filters';
+const filterStatus:Record<'undecided'|'kept'|'removed',Status>={undecided:'unreviewed',kept:'keep',removed:'cull'};
+/** The chips chosen on the last day, so a filter follows the reviewer from
+ * day to day in this tab. */
+function savedFilters():Filter[]{
+  try{
+    const value:unknown=JSON.parse(sessionStorage.getItem(filterKey)??'[]');
+    return Array.isArray(value)?value.filter((item):item is Filter=>filterChips.some(chip=>chip.id===item)):[];
+  }catch{return []}
+}
+function matches(asset:Asset,filters:ReadonlySet<Filter>):boolean{
+  if(filters.has('favourites')&&!asset.favourite)return false;
+  const videos=filters.has('videos'),photos=filters.has('photos');
+  if((videos||photos)&&!(videos&&asset.kind==='video'||photos&&asset.kind!=='video'))return false;
+  const statuses=(['undecided','kept','removed'] as const).filter(id=>filters.has(id)).map(id=>filterStatus[id]);
+  return statuses.length===0||statuses.includes(asset.status);
+}
+
 /** How long the keyboard tip stays, and whether this page load has had it. */
 const tipTime=15000;
 /** How long a notice in the corner stays. */
@@ -65,6 +96,8 @@ export function Today({initial}:{initial:TodayData}){
   // The keyboard tip comes up as a snackbar in the corner and goes on its
   // own; moving between days does not bring it back, a refresh does.
   const [tip,setTip]=useState(false);
+  // The card over the day once it is marked reviewed.
+  const [cheer,setCheer]=useState<Tally|null>(null);
   useEffect(()=>{
     if(tipShown)return;
     tipShown=true;
@@ -83,9 +116,17 @@ export function Today({initial}:{initial:TodayData}){
   const photo=usePhotoURL(id=>initial.years.some(year=>year.assets.some(asset=>String(asset.id)===id)));
   const viewer=photo.open===null?null:Number(photo.open);
   const assets=useMemo(()=>years.flatMap(year=>year.assets),[years]);
-  // A photograph counts as reviewed once it has a decision or its year on this
-  // date is marked reviewed, so marking a date fills the bar.
-  const reviewed=years.reduce((sum,year)=>sum+(year.status==='done'?year.assets.length:year.assets.filter(asset=>asset.status!=='unreviewed').length),0);
+  const [filters,setFilters]=useState<ReadonlySet<Filter>>(()=>new Set(savedFilters()));
+  function toggleFilter(id:Filter){
+    const next=new Set(filters);
+    if(next.has(id))next.delete(id);else next.add(id);
+    setFilters(next);
+    try{sessionStorage.setItem(filterKey,JSON.stringify([...next]))}catch{/* storage blocked: the chips still work on this day */}
+  }
+  // What the chips leave: the grid, the arrow keys and the viewer all walk
+  // this list, so a filtered day reviews as one.
+  const shown=useMemo(()=>filters.size===0?assets:assets.filter(asset=>matches(asset,filters)),[assets,filters]);
+  const shownIDs=useMemo(()=>new Set(shown.map(asset=>asset.id)),[shown]);
   const doneYears=years.filter(year=>year.status==='done').length;
   const dateDone=years.length>0&&doneYears===years.length;
 
@@ -133,6 +174,7 @@ export function Today({initial}:{initial:TodayData}){
   function restore(entry:HistoryEntry,direction:'before'|'after'){
     if(entry.kind==='progress'){
       const status=entry[direction];
+      if(status==='pending')setCheer(null);
       setSaving(true);
       Promise.all(entry.days.map(day=>setProgress(day,status))).then(()=>{
         setYears(current=>current.map(year=>entry.days.includes(year.day)?{...year,status}:year));
@@ -167,7 +209,8 @@ export function Today({initial}:{initial:TodayData}){
       setYears(current=>current.map(year=>({...year,status:'done'})));
       history.record({kind:'progress',label:`marked ${initial.label} reviewed`,days:open,before:'pending',after:'done'});
       binChanged();
-      setMessage(`${initial.label} marked reviewed.`);
+      const removed=assets.filter(asset=>asset.status==='cull');
+      setCheer({label:initial.label,total:assets.length,removed:removed.length,bytes:removed.reduce((sum,asset)=>sum+asset.size,0),favourites:assets.filter(asset=>asset.favourite).length});
     }catch(error){setMessage((error as Error).message)}finally{setSaving(false)}
   }
 
@@ -187,15 +230,15 @@ export function Today({initial}:{initial:TodayData}){
   useEffect(()=>{
     function key(event:KeyboardEvent){
       if(viewer!==null||event.ctrlKey||event.metaKey||event.altKey||event.target instanceof HTMLButtonElement)return;
-      const index=assets.findIndex(asset=>asset.id===selected);
+      const index=shown.findIndex(asset=>asset.id===selected);
       if(event.key==='ArrowRight'){
         event.preventDefault();
-        setSelected(assets[Math.min(assets.length-1,Math.max(0,index+1))]?.id??null);
+        setSelected(shown[Math.min(shown.length-1,Math.max(0,index+1))]?.id??null);
       }else if(event.key==='ArrowLeft'){
         event.preventDefault();
-        setSelected(assets[Math.max(0,index-1)]?.id??null);
+        setSelected(shown[Math.max(0,index-1)]?.id??null);
       }else if(!event.repeat&&selected!==null){
-        const asset=assets.find(item=>item.id===selected);
+        const asset=shown.find(item=>item.id===selected);
         if(!asset)return;
         if(event.key.toLowerCase()==='x')save(asset,asset.status==='cull'?'unreviewed':'cull');
         if(event.key.toLowerCase()==='f')save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite);
@@ -203,7 +246,7 @@ export function Today({initial}:{initial:TodayData}){
     }
     window.addEventListener('keydown',key);
     return()=>window.removeEventListener('keydown',key);
-  },[assets,selected,saving]);
+  },[shown,selected,saving,viewer]);
 
   useEffect(()=>{
     const controller=new AbortController();
@@ -228,7 +271,11 @@ export function Today({initial}:{initial:TodayData}){
       <span className="sep">·</span><span>{years.length} {years.length===1?'year':'years'}</span>
       <span className="sep">·</span><span className="dim">{bytes(initial.bytes)}</span>
     </div>
-    {assets.length>0&&<div className="dprog"><div className="pbar" role="progressbar" aria-label="Memories reviewed on this date" aria-valuemin={0} aria-valuemax={assets.length} aria-valuenow={reviewed}><span style={{width:`${reviewed/assets.length*100}%`}}/></div><span className="ofn">{reviewed.toLocaleString()} of {assets.length.toLocaleString()} reviewed</span></div>}
+    {assets.length>0&&<div className="dfilters" role="group" aria-label="Show only">{filterChips.map(chip=>{
+      const on=filters.has(chip.id),count=assets.filter(asset=>matches(asset,new Set([chip.id]))).length;
+      return <button type="button" key={chip.id} className={`fchip${on?' on':''}`} aria-pressed={on} onClick={()=>toggleFilter(chip.id)}><Icon name={chip.icon} filled={on}/>{chip.label}<span className="n">{count.toLocaleString()}</span></button>;
+    })}</div>}
+    {assets.length>0&&shown.length===0&&<p className="note">Nothing on this date matches the filters.</p>}
     {queue.error&&<p className="note warn" role="alert">{queue.error} <button className="btn small" onClick={queue.retry}>Retry the same save</button></p>}
     {years.length===0&&<p className="note">Nothing in the archive is filed under {initial.label}, so there is nothing to review.</p>}
     {duplicateGroups.length>0&&<section className="xdupes">
@@ -243,9 +290,9 @@ export function Today({initial}:{initial:TodayData}){
         <p className="xact"><button type="button" className="btn small danger" disabled={saving} onClick={()=>void resolveGroup(group)}>Keep the selected copy, mark the other {group.members.length-1} for the Bin</button><span className="hint">Nothing is deleted. The Bin remains separately reviewable and restorable.</span></p>
       </div>)}
     </section>}
-    {years.map(year=><section className={`yr${year.status==='done'?' settled':''}`} key={year.day}>
+    {years.filter(year=>filters.size===0||year.assets.some(asset=>shownIDs.has(asset.id))).map(year=><section className={`yr${year.status==='done'?' settled':''}`} key={year.day}>
       <div className="yhead"><h2>{year.year}{year.status==='done'&&<span className="tag done">reviewed</span>}</h2><p className="ymeta"><span>{year.assets.length.toLocaleString()} {year.assets.length===1?'memory':'memories'}{year.assets.length!==year.files&&<span className="dim"> from {year.files.toLocaleString()} files</span>}</span><span className="dim">{bytes(year.bytes)}</span></p></div>
-      {year.assets.length===0?<p className="note">Nothing left in this folder.</p>:<div className="gal">{year.assets.map(asset=><figure className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}`} key={asset.id} data-asset={asset.id} onClick={()=>{setSelected(asset.id);photo.show(asset.id)}} tabIndex={0}>
+      {year.assets.length===0?<p className="note">Nothing left in this folder.</p>:<div className="gal">{year.assets.filter(asset=>shownIDs.has(asset.id)).map(asset=><figure className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}`} key={asset.id} data-asset={asset.id} onClick={()=>{setSelected(asset.id);photo.show(asset.id)}} tabIndex={0}>
         <Media asset={asset}/>
         <div className="bdg">{(asset.relatedCount??0)>0&&<span className="b dupe">duplicate</span>}{asset.kind==='video'&&<span className="b play">▶</span>}</div>
         <div className="acts"><button type="button" className="act cull" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':'cull')}}>{asset.status==='cull'?'Undo':'Remove'}</button><button type="button" className="act fav" disabled={!queue.ready} aria-pressed={asset.favourite} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite)}}>♡</button></div>
@@ -257,6 +304,7 @@ export function Today({initial}:{initial:TodayData}){
       {message&&<div className="snack" role="status">{saving?<Busy label={message} state="working"/>:message}</div>}
       {tip&&assets.length>0&&<div className="snack" role="status">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>{undoKeys.undo}</b> undo, <b>{undoKeys.redo}</b> redo, <b>?</b> for the rest</div>}
     </div>}
-    {viewer!==null&&<Viewer assets={assets} initialID={viewer} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset} onRecord={history.record}/>} 
+    {cheer&&<Celebration tally={cheer} nextHref={`/on/${initial.next}`} nextLabel={calendarLabel(initial.next)} onClose={()=>setCheer(null)}/>}
+    {viewer!==null&&<Viewer assets={shownIDs.has(viewer)?shown:assets} initialID={viewer} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset} onRecord={history.record}/>} 
   </>;
 }
