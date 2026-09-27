@@ -516,7 +516,6 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 .yhead h2 { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 28px; font-weight: 400; line-height: 36px; letter-spacing: 0; font-variant-numeric: tabular-nums; }
 .yhead .ymeta { display: flex; flex-wrap: wrap; gap: 0 16px; margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--text); }
 .yhead .ymeta .dim { font-weight: 400; color: var(--muted); }
-.yhead .ymeta a.dim:hover { color: var(--text); }
 
 /* --------------------------------------------------------------- gallery -- */
 /* 4-6 columns on a desktop, by viewport rather than by media query: the tile
@@ -903,7 +902,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 @keyframes rvout { to { opacity: 0; } }
 /* While a picture is in flight the stage keeps its place but shows nothing,
    so the flyer is the one copy of it on screen. */
-.rv.flight .rvstage img, .rv.flight .rvstage video, .rv.flight .rvformat, .rv.flight .rvnav { opacity: 0 !important; }
+.rv.flight .rvstage img, .rv.flight .rvstage video, .rv.flight .rvnav { opacity: 0 !important; }
 .rvfly { position: fixed; z-index: 5; object-fit: cover; pointer-events: none; }
 
 .rvtop {
@@ -971,15 +970,14 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   max-width: 28rem; text-align: center; color: #a4a8b2; font-size: 14px; line-height: 1.45;
 }
 .rvgone b { color: #eceef2; font-size: 17px; font-weight: 600; text-wrap: balance; }
-/* The format on the photograph's corner, as Apple Photos marks a Live Photo. */
+/* The format, quiet text at the head of the strip's actions as Google Photos
+   marks a RAW, with the RAW icon beside it for one. */
 .rvformat {
-  position: absolute; z-index: 2; pointer-events: none;
-  padding: 5px 12px; border-radius: 999px;
-  font-size: 13px; font-weight: 600; letter-spacing: .06em; line-height: 1.2;
-  color: rgba(255, 255, 255, .88);
-  background: rgba(20, 20, 20, .55);
-  -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4);
+  display: flex; align-items: center; gap: 6px;
+  margin-right: 8px; padding: 0 4px;
+  color: #c4c7c5; font-size: 14px; font-weight: 500; letter-spacing: .08em; line-height: 24px;
 }
+.rvformat .icon, .rvformat .icon svg { width: 22px; height: 22px; }
 .rvstage.zoom {
   padding: 0; overflow: auto; cursor: grab;
   align-items: flex-start; justify-content: flex-start;
@@ -1073,9 +1071,13 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 /* With no room beside the photograph the panel covers it, strip included. */
 @media (max-width: 899px) { .rv.info .rvinfo { z-index: 5; } }
 @media (min-width: 900px) {
-  .rv.info .rvtop, .rv.info .rvstage, .rv.info .rvcmp { right: 360px; margin-right: 0; }
+  /* The strip and compare panel are pinned, so their right edge moves; the
+     stage flows in the body, so it gives up the width instead and the
+     photograph is fitted again to what is left, as Google Photos does. */
+  .rv.info .rvtop, .rv.info .rvcmp { right: 360px; }
   .rv.info .rvstage { margin-right: 360px; }
-  .rvtop, .rvstage { transition: right 200ms cubic-bezier(.2,0,0,1), margin-right 200ms cubic-bezier(.2,0,0,1), opacity var(--ease); }
+  .rvtop { transition: right 200ms cubic-bezier(.2,0,0,1), opacity var(--ease); }
+  .rvstage { transition: margin-right 200ms cubic-bezier(.2,0,0,1); }
 }
 .rvinfo .ihead { display: flex; align-items: center; gap: 8px; height: 64px; margin: 0 0 8px -12px; }
 .rvinfo h3 { margin: 0; font-size: 22px; font-weight: 400; line-height: 28px; }
@@ -1188,6 +1190,25 @@ html.rv-open, html.rv-open body { overflow: hidden; }
    one decision blocked the next one for as long as it was up. Out at the corner
    it is still the first thing in the eye's path after a removal, and it covers
    nothing that can be pressed. */
+/* Notices are snackbars in the bottom-left corner, as Google Photos places
+   them: text on the opposite ground to the page, no border, a short rise on
+   the way in. More than one stacks upwards. */
+.snacks {
+  position: fixed; left: 24px; bottom: 24px; z-index: 200;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  max-width: min(680px, calc(100vw - 48px));
+}
+.snack {
+  padding: 14px 16px;
+  color: var(--bg); background: var(--text);
+  border-radius: 4px;
+  box-shadow: 0 3px 5px -1px rgba(0, 0, 0, .2), 0 6px 10px rgba(0, 0, 0, .14), 0 1px 18px rgba(0, 0, 0, .12);
+  font-size: 14px; line-height: 20px;
+  animation: snackin 240ms cubic-bezier(.2, 0, 0, 1) both;
+}
+.snack b { font-weight: 600; }
+@keyframes snackin { from { opacity: 0; transform: translateY(12px); } }
+@media (prefers-reduced-motion: reduce) { .snack { animation: none; } }
 .toast {
   position: fixed; left: 1.1rem; bottom: 1.1rem;
   z-index: 200;
@@ -1229,11 +1250,8 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   .kv dt { flex: none; }
   .fbar { flex-wrap: wrap; gap: .5rem; }
   .fbar .hint { display: none; }
-  /* Without its keyboard hint, Today's bar has nothing to show once the date
-   * is reviewed. */
-  .fbar.keys:not(:has(.fright > *)) { display: none; }
   /* The bar wraps to two rows here, so the page keeps room for both. */
-  body:has(.fbar:not(.keys), .fbar.keys .fright > *) { padding-bottom: 7.5rem; }
+  body:has(.fbar) { padding-bottom: 7.5rem; }
   .rvnav { opacity: 0 !important; }
   .rvtop { height: 64px; padding: 4px 4px 0; }
   .rvact { width: 44px; height: 44px; }

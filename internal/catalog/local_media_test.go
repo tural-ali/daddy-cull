@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -643,9 +644,56 @@ printf frame
 	}
 	defer file.Close()
 	for _, scale := range []bool{true, false} {
-		out, err := runFrameExtractor(context.Background(), extractor, file, "1", scale)
+		out, err := runFrameExtractor(context.Background(), extractor, file, "1", scale, false)
 		if err != nil || string(out) != "frame" {
 			t.Fatalf("scale=%v: %q %v", scale, out, err)
+		}
+	}
+}
+
+func TestVideoFrameToneMapsAnHDRClip(t *testing.T) {
+	tools := t.TempDir()
+	// A prober that calls the clip HLG, beside an extractor that records the
+	// filter it was given, as ffprobe sits beside ffmpeg.
+	probe := filepath.Join(tools, "ffprobe")
+	if err := os.WriteFile(probe, []byte("#!/bin/sh\nhead -c1 /dev/fd/3 >/dev/null || exit 1\ncat "+filepath.Join(tools, "transfer")+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	extractor := filepath.Join(tools, "ffmpeg")
+	if err := os.WriteFile(extractor, []byte("#!/bin/sh\nwhile [ $# -gt 0 ]; do [ \"$1\" = \"-vf\" ] && printf %s \"$2\"; shift; done\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	media := filepath.Join(tools, "clip.mov")
+	if err := os.WriteFile(media, []byte("container"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := probeTool(extractor); got != probe {
+		t.Fatalf("probe tool %q, want %q", got, probe)
+	}
+	if got := probeTool(filepath.Join(tools, "frames")); got != "" {
+		t.Fatalf("an extractor that is not ffmpeg has no prober, got %q", got)
+	}
+	for _, c := range []struct {
+		transfer string
+		toneMap  bool
+	}{{"arib-std-b67", true}, {"smpte2084", true}, {"bt709", false}, {"", false}} {
+		if err := os.WriteFile(filepath.Join(tools, "transfer"), []byte(c.transfer+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		file, err := os.Open(media)
+		if err != nil {
+			t.Fatal(err)
+		}
+		frame, err := videoFrame(context.Background(), extractor, file, "", "clip"+c.transfer, 9, 1)
+		file.Close()
+		if err != nil {
+			t.Fatalf("%q: %v", c.transfer, err)
+		}
+		if got := strings.Contains(string(frame), "tonemap="); got != c.toneMap {
+			t.Errorf("%q: filter %q, tone mapped %v, want %v", c.transfer, frame, got, c.toneMap)
+		}
+		if !strings.HasPrefix(string(frame), "scale=") {
+			t.Errorf("%q: the frame is scaled first, got %q", c.transfer, frame)
 		}
 	}
 }

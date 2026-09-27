@@ -67,21 +67,8 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   const weekday=capture?.toLocaleDateString(undefined,{weekday:'short'})??'';
   const time=capture?.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})??'';
   const compareFiles=useMemo(()=>related??[],[related]);
-  // The badge sits on the photograph's own top-left corner, which moves with
-  // the picture's shape and the window, so it follows the drawn media.
   const media=useRef<HTMLImageElement&HTMLVideoElement>(null);
   const stage=useRef<HTMLDivElement>(null);
-  const [corner,setCorner]=useState<{left:number;top:number}|null>(null);
-  useLayoutEffect(()=>{
-    const element=media.current;
-    if(!element){setCorner(null);return}
-    const place=()=>setCorner(element.offsetWidth>0?{left:element.offsetLeft,top:element.offsetTop}:null);
-    place();
-    const observer=new ResizeObserver(place);
-    observer.observe(element);observer.observe(element.parentElement!);
-    element.addEventListener('load',place);element.addEventListener('loadedmetadata',place);
-    return()=>{observer.disconnect();element.removeEventListener('load',place);element.removeEventListener('loadedmetadata',place)};
-  },[current?.id,zoom]);
 
   // The opening flight: the tile's own thumbnail grows to where the large
   // preview will be drawn, and stays there until that preview has arrived.
@@ -231,6 +218,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     <div className="rvtop">
       <button type="button" className="rvact rvback" aria-label="Back to the grid" title="Back (Esc)" onClick={leave}><Icon name="arrow_back"/></button>
       <div className="rvacts">
+        {format(current)&&<span className="rvformat" title={name.split('.').pop()?.toUpperCase()}>{current.kind==='raw'&&<Icon name="raw_on"/>}{format(current)}</span>}
         {(current.relatedCount??0)>0&&<button type="button" className="rvact cmp" aria-label="Compare similar photos" title="Compare (C)" onClick={()=>void openCompare()}><Icon name="compare"/></button>}
         <button type="button" className="rvact zoom" aria-label="Zoom" aria-pressed={zoom} title="Zoom (Z)" onClick={()=>setZoom(value=>!value)}><Icon name="zoom_in" filled={zoom}/></button>
         <button type="button" className="rvact infobtn" aria-label="Info" aria-pressed={info} title="Info (I)" onClick={()=>setInfo(value=>!value)}><Icon name="info" filled={info}/></button>
@@ -249,7 +237,6 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       <button type="button" className="rvnav prev" aria-label="Previous" onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
       {broken?.id===current.id?<div className="rvgone" role="status"><b>{broken.gone?'This file is no longer in the archive':'This file could not be shown'}</b><span>{broken.gone?'It was moved or removed on the server since the last scan. It leaves review at the next nightly scan.':'Try again in a moment.'}</span></div>
         :current.kind==='video'?<SessionVideo ref={media} key={current.id} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onLoadedData={()=>setShown(current.id)} onError={()=>failed(current.id)}/>:<img ref={media} key={current.id} src={preview(current)} alt={name} onLoad={()=>setShown(current.id)} onError={()=>failed(current.id)}/>}
-      {corner&&!zoom&&format(current)&&<span className="rvformat" style={{left:corner.left+12,top:corner.top+12}} title={name.split('.').pop()?.toUpperCase()}>{format(current)}</span>}
       <button type="button" className="rvnav next" aria-label="Next" onClick={event=>{event.stopPropagation();step(1)}}>›</button>
     </div>
     <aside className="rvinfo" aria-label="Info">

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 )
 
 // browserBlindStill lists still formats a browser will not decode but the frame
@@ -27,14 +29,17 @@ func videoFrame(ctx context.Context, tool string, file *os.File, cacheDir, subje
 	if tool == "" {
 		return nil, fmt.Errorf("no frame extractor configured")
 	}
-	return cachedBytes(cacheDir, "frame", subject, size, mtime, func() ([]byte, error) {
+	// The kind names the second generation of frames: the first was cut
+	// without tone mapping, so an HDR clip's frame came out grey.
+	return cachedBytes(cacheDir, "frame2", subject, size, mtime, func() ([]byte, error) {
 		return withWorker(ctx, func() ([]byte, error) {
+			hdr := isHDR(ctx, probeTool(tool), file)
 			// A second past the start avoids the black or half-faded opening
 			// frame most phone clips begin with; a clip shorter than that falls
 			// back to its first.
-			frame, err := runFrameExtractor(ctx, tool, file, "1", true)
+			frame, err := runFrameExtractor(ctx, tool, file, "1", true, hdr)
 			if err != nil || len(frame) == 0 {
-				frame, err = runFrameExtractor(ctx, tool, file, "0", true)
+				frame, err = runFrameExtractor(ctx, tool, file, "0", true, hdr)
 			}
 			if err != nil {
 				return nil, err
@@ -60,7 +65,7 @@ func stillFrame(ctx context.Context, tool string, file *os.File, cacheDir, subje
 	}
 	return cachedBytes(cacheDir, previewKind("still", pixels), subject, size, mtime, func() ([]byte, error) {
 		return withWorker(ctx, func() ([]byte, error) {
-			full, err := runFrameExtractor(ctx, tool, file, "", false)
+			full, err := runFrameExtractor(ctx, tool, file, "", false, false)
 			if err != nil {
 				return nil, err
 			}
@@ -72,10 +77,63 @@ func stillFrame(ctx context.Context, tool string, file *os.File, cacheDir, subje
 	})
 }
 
+// hdrTransfers are the transfer characteristics of an HDR clip: HLG, which an
+// iPhone records, and PQ. A frame cut from either straight into an SDR JPEG
+// comes out grey and flat, its values never meant for that range.
+var hdrTransfers = map[string]bool{"arib-std-b67": true, "smpte2084": true}
+
+// toneMapFilter brings an HDR frame down to SDR the way a player would show
+// it: linear light, BT.709 primaries, the Hable curve, then back to video
+// range. It follows the scale, so the work is done on the small frame.
+const toneMapFilter = "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
+
+// probeTool is the prober that ships beside the extractor, ffprobe next to
+// ffmpeg, or empty when there is none to be found.
+func probeTool(tool string) string {
+	dir, base := filepath.Split(tool)
+	if !strings.HasSuffix(base, "ffmpeg") {
+		return ""
+	}
+	probe := strings.TrimSuffix(base, "ffmpeg") + "ffprobe"
+	if dir == "" {
+		resolved, err := exec.LookPath(probe)
+		if err != nil {
+			return ""
+		}
+		return resolved
+	}
+	probe = filepath.Join(dir, probe)
+	if _, err := os.Stat(probe); err != nil {
+		return ""
+	}
+	return probe
+}
+
+// isHDR reports whether the clip's first video stream is tagged HDR. A clip the
+// prober cannot read counts as SDR: its frame still comes out, at worst dull.
+func isHDR(ctx context.Context, probe string, file *os.File) bool {
+	if probe == "" {
+		return false
+	}
+	if _, err := file.Seek(0, 0); err != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(ctx, previewTimeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, probe, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=color_transfer", "-of", "csv=p=0", "/dev/fd/3")
+	command.ExtraFiles = []*os.File{file}
+	out, err := command.Output()
+	if err != nil {
+		return false
+	}
+	return hdrTransfers[strings.TrimSpace(string(out))]
+}
+
 // runFrameExtractor decodes one frame to JPEG on standard output. seconds is the
 // offset to seek to, empty for none, and scale asks the decoder to size the
-// frame itself, which only works for streams it filters simply.
-func runFrameExtractor(ctx context.Context, tool string, file *os.File, seconds string, scale bool) ([]byte, error) {
+// frame itself, which only works for streams it filters simply. toneMap brings
+// an HDR frame down to SDR on the way, and needs scale.
+func runFrameExtractor(ctx context.Context, tool string, file *os.File, seconds string, scale, toneMap bool) ([]byte, error) {
 	if _, err := file.Seek(0, 0); err != nil {
 		return nil, err
 	}
@@ -95,7 +153,11 @@ func runFrameExtractor(ctx context.Context, tool string, file *os.File, seconds 
 		// Downscaling in the decoder rather than afterwards keeps a 4K frame
 		// from being carried through memory at full size. -2 keeps the height
 		// even, which the JPEG encoder requires for subsampled chroma.
-		arguments = append(arguments, "-vf", fmt.Sprintf("scale='min(%d,iw)':-2", gridPixels))
+		filter := fmt.Sprintf("scale='min(%d,iw)':-2", gridPixels)
+		if toneMap {
+			filter += "," + toneMapFilter
+		}
+		arguments = append(arguments, "-vf", filter)
 	}
 	arguments = append(arguments, "-f", "mjpeg", "-")
 

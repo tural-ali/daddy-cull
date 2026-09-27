@@ -41,11 +41,42 @@ async function setProgress(day:string,status:'pending'|'done'){
   if(!response.ok)throw new Error('The review marker could not be saved.');
 }
 
+/** How long the keyboard tip stays, and whether this page load has had it. */
+const tipTime=15000;
+/** How long a notice in the corner stays. */
+const snackTime=6000;
+let tipShown=false;
+const tipKey='cull.tip';
+
+/** Whether the tip is due: on the first day opened in this tab, and again
+ * after a refresh, but not while the reviewer moves from day to day. Every
+ * day link is a page load, so the load's own kind tells the two apart. */
+function tipDue():boolean{
+  try{
+    const load=performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming|undefined;
+    if(load?.type==='reload')return true;
+    return sessionStorage.getItem(tipKey)===null;
+  }catch{return true}
+}
+
 export function Today({initial}:{initial:TodayData}){
   const [years,setYears]=useState(initial.years);
   const [selected,setSelected]=useState<number|null>(null);
+  // The keyboard tip comes up as a snackbar in the corner and goes on its
+  // own; moving between days does not bring it back, a refresh does.
+  const [tip,setTip]=useState(false);
+  useEffect(()=>{
+    if(tipShown)return;
+    tipShown=true;
+    if(!tipDue())return;
+    try{sessionStorage.setItem(tipKey,'shown')}catch{/* storage blocked: the tip shows on every day */}
+    setTip(true);
+  },[]);
+  useEffect(()=>{if(!tip)return;const timer=setTimeout(()=>setTip(false),tipTime);return()=>clearTimeout(timer)},[tip]);
   const [saving,setSaving]=useState(false);
+  // A notice in the corner, gone on its own unless a save is still running.
   const [message,setMessage]=useState('');
+  useEffect(()=>{if(!message||saving)return;const timer=setTimeout(()=>setMessage(''),snackTime);return()=>clearTimeout(timer)},[message,saving]);
   const [duplicateGroups,setDuplicateGroups]=useState<DuplicateGroup[]>([]);
   const [keepers,setKeepers]=useState<Record<string,number>>({});
   const history=useHistory();
@@ -81,8 +112,6 @@ export function Today({initial}:{initial:TodayData}){
   }
   const queue=useDecisionQueue((job,result)=>{
     patchAsset(job.asset.id,{status:job.status,favourite:job.favourite,revision:result.revision});
-    // An undo's own message stays up while its saves are confirmed.
-    setMessage(current=>/^(Undone|Redone):/.test(current)?current:job.status==='cull'?'Marked for the Bin. The original has not moved.':'Saved.');
   });
   function save(asset:Asset,status:Status,favourite=asset.favourite,remember=true){
     if(status==='cull')favourite=false;
@@ -95,7 +124,6 @@ export function Today({initial}:{initial:TodayData}){
     }
     if(remember){
       history.record({kind:'decisions',label:describe(asset,status,favourite),before:[snapshot(asset)],after:[{id:asset.id,status,favourite}]});
-      setMessage('Saving…');
     }
     return true;
   }
@@ -201,7 +229,6 @@ export function Today({initial}:{initial:TodayData}){
       <span className="sep">·</span><span className="dim">{bytes(initial.bytes)}</span>
     </div>
     {assets.length>0&&<div className="dprog"><div className="pbar" role="progressbar" aria-label="Memories reviewed on this date" aria-valuemin={0} aria-valuemax={assets.length} aria-valuenow={reviewed}><span style={{width:`${reviewed/assets.length*100}%`}}/></div><span className="ofn">{reviewed.toLocaleString()} of {assets.length.toLocaleString()} reviewed</span></div>}
-    {message&&<p className="flash" role="status">{saving||(message==='Saving…'&&queue.pending>0&&!queue.error)?<Busy label={message} state="working"/>:message}</p>}
     {queue.error&&<p className="note warn" role="alert">{queue.error} <button className="btn small" onClick={queue.retry}>Retry the same save</button></p>}
     {years.length===0&&<p className="note">Nothing in the archive is filed under {initial.label}, so there is nothing to review.</p>}
     {duplicateGroups.length>0&&<section className="xdupes">
@@ -217,7 +244,7 @@ export function Today({initial}:{initial:TodayData}){
       </div>)}
     </section>}
     {years.map(year=><section className={`yr${year.status==='done'?' settled':''}`} key={year.day}>
-      <div className="yhead"><h2>{year.year}{year.status==='done'&&<span className="tag done">reviewed</span>}</h2><p className="ymeta"><span>{year.assets.length.toLocaleString()} {year.assets.length===1?'memory':'memories'}{year.assets.length!==year.files&&<span className="dim"> from {year.files.toLocaleString()} files</span>}</span><span className="dim">{bytes(year.bytes)}</span><a className="dim" href={`/day/${year.day}`}>Open {year.day} on its own</a></p></div>
+      <div className="yhead"><h2>{year.year}{year.status==='done'&&<span className="tag done">reviewed</span>}</h2><p className="ymeta"><span>{year.assets.length.toLocaleString()} {year.assets.length===1?'memory':'memories'}{year.assets.length!==year.files&&<span className="dim"> from {year.files.toLocaleString()} files</span>}</span><span className="dim">{bytes(year.bytes)}</span></p></div>
       {year.assets.length===0?<p className="note">Nothing left in this folder.</p>:<div className="gal">{year.assets.map(asset=><figure className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}`} key={asset.id} data-asset={asset.id} onClick={()=>{setSelected(asset.id);photo.show(asset.id)}} tabIndex={0}>
         <Media asset={asset}/>
         <div className="bdg">{(asset.relatedCount??0)>0&&<span className="b dupe">duplicate</span>}{asset.kind==='video'&&<span className="b play">▶</span>}</div>
@@ -226,7 +253,10 @@ export function Today({initial}:{initial:TodayData}){
         {asset.status==='cull'&&<div className="undo"><span>Removed</span><button type="button" className="act" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,'unreviewed')}}>Undo</button></div>}
       </figure>)}</div>}
     </section>)}
-    {assets.length>0&&<footer className="fbar keys"><span className="fleft"><span className="hint">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>{undoKeys.undo}</b> undo, <b>{undoKeys.redo}</b> redo, <b>?</b> for the rest</span></span></footer>}
+    {(message||(tip&&assets.length>0))&&<div className="snacks">
+      {message&&<div className="snack" role="status">{saving?<Busy label={message} state="working"/>:message}</div>}
+      {tip&&assets.length>0&&<div className="snack" role="status">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>{undoKeys.undo}</b> undo, <b>{undoKeys.redo}</b> redo, <b>?</b> for the rest</div>}
+    </div>}
     {viewer!==null&&<Viewer assets={assets} initialID={viewer} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset} onRecord={history.record}/>} 
   </>;
 }

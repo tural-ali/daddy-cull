@@ -24,7 +24,7 @@ const pick=({assetId,status,favourite})=>({assetId,status,favourite});
     return route.fulfill({status:404,json:{error:'not mocked'}});
   });
   const viewer=page.getByRole('dialog',{name:'Photo review'});
-  const flash=page.locator('.flash');
+  const flash=page.locator('.snack');
   const settled=async n=>{for(let i=0;i<100&&writes.length<n;i++)await page.waitForTimeout(50);assert.equal(writes.length,n,'decision count');return writes[n-1]};
 
   await page.goto(`${base}/on/09-07/photo/1`);
