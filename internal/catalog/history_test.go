@@ -89,3 +89,47 @@ func TestHistoryIsInTheOrderThingsHappened(t *testing.T) {
 		t.Fatalf("history order: %+v", events)
 	}
 }
+
+// The Log says where a file went after its choice: into the Bin, deleted from
+// it and waiting out its days, or gone, so a tile never offers what it cannot
+// show or undo.
+func TestHistorySaysWhereAFileWentAfterTheBin(t *testing.T) {
+	b, s, _ := binFixture(t)
+	ctx := context.Background()
+	if _, err := s.write.Exec("INSERT INTO decision_events(request_id,asset_id,expected_revision,status,favourite,previous_status,previous_favourite) VALUES('where-request-1',1,0,'cull',0,'unreviewed',0)"); err != nil {
+		t.Fatal(err)
+	}
+	where := func() string {
+		t.Helper()
+		events, err := s.History(ctx, 20, 0)
+		if err != nil || len(events) != 1 {
+			t.Fatalf("history: %v %+v", err, events)
+		}
+		return events[0].Where
+	}
+	if got := where(); got != "" {
+		t.Fatalf("in its day folder: %q", got)
+	}
+	p, err := b.Preview(ctx, []int64{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = b.Run(ctx, p.ID, "quarantine", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := where(); got != "bin" {
+		t.Fatalf("in the Bin: %q", got)
+	}
+	if _, err = s.write.Exec("INSERT INTO trash_deletions(grp,deleted_at) VALUES(?,'2026-09-28T00:00:00Z')", "bin:"+p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := where(); got != "deleting" {
+		t.Fatalf("deleted from the Bin, waiting: %q", got)
+	}
+	if _, err = b.Run(ctx, p.ID, "purge", "DELETE 2"); err != nil {
+		t.Fatal(err)
+	}
+	if got := where(); got != "deleted" {
+		t.Fatalf("gone: %q", got)
+	}
+}

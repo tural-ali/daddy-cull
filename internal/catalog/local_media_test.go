@@ -717,3 +717,28 @@ func TestVideoFrameToneMapsAnHDRClip(t *testing.T) {
 		}
 	}
 }
+
+// A file moved to the Bin has left its day folder, but the Log and the viewer
+// still ask for it by its catalogue id: they are served the Bin's copy, and a
+// file emptied from the Bin is simply gone.
+func TestLocalMediaFollowsAFileIntoTheBin(t *testing.T) {
+	b, s, root := binFixture(t)
+	ctx := context.Background()
+	handler := s.LocalMediaHandler(MediaRoots{Archive: root})
+	p, err := b.Preview(ctx, []int64{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = b.Run(ctx, p.ID, "quarantine", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := serveMedia(t, handler, "1", "original", nil); got.Code != 200 || got.Body.String() != "family original" {
+		t.Fatalf("a file in the Bin: %d %q", got.Code, got.Body.String())
+	}
+	if _, err = b.Run(ctx, p.ID, "purge", "DELETE 2"); err != nil {
+		t.Fatal(err)
+	}
+	if got := serveMedia(t, handler, "1", "original", nil); got.Code != 404 {
+		t.Fatalf("a file emptied from the Bin: %d", got.Code)
+	}
+}

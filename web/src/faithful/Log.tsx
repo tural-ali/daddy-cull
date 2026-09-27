@@ -7,7 +7,9 @@ import {Viewer} from './Viewer';
 import {usePhotoURL} from './photoURL';
 import {dayOfPath} from './goto';
 
-export type HistoryEvent={requestId:string;asset:Asset;status:string;favourite:boolean;previousStatus:'unreviewed'|'keep'|'later'|'cull';previousFavourite:boolean;createdAt:string};
+// where is set once the file has left its day folder: moved to the Bin,
+// deleted from it and waiting out its days, or gone.
+export type HistoryEvent={requestId:string;asset:Asset;status:string;favourite:boolean;previousStatus:'unreviewed'|'keep'|'later'|'cull';previousFavourite:boolean;createdAt:string;where?:'bin'|'deleting'|'deleted'};
 // The server sends every time as UTC; the day an action belongs to is the
 // reader's own, so a late-evening choice is not filed under tomorrow.
 function localDay(at:Date){return `${at.getFullYear()}-${at.getMonth()}-${at.getDate()}`}
@@ -42,13 +44,14 @@ export function Log({initial}:{initial:HistoryEvent[]}){
   // The choice being undone, so only its tile says it is working.
   const [busy,setBusy]=useState('');
   const [message,setMessage]=useState('');
-  const photo=usePhotoURL(id=>known.current.some(event=>String(event.asset.id)===id));
+  const photo=usePhotoURL(id=>known.current.some(event=>String(event.asset.id)===id&&event.where!=='deleted'));
   const viewing=photo.open===null?null:Number(photo.open);
   // The viewer steps through photographs, not events: a file chosen twice is
   // one frame, at the place of its latest choice.
   const assets=useMemo(()=>{
     const byID=new Map<number,Asset>();
-    for(const event of events)if(!byID.has(event.asset.id))byID.set(event.asset.id,event.asset);
+    // A file deleted from the Bin has nothing left to show.
+    for(const event of events)if(event.where!=='deleted'&&!byID.has(event.asset.id))byID.set(event.asset.id,event.asset);
     return [...byID.values()];
   },[events]);
   function patch(id:number,change:Partial<Asset>){
@@ -96,9 +99,14 @@ export function Log({initial}:{initial:HistoryEvent[]}){
       return <Fragment key={event.requestId}>
         {opensDay&&<h3 className="lday">{dayHeading(at)}</h3>}
         <figure className={`mo logtile${isUndone?' undone':''}${event.asset.favourite?' fav':''}`} data-asset={event.asset.id}>
-          <button type="button" className="shot" aria-label={`Look at ${name}`} onClick={()=>photo.show(event.asset.id)}><Media asset={event.asset}/></button>
+          {event.where==='deleted'
+            ?<div className="shot"><div className="media-missing"><span>Deleted from the Bin</span><small>{event.asset.kind.toUpperCase()} · no longer on the server</small></div></div>
+            :<button type="button" className="shot" aria-label={`Look at ${name}`} onClick={()=>photo.show(event.asset.id)}><Media asset={event.asset}/></button>}
           <div className="bdg"><span className={`b verb ${isUndone?'':tone}`}>{isUndone?'Undone':label}</span></div>
-          {!isUndone&&<div className="acts"><button type="button" className="act" disabled={!!busy} onClick={()=>void undo(event)}>{busy===event.requestId?<Busy label="Undoing…" state="working"/>:'Undo'}</button></div>}
+          {/* A file in the Bin is given back from the Bin, and one deleted
+              from it cannot be given back at all. */}
+          {!isUndone&&!event.where&&<div className="acts"><button type="button" className="act" disabled={!!busy} onClick={()=>void undo(event)}>{busy===event.requestId?<Busy label="Undoing…" state="working"/>:'Undo'}</button></div>}
+          {!isUndone&&(event.where==='bin'||event.where==='deleting')&&<div className="acts"><a className="act" href="/bin">{event.where==='bin'?'In the Bin':'Waiting to go'}</a></div>}
           <figcaption className="cap"><a href={dayOf(event.asset)} title={`Open ${event.asset.path.slice(0,event.asset.path.lastIndexOf('/'))}`}>{name}</a><span className="dim">{at.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</span></figcaption>
         </figure>
       </Fragment>;

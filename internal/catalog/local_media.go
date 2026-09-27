@@ -3,6 +3,7 @@ package catalog
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -113,15 +114,43 @@ func (s *Store) LocalMediaHandler(roots MediaRoots) http.Handler {
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		var relative, kind string
-		err = s.read.QueryRowContext(ctx, "SELECT relative_path,kind FROM assets WHERE id=?", id).Scan(&relative, &kind)
-		cancel()
+		defer cancel()
+		var relative, kind, state, planID string
+		err = s.read.QueryRowContext(ctx, "SELECT a.relative_path,a.kind,COALESCE(fs.state,''),COALESCE(fs.plan_id,'') FROM assets a LEFT JOIN file_state fs ON fs.asset_id=a.id WHERE a.id=?", id).Scan(&relative, &kind, &state, &planID)
 		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
+		// A file in the Bin has left its day folder, so every page that shows
+		// it, the Log and the viewer among them, is served the Bin's copy, as
+		// the Bin page itself is.
+		if state == "bin" || state == "quarantining" {
+			if binned, index, ok := s.binnedAsset(ctx, planID, relative); ok {
+				s.serveMedia(w, r, roots, mode, mediaFile{relative: binned, kind: kind, subject: "binned/" + planID + "/" + strconv.Itoa(index), posterID: id})
+				return
+			}
+		}
 		s.serveMedia(w, r, roots, mode, mediaFile{relative: relative, kind: kind, id: id, subject: strconv.FormatInt(id, 10), posterID: id})
 	})
+}
+
+// binnedAsset finds where a catalogued file sits in its Bin batch, and its
+// index there, when the batch says it is in the Bin now.
+func (s *Store) binnedAsset(ctx context.Context, planID, relative string) (string, int, bool) {
+	var body string
+	if s.read.QueryRowContext(ctx, "SELECT body FROM file_plans WHERE id=?", planID).Scan(&body) != nil {
+		return "", 0, false
+	}
+	var plan BinPlan
+	if json.Unmarshal([]byte(body), &plan) != nil || plan.ID != planID {
+		return "", 0, false
+	}
+	indexes := assetFiles(&plan, BinAsset{Path: relative})
+	if len(indexes) == 0 {
+		return "", 0, false
+	}
+	binned, _, found := s.binnedFile(ctx, "bin", planID, indexes[0])
+	return binned, indexes[0], found
 }
 
 // mediaFile is one file the media pipeline can serve: where the catalogue says

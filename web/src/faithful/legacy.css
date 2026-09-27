@@ -2112,6 +2112,10 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
 .logtile.fav::before { display: none; }
 .logtile .cap a { color: inherit; }
 .logtile .cap a:hover { text-decoration: underline; }
+.logtile a.act { text-decoration: none; }
+/* A file deleted from the Bin has no picture left, so its tile is not a
+   button that opens one. */
+.logtile div.shot { cursor: default; }
 .logtile.undone { opacity: .55; }
 .logtile.undone img { filter: grayscale(.6); }
 
