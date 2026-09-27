@@ -1,6 +1,8 @@
 import type {CSSProperties} from 'react';
 
-export type CalendarCell={md:string;dom:number;years:number;files:number;done:number;waiting:number;state:'none'|'todo'|'part'|'done'};
+// fresh counts files that reached the archive after the date was reviewed and
+// still wait: the date's red dot.
+export type CalendarCell={md:string;dom:number;years:number;files:number;done:number;waiting:number;state:'none'|'todo'|'part'|'done';fresh?:number};
 export type CalendarMonth={name:string;cells:(CalendarCell|null)[]};
 export type CalendarProgress={dates:number;done:number;part:number;filesDone:number;files:number};
 export type YearData={months:CalendarMonth[];prog:CalendarProgress;today:string;streak:number;week:{days:number;seconds:number};refreshed?:string|null};
@@ -29,10 +31,12 @@ function depth(cell:CalendarCell,busiest:number){
   return 0;
 }
 function plural(count:number,word:string){return `${count.toLocaleString()} ${word}${count===1?'':'s'}`}
+/** How a date's new arrivals read after its description. */
+export function freshNote(cell:{fresh?:number}){return (cell.fresh??0)>0?`, ${plural(cell.fresh!,'newly arrived file')}`:''}
 function describe(cell:CalendarCell){
   if(cell.years===0)return `${calendarLabel(cell.md)} - nothing in the archive`;
   if(cell.state==='done')return `${calendarLabel(cell.md)} - reviewed, ${plural(cell.files,'file')} across ${plural(cell.years,'year')}`;
-  return `${calendarLabel(cell.md)} - ${plural(cell.waiting,'file')} waiting${cell.done>0?`, ${plural(cell.done,'year')} already reviewed`:''}`;
+  return `${calendarLabel(cell.md)} - ${plural(cell.waiting,'file')} waiting${cell.done>0?`, ${plural(cell.done,'year')} already reviewed`:''}${freshNote(cell)}`;
 }
 
 export function Year({months,prog,streak,week,refreshed}:YearData){
@@ -55,12 +59,13 @@ export function Year({months,prog,streak,week,refreshed}:YearData){
           key={cell.md} className={`cell ${heat(cell)}${cell.md===today?' now':''}`} href={`/on/${cell.md}`}
           style={{'--depth':depth(cell,busiest).toFixed(3)} as CSSProperties}
           title={describe(cell)} aria-label={describe(cell)}
-        >{cell.dom}</a>)}
+        >{cell.dom}{(cell.fresh??0)>0&&<span className="freshdot" aria-hidden="true"/>}</a>)}
       </div>)}
     </div>
     <p className="legend">{[['low','fewer than 30 waiting'],['mid','30 to 100'],['high',`more than 100, up to ${busiest.toLocaleString()}`],['done','reviewed'],['none','nothing filed'],['now','today']].map(([state,label])=><span className="lg" key={state}><span className={`key ${state}`}/>{label}</span>)}
+      <span className="lg"><span className="key fresh"><span className="freshdot"/></span>newly arrived files</span>
       <span className="lg dim">Deeper shades have more waiting</span></p>
-    <p className="hint">{prog.filesDone.toLocaleString()} of {prog.files.toLocaleString()} files sit under a date you have finished. A reviewed date comes back when a new year adds media to it.
+    <p className="hint">{prog.filesDone.toLocaleString()} of {prog.files.toLocaleString()} files sit under a date you have finished. A reviewed date comes back, with a red dot, when new files reach it.
       {week.days>0&&<> You reviewed on {week.days} of the last 7 days, {minutes(week.seconds)} in total.</>}
       {refreshed&&<> Index last refreshed {new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(refreshed))}.</>}
     </p>

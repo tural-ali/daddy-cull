@@ -17,7 +17,9 @@ import {pairLabel,rawsBehind,setPaired} from './pairs';
 import {usePageFilters} from './SearchFilters';
 import {Snacks} from './Snacks';
 
-export type TodayYear={day:string;year:number;files:number;bytes:number;status:'pending'|'done';assets:Asset[]};
+// fresh counts files that reached the archive after the day was reviewed and
+// still wait; each carries new.
+export type TodayYear={day:string;year:number;files:number;bytes:number;status:'pending'|'done';assets:Asset[];fresh?:number};
 export type TodayData={md:string;label:string;previous:string;next:string;years:TodayYear[];memories:number;bytes:number};
 export type DuplicateMember=Asset&{day:string};
 export type DuplicateGroup={hash:string;size:number;reclaimable:number;members:DuplicateMember[]};
@@ -384,10 +386,10 @@ export function Today({initial}:{initial:TodayData}){
     {years.filter(year=>filters.size===0||year.assets.some(asset=>shownIDs.has(asset.id))).map(year=>{
       const memories=year.assets.filter(asset=>!hidden.has(asset.id)).length;
       return <section className={`yr${year.status==='done'?' settled':''}`} key={year.day}>
-      <div className="yhead"><h2>{year.year}{year.status==='done'&&<span className="tag done">reviewed</span>}</h2><p className="ymeta"><span>{memories.toLocaleString()} {memories===1?'memory':'memories'}{memories!==year.files&&<span className="dim"> from {year.files.toLocaleString()} files</span>}</span><span className="dim">{bytes(year.bytes)}</span></p></div>
+      <div className="yhead"><h2>{year.year}{year.status==='done'&&<span className="tag done">reviewed</span>}{(year.fresh??0)>0&&<span className="tag fresh" title="Newly arrived in the archive, and not decided yet"><span className="freshdot" aria-hidden="true"/>{year.fresh!.toLocaleString()} new</span>}</h2><p className="ymeta"><span>{memories.toLocaleString()} {memories===1?'memory':'memories'}{memories!==year.files&&<span className="dim"> from {year.files.toLocaleString()} files</span>}</span><span className="dim">{bytes(year.bytes)}</span></p></div>
       {year.assets.length===0?<p className="note">Nothing left in this folder.</p>:<div className="gal">{year.assets.filter(asset=>shownIDs.has(asset.id)).map(asset=><figure className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}`} key={asset.id} data-asset={asset.id} onClick={()=>{setSelected(asset.id);photo.show(asset.id)}} tabIndex={0}>
         <Media asset={asset}/>
-        <div className="bdg">{behind.has(asset.id)&&<span className="b pair">{pairLabel(asset)}</span>}{(asset.relatedCount??0)>(behind.has(asset.id)?1:0)&&<span className="b dupe">duplicate</span>}</div>
+        <div className="bdg">{asset.new&&asset.status==='unreviewed'&&<span className="b new">new</span>}{behind.has(asset.id)&&<span className="b pair">{pairLabel(asset)}</span>}{(asset.relatedCount??0)>(behind.has(asset.id)?1:0)&&<span className="b dupe">duplicate</span>}</div>
         <div className="acts"><button type="button" className="act cull" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':'cull')}}>{asset.status==='cull'?'Undo':'Remove'}</button><button type="button" className="act fav" disabled={!queue.ready} aria-pressed={asset.favourite} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite)}}>♡</button></div>
         {captureTime(asset.capturedAt)&&<div className="when">{captureTime(asset.capturedAt)}</div>}
         {(asset.duration||asset.kind==='video')&&<span className="dur" aria-label={asset.duration?`Video, ${runningTime(asset.duration)}`:'Video'}>{asset.duration?runningTime(asset.duration):<Icon name="play_circle" filled/>}</span>}

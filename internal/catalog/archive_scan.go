@@ -193,6 +193,7 @@ func (s *Store) ScanArchive(ctx context.Context, root string) (ArchiveScanResult
 		return result, err
 	}
 	defer stmt.Close()
+	arrivals := make([]arrival, 0)
 	for _, file := range found {
 		r, insertErr := stmt.ExecContext(ctx, file.path, file.captured, assetKind(file.path), file.size)
 		if insertErr != nil {
@@ -201,6 +202,12 @@ func (s *Store) ScanArchive(ctx context.Context, root string) (ArchiveScanResult
 		if n, _ := r.RowsAffected(); n == 0 {
 			continue
 		}
+		id, idErr := r.LastInsertId()
+		if idErr != nil {
+			return result, idErr
+		}
+		day, _ := archiveDay(file.path, file.captured)
+		arrivals = append(arrivals, arrival{id: id, day: day, size: file.size})
 		result.Added++
 		result.AddedBytes += file.size
 		if ClassifyScreenshot(file.path) != "" {
@@ -211,6 +218,9 @@ func (s *Store) ScanArchive(ctx context.Context, root string) (ArchiveScanResult
 		if _, err = tx.ExecContext(ctx, "UPDATE stats SET total=total+? WHERE id=1", result.Added); err != nil {
 			return result, err
 		}
+	}
+	if err = recordArrivalsTx(ctx, tx, arrivals, time.Now()); err != nil {
+		return result, err
 	}
 	for id := range wasMissing {
 		if !missing[id] {

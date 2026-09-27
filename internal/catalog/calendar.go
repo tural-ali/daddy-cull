@@ -21,6 +21,9 @@ type CalendarCell struct {
 	Waiting int    `json:"waiting"`
 	State   string `json:"state"`
 	Today   bool   `json:"today"`
+	// Fresh counts files that arrived after the date was reviewed and still
+	// wait: the red dot.
+	Fresh int `json:"fresh,omitempty"`
 }
 
 type CalendarMonth struct {
@@ -57,6 +60,9 @@ type TodayYear struct {
 	Bytes  int64   `json:"bytes"`
 	Status string  `json:"status"`
 	Assets []Asset `json:"assets"`
+	// Fresh counts this year's files that arrived after it was reviewed and
+	// still wait; each one is marked New.
+	Fresh int `json:"fresh,omitempty"`
 }
 
 type TodayData struct {
@@ -184,6 +190,10 @@ func (s *Store) Calendar(ctx context.Context, now time.Time) (CalendarData, erro
 	if err = rows.Close(); err != nil {
 		return data, err
 	}
+	fresh, err := s.FreshDates(ctx)
+	if err != nil {
+		return data, err
+	}
 	for month := 1; month <= 12; month++ {
 		first := time.Date(2000, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
 		days := time.Date(2000, time.Month(month+1), 0, 0, 0, 0, 0, time.UTC).Day()
@@ -205,7 +215,7 @@ func (s *Store) Calendar(ctx context.Context, now time.Time) (CalendarData, erro
 					data.Progress.Part++
 				}
 			}
-			cells[day-1] = &CalendarCell{MD: md, DOM: day, Years: a.years, Files: a.files, Done: a.done, Waiting: a.waiting, State: state, Today: md == data.Today}
+			cells[day-1] = &CalendarCell{MD: md, DOM: day, Years: a.years, Files: a.files, Done: a.done, Waiting: a.waiting, State: state, Today: md == data.Today, Fresh: fresh[md]}
 		}
 		data.Months[month-1] = CalendarMonth{Name: first.Format("January"), Cells: cells}
 	}
@@ -260,10 +270,19 @@ func (s *Store) Today(ctx context.Context, md string) (TodayData, error) {
 			return data, queryErr
 		}
 	}
+	fresh, err := s.freshOn(ctx, md)
+	if err != nil {
+		return data, err
+	}
 	var all []*Asset
 	for index := range data.Years {
 		for i := range data.Years[index].Assets {
-			all = append(all, &data.Years[index].Assets[i])
+			asset := &data.Years[index].Assets[i]
+			if fresh[asset.ID] {
+				asset.New = true
+				data.Years[index].Fresh++
+			}
+			all = append(all, asset)
 		}
 	}
 	if err := s.markPairs(ctx, all); err != nil {
@@ -313,14 +332,17 @@ func setDayProgressTx(ctx context.Context, tx *sql.Tx, change DayProgressChange)
 	if err = tx.QueryRowContext(ctx, "SELECT status FROM day_progress WHERE day=?", change.Day).Scan(&previous); err != nil && err != sql.ErrNoRows {
 		return DayProgressResult{}, err
 	}
+	// To the millisecond, so a file that arrives in the same second as a
+	// review is still placed before or after it.
+	now := time.Now().UTC()
 	reviewedAt := any(nil)
 	if change.Status == "done" {
-		reviewedAt = time.Now().UTC().Format(time.RFC3339)
+		reviewedAt = now.Format(reviewStamp)
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO day_progress(day,status,reviewed_at) VALUES(?,?,?) ON CONFLICT(day) DO UPDATE SET status=excluded.status,reviewed_at=excluded.reviewed_at", change.Day, change.Status, reviewedAt); err != nil {
 		return DayProgressResult{}, err
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO day_progress_events(request_id,day,status,previous_status) VALUES(?,?,?,?)", change.RequestID, change.Day, change.Status, previous); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT INTO day_progress_events(request_id,day,status,previous_status,created_at) VALUES(?,?,?,?,?)", change.RequestID, change.Day, change.Status, previous, now.Format(eventStamp)); err != nil {
 		return DayProgressResult{}, err
 	}
 	return DayProgressResult{Day: change.Day, Status: change.Status, PreviousStatus: previous}, nil

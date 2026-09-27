@@ -30,11 +30,13 @@ func parseActivity(value string) (time.Time, bool) {
 }
 
 // reviewTimes reads every moment a review happened: each decision and each
-// date marked reviewed, in the viewer's time zone and in order.
+// date marked reviewed, in the viewer's time zone and in order. A day opened
+// again by new files keeps its reviewed_at, since that review still happened;
+// taking a mark back clears it.
 func (s *Store) reviewTimes(ctx context.Context, loc *time.Location) ([]time.Time, error) {
 	rows, err := s.read.QueryContext(ctx, `SELECT created_at FROM decision_events
 		UNION ALL SELECT created_at FROM day_progress_events WHERE status='done'
-		UNION ALL SELECT reviewed_at FROM day_progress WHERE status='done' AND reviewed_at IS NOT NULL`)
+		UNION ALL SELECT reviewed_at FROM day_progress WHERE reviewed_at IS NOT NULL`)
 	if err != nil {
 		return nil, err
 	}

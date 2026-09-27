@@ -97,12 +97,23 @@ func (s *Store) MarkPhoneDeletions(ctx context.Context, root string, in io.Reade
 	if err := scan.Err(); err != nil {
 		return result, err
 	}
+	// Each mark commits on its own, so the notification covers every mark
+	// made, even when a later one fails.
+	var bytes int64
+	var failed error
 	for _, d := range deletions {
-		if err := s.markPhoneDeletion(ctx, d, &result); err != nil {
-			return result, err
+		before := result.Marked
+		if failed = s.markPhoneDeletion(ctx, d, &result); failed != nil {
+			break
+		}
+		if result.Marked > before {
+			bytes += d.size
 		}
 	}
-	return result, nil
+	if err := s.recordPhoneDeletions(ctx, result.Marked, bytes); err != nil && failed == nil {
+		failed = err
+	}
+	return result, failed
 }
 
 func (s *Store) markPhoneDeletion(ctx context.Context, d phoneDeletion, result *PhoneDeletionResult) error {

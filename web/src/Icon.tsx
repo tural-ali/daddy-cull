@@ -83,6 +83,8 @@ import LinkOff from '@material-symbols/svg-400/outlined/link_off.svg?raw';
 import LinkOffFill from '@material-symbols/svg-400/outlined/link_off-fill.svg?raw';
 import DropDown from '@material-symbols/svg-400/outlined/arrow_drop_down.svg?raw';
 import DropDownFill from '@material-symbols/svg-400/outlined/arrow_drop_down-fill.svg?raw';
+import Bell from '@material-symbols/svg-400/outlined/notifications.svg?raw';
+import BellFill from '@material-symbols/svg-400/outlined/notifications-fill.svg?raw';
 
 const icons={
   photo:[Photo,PhotoFill],
@@ -126,6 +128,7 @@ const icons={
   arrow_drop_down:[DropDown,DropDownFill],
   link_off:[LinkOff,LinkOffFill],
   filter_list:[FilterList,FilterListFill],
+  notifications:[Bell,BellFill],
 } as const;
 
 export type IconName=keyof typeof icons;

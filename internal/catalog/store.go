@@ -306,6 +306,28 @@ CREATE TABLE IF NOT EXISTS catalogue_generation (id INTEGER PRIMARY KEY CHECK(id
 INSERT OR IGNORE INTO catalogue_generation VALUES(1,0);
 CREATE TRIGGER IF NOT EXISTS assets_added_to_catalogue AFTER INSERT ON assets BEGIN UPDATE catalogue_generation SET value=value+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS assets_removed_from_catalogue AFTER DELETE ON assets BEGIN UPDATE catalogue_generation SET value=value+1 WHERE id=1; END;
+-- What reached the catalogue with nobody on a page to see it, for the bell,
+-- and the files each archive scan added; see notifications.go.
+CREATE TABLE IF NOT EXISTS notifications (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ kind TEXT NOT NULL CHECK(kind IN ('arrivals','phone-deletions')),
+ created_at TEXT NOT NULL,
+ files INTEGER NOT NULL,
+ bytes INTEGER NOT NULL,
+ read_at TEXT
+);
+CREATE TABLE IF NOT EXISTS notification_days (
+ notification_id INTEGER NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+ day TEXT NOT NULL CHECK(length(day)=10),
+ files INTEGER NOT NULL,
+ reopened INTEGER NOT NULL CHECK(reopened IN (0,1)),
+ PRIMARY KEY(notification_id,day)
+);
+CREATE TABLE IF NOT EXISTS asset_arrivals (
+ asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
+ arrived_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS day_progress_events_day ON day_progress_events(day,status);
 COMMIT;`, applicationID)); err != nil {
 		return fail(err)
 	}

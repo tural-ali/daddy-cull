@@ -2,6 +2,8 @@ export type Status = 'unreviewed' | 'keep' | 'later' | 'cull';
 export type Asset = { id:number; path:string; capturedAt:number; kind:string; source:string; size:number; status:Status; favourite:boolean; revision:number;alternativeCount:number;relatedCount?:number;
   /** The other half of a RAW+JPEG pair, on the day pages. */
   pair?:number;
+  /** Reached the archive after its day was reviewed, and still waits. */
+  new?:boolean;
   /** How long a video runs, in seconds, once the server has read it. */
   duration?:number };
 export type Page = {assets:Asset[];next:string};

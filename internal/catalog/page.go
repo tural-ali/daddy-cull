@@ -22,6 +22,9 @@ type Asset struct {
 	// Pair is the other half of a RAW+JPEG pair, on the pages that show
 	// pairs as one photo.
 	Pair int64 `json:"pair,omitempty"`
+	// New marks a file that reached the archive after its day was reviewed
+	// and still waits for a decision, on the day page.
+	New bool `json:"new,omitempty"`
 	// Duration is how long a video runs, in seconds, once it has been read.
 	Duration float64 `json:"duration,omitempty"`
 }

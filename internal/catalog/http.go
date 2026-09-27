@@ -601,6 +601,42 @@ func (s *Store) Handler() http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		json.NewEncoder(w).Encode(map[string]int64{"generation": generation})
 	})
+	mux.HandleFunc("GET /api/notifications", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		result, e := s.ListNotifications(ctx, 50)
+		if e != nil {
+			http.Error(w, "notifications unavailable", 503)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, result)
+	})
+	mux.HandleFunc("POST /api/notifications/read", func(w http.ResponseWriter, r *http.Request) {
+		if !sameOriginJSON(w, r) {
+			return
+		}
+		var body struct {
+			Through int64 `json:"through"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&body); err != nil {
+			http.Error(w, "invalid request", 400)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := s.ReadNotifications(ctx, body.Through); err != nil {
+			status := 503
+			if errors.Is(err, ErrInvalid) {
+				status = 400
+			}
+			http.Error(w, http.StatusText(status), status)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("GET /api/stats", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
@@ -645,7 +681,8 @@ func (s *Store) Handler() http.Handler {
 		}
 		activity, _ := s.Activity(ctx, viewerLocation(r), time.Now())
 		videoMuted, _ := s.VideoMuted(ctx)
-		json.NewEncoder(w).Encode(map[string]any{"total": n, "synthetic": library != "real", "snapshotAt": snapshot, "candidates": candidates, "calendarDays": calendarDays, "reviewedDays": reviewedDays, "decisions": decisions, "favourites": favourites, "evidence": evidence, "fullHashes": fullHashes, "marked": marked, "legacyBin": legacyBin, "shadowGroups": shadowGroups, "screenshots": screenshots, "social": social, "upgradesAccepted": upgradesAccepted, "upgradeCandidates": upgradeCandidates, "bin": bin, "immichSynced": immichSynced, "immichPending": immichPending, "immichFailed": immichFailed, "immichRefused": immichRefused, "calendarDates": dates.Dates, "reviewedDates": dates.Done, "streak": activity.Streak, "reviewedToday": activity.Today, "videoMuted": videoMuted})
+		notifications, _ := s.UnreadNotifications(ctx)
+		json.NewEncoder(w).Encode(map[string]any{"total": n, "synthetic": library != "real", "snapshotAt": snapshot, "candidates": candidates, "calendarDays": calendarDays, "reviewedDays": reviewedDays, "decisions": decisions, "favourites": favourites, "evidence": evidence, "fullHashes": fullHashes, "marked": marked, "legacyBin": legacyBin, "shadowGroups": shadowGroups, "screenshots": screenshots, "social": social, "upgradesAccepted": upgradesAccepted, "upgradeCandidates": upgradeCandidates, "bin": bin, "immichSynced": immichSynced, "immichPending": immichPending, "immichFailed": immichFailed, "immichRefused": immichRefused, "calendarDates": dates.Dates, "reviewedDates": dates.Done, "streak": activity.Streak, "reviewedToday": activity.Today, "videoMuted": videoMuted, "notifications": notifications})
 	})
 	return mux
 }

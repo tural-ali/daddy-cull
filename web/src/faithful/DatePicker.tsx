@@ -111,6 +111,7 @@ export function DateCalendar({date,anchor,onClose}:{date:PageDate;anchor:RefObje
       if(cell.years===0)parts.push('nothing filed');
       else if(cell.state==='done')parts.push('reviewed');
       else parts.push(`${plural(cell.waiting,'file')} waiting`);
+      if((cell.fresh??0)>0)parts.push(`${plural(cell.fresh!,'newly arrived file')}`);
     }
     return parts.join(', ');
   }
@@ -134,10 +135,10 @@ export function DateCalendar({date,anchor,onClose}:{date:PageDate;anchor:RefObje
       {days.map(({md,dom,cell})=><a key={md} href={`/on/${md}`} data-md={md} role="gridcell" tabIndex={md===focusable?0:-1}
         aria-current={md===date.md?'page':undefined} aria-label={describe(md,cell)}
         className={`d${cell?` ${cell.state}`:''}${md===today?' today':''}${md===date.md?' current':''}`}
-        onFocus={()=>{if(focus!==md)setFocus(md)}}><span>{dom}</span></a>)}
+        onFocus={()=>{if(focus!==md)setFocus(md)}}><span>{dom}</span>{(cell?.fresh??0)>0&&<i className="freshdot" aria-hidden="true"/>}</a>)}
     </div>
     {failed?<p className="calfoot" role="alert">How far each date has got did not load. <button type="button" className="textbtn" onClick={()=>setAttempt(value=>value+1)}>Try again</button></p>
-      :<p className="calfoot callegend" aria-hidden="true"><span className="key done"/>Reviewed<span className="key part"/>Partly reviewed</p>}
+      :<p className="calfoot callegend" aria-hidden="true"><span className="key done"/>Reviewed<span className="key part"/>Partly reviewed{days.some(day=>(day.cell?.fresh??0)>0)&&<><span className="freshdot"/>New files</>}</p>}
     <nav className="calsteps" aria-label="Nearby dates">
       <a href={`/on/${date.previous}`} rel="prev"><Icon name="arrow_back"/>{shortLabel(date.previous)}</a>
       {date.md!==today&&<a href={`/on/${today}`} className="totoday">Today</a>}

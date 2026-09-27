@@ -48,6 +48,8 @@
   --flame-2:   #ffb14e;
   --bad:       #f0827f;
   --fav:       #f2789d;
+  /* Something new to look at: a true red, apart from the coral of removal. */
+  --dot:       #ff5c52;
 
   /* Logo lettering. */
   --logo-ink:  #f4f6fa;
@@ -105,6 +107,7 @@
   --flame-2:   #f5a524;
   --bad:       #c2402f;
   --fav:       #cf4a75;
+  --dot:       #e0281b;
   --logo-ink:  #16181d;
   --logo-mint: #149163;
   --logo-coral:#ec7f8c;
@@ -242,6 +245,47 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .streakpill.bump .icon { animation: flamepop 820ms cubic-bezier(.34, 1.56, .64, 1); }
 @keyframes streakbump { 0% { transform: scale(1); } 30% { transform: scale(1.18); background: color-mix(in oklab, var(--flame) 26%, transparent); } 100% { transform: scale(1); } }
 @keyframes flamepop { 0% { transform: none; } 35% { transform: translateY(-3px) rotate(-8deg) scale(1.2); } 70% { transform: rotate(4deg); } 100% { transform: none; } }
+
+/* The bell: what reached the archive while nobody was looking. Its count is
+   the sidebar's red badge, pinned to the corner of the button. */
+.bellwrap { position: relative; flex: none; }
+.bell .bellcount {
+  position: absolute; top: 5px; right: 4px; min-width: 18px; padding: 0 5px;
+  font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums;
+  color: #fff; background: var(--dot); border-radius: 999px; box-shadow: 0 0 0 2px var(--shell);
+  pointer-events: none;
+}
+.bell { position: relative; }
+.bellwrap > .calpop { left: auto; right: 0; width: 380px; padding: 16px 8px 8px; transform-origin: calc(100% - 22px) 0; }
+.notehead { padding: 0 12px 10px; }
+.notehead h2 { margin: 0; font-size: 20px; font-weight: 500; }
+.notenote { margin: 0; padding: 18px 12px 20px; font-size: 14px; color: var(--muted); }
+.notenote .textbtn { margin-left: 4px; }
+.notelist { list-style: none; margin: 0; padding: 0; max-height: min(70vh, 560px); overflow-y: auto; overscroll-behavior: contain; }
+.noteitem { display: flex; gap: 12px; padding: 12px; border-radius: 16px; }
+.noteitem + .noteitem { margin-top: 2px; }
+.noteitem.unseen { background: color-mix(in oklab, var(--accent) 9%, transparent); }
+.notetile { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 12px; color: var(--muted); background: var(--bg-3); }
+.notetile.arrivals { color: var(--accent); background: color-mix(in oklab, var(--accent) 16%, var(--bg-3)); }
+.notetile.deletions { color: var(--bad); background: color-mix(in oklab, var(--bad) 14%, var(--bg-3)); }
+.notebody { min-width: 0; flex: 1; }
+.notetitle { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.35; color: var(--text); }
+.notemeta { display: flex; flex-wrap: wrap; gap: 0 10px; margin: 2px 0 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.notemeta span + span::before { content: "·"; margin-right: 10px; color: var(--faint); }
+.notedays { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; }
+.noteday {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px;
+  font-size: 12.5px; color: var(--text); text-decoration: none; white-space: nowrap;
+  background: var(--bg-3); border: 1px solid var(--line); border-radius: 999px;
+  transition: background var(--ease), border-color var(--ease);
+}
+.noteday:hover { background: var(--hover); border-color: var(--line-2); text-decoration: none; }
+.noteday:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.noteday .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+.noteday .freshdot { width: 7px; height: 7px; box-shadow: none; }
+.notemore { display: inline-flex; align-items: center; height: 28px; font-size: 12.5px; color: var(--muted); }
+.noteacts { margin: 8px 0 0; font-size: 13px; }
+.noteacts a { color: var(--accent); font-weight: 500; }
 
 /* The calendars that drop from the top bar, the streak's and the date
    pill's: the headline in large type, then a month of days. */
@@ -389,6 +433,15 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .callegend .key + .key, .callegend .key:not(:first-child) { margin-left: 10px; }
 .callegend .key.done { background: color-mix(in oklab, var(--good) 35%, transparent); }
 .callegend .key.part::after { content: ""; position: absolute; left: 4px; top: 4px; width: 4px; height: 4px; border-radius: 999px; background: var(--good); }
+/* A date that gained files carries a red dot at its corner, as an app icon
+   does, until the new files are decided. In the date picker it is an <i>, so
+   the day number's own span rules pass it by. */
+.freshdot {
+  display: inline-block; width: 8px; height: 8px; flex: none;
+  border-radius: 999px; background: var(--dot); box-shadow: 0 0 0 2px var(--bg-2);
+}
+.calgrid .d > .freshdot { position: absolute; top: 2px; right: calc(50% - 17px); z-index: 2; }
+.callegend .freshdot { margin-left: 10px; box-shadow: none; }
 .calsteps { display: flex; align-items: center; gap: 4px; margin: 10px -4px 0; padding-top: 10px; border-top: 1px solid var(--line); }
 .calsteps a {
   display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 10px;
@@ -433,7 +486,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 @media (max-width: 600px) {
   .introflame, .introflame .icon, .introflame .icon svg { width: 128px; height: 128px; }
   .introcount b { font-size: 84px; }
-  .calpop, .searchwrap > .calpop { position: fixed; top: calc(var(--head-h) + 4px); left: 8px; right: 8px; width: auto; }
+  .calpop, .searchwrap > .calpop, .bellwrap > .calpop { position: fixed; top: calc(var(--head-h) + 4px); left: 8px; right: 8px; width: auto; }
 }
 
 /* Sidebar folded from the menu button: as in Google Photos it becomes a rail
@@ -667,6 +720,8 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 }
 .tag.today { background: color-mix(in oklab, var(--accent) 22%, var(--bg-3)); color: var(--accent); }
 .tag.done  { background: color-mix(in oklab, var(--good) 20%, var(--bg-3)); color: var(--good); }
+.tag.fresh { display: inline-flex; align-items: center; gap: 5px; background: color-mix(in oklab, var(--dot) 16%, var(--bg-3)); color: var(--text); }
+.tag.fresh .freshdot { width: 6px; height: 6px; box-shadow: none; }
 
 /* ================================================================= TODAY == */
 /* The gallery has to begin as high on the page as it can, so everything above
@@ -714,6 +769,8 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
    line under it, and no rule between them and the photographs. */
 .yhead { display: flex; flex-direction: column; gap: 10px; padding: 8px 0 20px; }
 .yhead h2 { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 28px; font-weight: 400; line-height: 36px; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+/* The heading's gap spaces its tags; they keep their own small line. */
+.yhead h2 .tag { margin-left: 0; padding: .14rem .5rem; line-height: 16px; vertical-align: 0; }
 .yhead .ymeta { display: flex; flex-wrap: wrap; gap: 0 16px; margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--text); }
 .yhead .ymeta .dim { font-weight: 400; color: var(--muted); }
 
@@ -795,6 +852,7 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 }
 .bdg .b.dupe { background: color-mix(in oklab, var(--warn) 82%, #000); }
 .bdg .b.keep { background: color-mix(in oklab, var(--good) 78%, #000); }
+.bdg .b.new  { background: color-mix(in oklab, var(--dot) 88%, #000); color: #fff; }
 .bdg .b.pair { letter-spacing: .04em; }
 
 /* The badge that counts the files is also the way into the comparison, so it -
@@ -1037,6 +1095,10 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 .legend .key.low, .legend .key.mid, .legend .key.high { width: 28px; background: linear-gradient(90deg in oklab, var(--pale), var(--deep)); }
 .legend .key.done { background: var(--bg-3); box-shadow: inset 0 0 0 1px var(--line-2); }
 .legend .key.now  { box-shadow: 0 0 0 2px var(--accent); }
+.legend .key.fresh { position: relative; background: var(--bg-3); }
+.legend .key.fresh .freshdot { position: absolute; top: -3px; right: -3px; width: 7px; height: 7px; box-shadow: 0 0 0 1.5px var(--bg); }
+.cell { position: relative; }
+.cell > .freshdot { position: absolute; top: -3px; right: -3px; box-shadow: 0 0 0 2px var(--bg); }
 
 /* ------------------------------------------------------------- completion -- */
 /* The photograph is the largest thing here. The numbers are small, there is no

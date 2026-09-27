@@ -5,6 +5,7 @@ import {pathForDate} from './goto';
 import {SelectionBar,SelectionProvider,type Selection} from './selection';
 import {PageActionButtons,PageActionsProvider,type PageActions} from './pageActions';
 import {StreakCalendar,StreakIntro,StreakPill,introDue} from './Streak';
+import {NotificationBell} from './Notifications';
 import {DateCalendar,DatePill,PageDateProvider,type PageDate} from './DatePicker';
 import {FilterButton,FilterMenu,FilterPills,PageFiltersProvider,matchFilters,type FilterOption,type PageFilters} from './SearchFilters';
 
@@ -116,7 +117,7 @@ const narrowQuery='(max-width: 1000px)';
 const sideKey='cull-side';
 function readSideHidden(){try{return localStorage.getItem(sideKey)==='hidden'}catch{return false}}
 
-export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:LegacyRoute;binFiles:number;reviewed?:{done:number;total:number};streak?:{days:number;today:boolean};flash?:string;children:ReactNode}){
+export function Layout({route,binFiles,reviewed,streak,notifications,onNotificationsRead,flash,children}:{route:LegacyRoute;binFiles:number;reviewed?:{done:number;total:number};streak?:{days:number;today:boolean};notifications?:number;onNotificationsRead?:()=>void;flash?:string;children:ReactNode}){
   const [drawer,setDrawer]=useState(false);
   const [selection,setSelection]=useState<Selection|null>(null);
   const [pageActions,setPageActions]=useState<PageActions|null>(null);
@@ -179,6 +180,7 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
       <DateSearch date={pageDate} filters={pageFilters}/>
       <div className="gbaracts">
         {pageActions&&<PageActionButtons page={pageActions}/>}
+        {notifications!==undefined&&<NotificationBell unread={notifications} onRead={()=>onNotificationsRead?.()}/>}
       </div>
     </header>}
     <aside id="side" className="side">

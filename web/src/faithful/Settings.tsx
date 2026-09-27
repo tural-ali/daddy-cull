@@ -4,7 +4,7 @@ import {dayStartsAt,nightStartsAt,readChoice,saveChoice,themeEvent,themeFor,type
 import {bytes,longDate,readDeleting,type DeletingReport} from './Bin';
 import {clearSessionSound,setVideoSoundPreference} from '../SessionVideo';
 
-export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;videoMuted?:boolean;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number;immichRefused?:number;calendarDates?:number;reviewedDates?:number;streak?:number;reviewedToday?:boolean};
+export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;videoMuted?:boolean;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number;immichRefused?:number;calendarDates?:number;reviewedDates?:number;streak?:number;reviewedToday?:boolean;notifications?:number};
 
 function localDate(value:string){
   if(!value)return 'never';
