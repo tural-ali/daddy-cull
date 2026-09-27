@@ -29,48 +29,74 @@ func parseActivity(value string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
+// reviewTimes reads every moment a review happened: each decision and each
+// date marked reviewed, in the viewer's time zone and in order.
+func (s *Store) reviewTimes(ctx context.Context, loc *time.Location) ([]time.Time, error) {
+	rows, err := s.read.QueryContext(ctx, `SELECT created_at FROM decision_events
+		UNION ALL SELECT created_at FROM day_progress_events WHERE status='done'
+		UNION ALL SELECT reviewed_at FROM day_progress WHERE status='done' AND reviewed_at IS NOT NULL`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var times []time.Time
+	for rows.Next() {
+		var value string
+		if err = rows.Scan(&value); err != nil {
+			return nil, err
+		}
+		if t, ok := parseActivity(value); ok {
+			times = append(times, t.In(loc))
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	sort.Slice(times, func(i, j int) bool { return times[i].Before(times[j]) })
+	return times, nil
+}
+
+func dayKey(t time.Time) string { return t.Format("2006-01-02") }
+
+func reviewDaySet(times []time.Time) map[string]bool {
+	days := make(map[string]bool, len(times))
+	for _, t := range times {
+		days[dayKey(t)] = true
+	}
+	return days
+}
+
+// currentStreak counts back from today, or from yesterday while today has no
+// review yet, so a streak survives until the end of a day without one.
+func currentStreak(days map[string]bool, loc *time.Location, now time.Time) (int, bool) {
+	now = now.In(loc)
+	day := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, loc)
+	today := days[dayKey(day)]
+	if !today {
+		day = day.AddDate(0, 0, -1)
+	}
+	streak := 0
+	for days[dayKey(day)] {
+		streak++
+		day = day.AddDate(0, 0, -1)
+	}
+	return streak, today
+}
+
 // Activity counts a day as reviewed when any photograph was decided on it or
 // any date was marked reviewed, in the viewer's time zone so the day turns
 // over at their midnight. A streak survives until the end of a day with no
 // review yet: it counts back from yesterday until today has one.
 func (s *Store) Activity(ctx context.Context, loc *time.Location, now time.Time) (ReviewActivity, error) {
 	var activity ReviewActivity
-	rows, err := s.read.QueryContext(ctx, `SELECT created_at FROM decision_events
-		UNION ALL SELECT created_at FROM day_progress_events WHERE status='done'
-		UNION ALL SELECT reviewed_at FROM day_progress WHERE status='done' AND reviewed_at IS NOT NULL`)
+	times, err := s.reviewTimes(ctx, loc)
 	if err != nil {
 		return activity, err
 	}
-	var times []time.Time
-	for rows.Next() {
-		var value string
-		if err = rows.Scan(&value); err != nil {
-			rows.Close()
-			return activity, err
-		}
-		if t, ok := parseActivity(value); ok {
-			times = append(times, t.In(loc))
-		}
-	}
-	if err = rows.Close(); err != nil {
-		return activity, err
-	}
-	sort.Slice(times, func(i, j int) bool { return times[i].Before(times[j]) })
 	now = now.In(loc)
-	key := func(t time.Time) string { return t.Format("2006-01-02") }
-	days := make(map[string]bool, len(times))
-	for _, t := range times {
-		days[key(t)] = true
-	}
-	day := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, loc)
-	activity.Today = days[key(day)]
-	if !activity.Today {
-		day = day.AddDate(0, 0, -1)
-	}
-	for days[key(day)] {
-		activity.Streak++
-		day = day.AddDate(0, 0, -1)
-	}
+	key := dayKey
+	days := reviewDaySet(times)
+	activity.Streak, activity.Today = currentStreak(days, loc, now)
 	weekStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, -6)
 	for offset := 0; offset < 7; offset++ {
 		if days[key(weekStart.AddDate(0, 0, offset).Add(12*time.Hour))] {
