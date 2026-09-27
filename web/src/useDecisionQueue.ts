@@ -15,7 +15,9 @@ export function useDecisionQueue(onSaved:(job:PendingDecision,result:Saved)=>voi
   try{while(jobs.current.length){
    const job=jobs.current[0];
    const result=await decide(job.asset,job.status,job.favourite,job.requestId);
-   persist(jobs.current.slice(1));setError('');callback.current(job,result);
+   // A later choice on the same file was queued before this one was
+   // confirmed, so it waits for, and builds on, the revision just saved.
+   persist(jobs.current.slice(1).map(next=>next.asset.id===job.asset.id?{...next,asset:{...next.asset,revision:result.revision}}:next));setError('');callback.current(job,result);
   }}catch(e){paused.current=true;setError(`A choice has not been confirmed. Your pending choices are retained locally. ${(e as Error).message}`)}
   finally{running.current=false}
  }
@@ -32,7 +34,6 @@ export function useDecisionQueue(onSaved:(job:PendingDecision,result:Saved)=>voi
  },[]);
  function enqueue(job:Omit<PendingDecision,'requestId'>){
   if(!ready||paused.current)return false;
-  if(jobs.current.some(j=>j.asset.id===job.asset.id))return false;
   if(jobs.current.length>=32){setError('32 choices are waiting to save. Wait for the connection to catch up.');return false}
   try{persist([...jobs.current,{...job,requestId:randomId()}]);setError('');void drain();return true}
   catch{paused.current=true;setError('Could not retain the choice locally. Review is paused; no choice was advanced.');return false}

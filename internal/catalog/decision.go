@@ -74,6 +74,11 @@ func decideTx(ctx context.Context, tx *sql.Tx, d Decision) (Saved, error) {
 	if d.Status != "unreviewed" && d.Status != "keep" && d.Status != "later" && d.Status != "cull" {
 		return result, ErrInvalid
 	}
+	// A file marked for the Bin is not a favourite: removing it withdraws the
+	// heart as well as any keep, whichever screen sent the choice.
+	if d.Status == "cull" {
+		d.Favourite = false
+	}
 	var old Decision
 	err := tx.QueryRowContext(ctx, "SELECT asset_id,expected_revision,status,favourite,previous_status,previous_favourite FROM decision_events WHERE request_id=?", d.RequestID).Scan(&old.AssetID, &old.ExpectedRevision, &old.Status, &old.Favourite, &result.PreviousStatus, &result.PreviousFavourite)
 	if err == nil {

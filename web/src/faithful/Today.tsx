@@ -51,7 +51,7 @@ export function Today({initial}:{initial:TodayData}){
   async function resolveGroup(group:DuplicateGroup){
     if(saving)return;
     const keeperID=keepers[group.hash]??group.members[0].id;
-    const changes=group.members.map(asset=>({assetId:asset.id,status:asset.id===keeperID?'keep':'cull',favourite:asset.favourite,expectedRevision:asset.revision,requestId:requestID()}));
+    const changes=group.members.map(asset=>({assetId:asset.id,status:asset.id===keeperID?'keep':'cull',favourite:asset.id===keeperID&&asset.favourite,expectedRevision:asset.revision,requestId:requestID()}));
     setSaving(true);
     setMessage('Saving the duplicate choices…');
     try{
@@ -59,7 +59,7 @@ export function Today({initial}:{initial:TodayData}){
       if(!response.ok)throw new Error(response.status===409?'One of these files changed. Reload before resolving this group.':'The duplicate choices could not be confirmed.');
       const results:{revision:number}[]=await response.json();
       binChanged();
-      group.members.forEach((asset,index)=>patchAsset(asset.id,{status:asset.id===keeperID?'keep':'cull',revision:results[index].revision}));
+      group.members.forEach((asset,index)=>patchAsset(asset.id,{status:asset.id===keeperID?'keep':'cull',favourite:asset.id===keeperID&&asset.favourite,revision:results[index].revision}));
 	  setDuplicateGroups(current=>current.filter(item=>item.hash!==group.hash||item.size!==group.size));
       setMessage(`${group.members.length-1} verified ${group.members.length===2?'copy':'copies'} marked for the Bin. No original has moved.`);
     }catch(error){setMessage((error as Error).message)}finally{setSaving(false)}
@@ -69,6 +69,7 @@ export function Today({initial}:{initial:TodayData}){
     setMessage(job.status==='cull'?'Marked for the Bin. The original has not moved.':'Saved.');
   });
   function save(asset:Asset,status:Status,favourite=asset.favourite){
+    if(status==='cull')favourite=false;
     const before={status:asset.status,favourite:asset.favourite};
     patchAsset(asset.id,{status,favourite});
     if(!queue.enqueue({asset,status,favourite,wasResolved:asset.status==='keep'||asset.status==='cull'})){
@@ -116,7 +117,7 @@ export function Today({initial}:{initial:TodayData}){
         const asset=assets.find(item=>item.id===selected);
         if(!asset)return;
         if(event.key.toLowerCase()==='x')save(asset,asset.status==='cull'?'unreviewed':'cull');
-        if(event.key.toLowerCase()==='f')save(asset,asset.status,!asset.favourite);
+        if(event.key.toLowerCase()==='f')save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite);
       }
     }
     window.addEventListener('keydown',key);
@@ -167,7 +168,7 @@ export function Today({initial}:{initial:TodayData}){
       {year.assets.length===0?<p className="note">Nothing left in this folder.</p>:<div className="gal">{year.assets.map(asset=><figure className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}`} key={asset.id} onClick={()=>{setSelected(asset.id);photo.show(asset.id)}} tabIndex={0}>
         <Media asset={asset}/>
         <div className="bdg">{(asset.relatedCount??0)>0&&<span className="b dupe">duplicate</span>}{asset.kind==='video'&&<span className="b play">▶</span>}</div>
-        <div className="acts"><button type="button" className="act cull" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':'cull')}}>{asset.status==='cull'?'Undo':'Remove'}</button><button type="button" className="act fav" disabled={!queue.ready} aria-pressed={asset.favourite} onClick={event=>{event.stopPropagation();save(asset,asset.status,!asset.favourite)}}>♡</button></div>
+        <div className="acts"><button type="button" className="act cull" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':'cull')}}>{asset.status==='cull'?'Undo':'Remove'}</button><button type="button" className="act fav" disabled={!queue.ready} aria-pressed={asset.favourite} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite)}}>♡</button></div>
         {captureTime(asset.capturedAt)&&<div className="when">{captureTime(asset.capturedAt)}</div>}
         {asset.status==='cull'&&<div className="undo"><span>Removed</span><button type="button" className="act" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,'unreviewed')}}>Undo</button></div>}
       </figure>)}</div>}

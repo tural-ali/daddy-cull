@@ -157,7 +157,7 @@ export function Duplicates({report}:{report:DuplicateReport}){
     setBusy(true);setError('');setMessage('');
     const changes=chosen.flatMap(group=>{
       const keeperID=keeperOf(group);
-      return group.members.map(member=>({assetId:member.id,status:member.id===keeperID?'keep':'cull',favourite:member.favourite,expectedRevision:member.revision,requestId:requestID()}));
+      return group.members.map(member=>({assetId:member.id,status:member.id===keeperID?'keep':'cull',favourite:member.id===keeperID&&member.favourite,expectedRevision:member.revision,requestId:requestID()}));
     });
     let saved=0;
     try{

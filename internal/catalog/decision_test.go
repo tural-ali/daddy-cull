@@ -77,3 +77,36 @@ func TestConcurrentDecisions(t *testing.T) {
 		t.Fatalf("success=%d conflict=%d", success, conflict)
 	}
 }
+
+func TestRemovingAFileWithdrawsItsFavourite(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if err := s.Seed(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Decide(ctx, Decision{RequestID: "heart-request-1", AssetID: 1, Status: "keep", Favourite: true}); err != nil {
+		t.Fatal(err)
+	}
+	cull := Decision{RequestID: "remove-request-1", AssetID: 1, ExpectedRevision: 1, Status: "cull", Favourite: true}
+	saved, err := s.Decide(ctx, cull)
+	if err != nil || saved.PreviousStatus != "keep" || !saved.PreviousFavourite {
+		t.Fatalf("%+v %v", saved, err)
+	}
+	if again, err := s.Decide(ctx, cull); err != nil || again != saved {
+		t.Fatal("a retried removal was not recognised", again, err)
+	}
+	p, err := s.Page(ctx, "", "", "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := p.Assets[0]; got.Status != "cull" || got.Favourite {
+		t.Fatalf("a removed file kept its heart: %+v", got)
+	}
+	var desired bool
+	if err = s.read.QueryRowContext(ctx, "SELECT desired FROM immich_favourites WHERE asset_id=1").Scan(&desired); err != nil {
+		t.Fatal("the withdrawn heart was not queued for Immich", err)
+	}
+	if desired {
+		t.Fatal("Immich was asked to keep the heart on a removed file")
+	}
+}

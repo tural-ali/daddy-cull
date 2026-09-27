@@ -41,7 +41,7 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
   async function apply(status:'keep'|'cull',chosen=items.filter(item=>selected.has(item.id))){
     if(chosen.length===0||busy)return;
     setBusy(true);setError('');setMessage('');setUndo(null);
-    const changes:Change[]=chosen.map(item=>({assetId:item.id,status,favourite:item.favourite,expectedRevision:item.revision,requestId:requestID()}));
+    const changes:Change[]=chosen.map(item=>({assetId:item.id,status,favourite:status!=='cull'&&item.favourite,expectedRevision:item.revision,requestId:requestID()}));
     try{
       const saved=await sendDecisions(changes);
       const gone=new Set(chosen.map(item=>item.id));
