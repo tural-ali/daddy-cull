@@ -1,6 +1,6 @@
 import {useEffect,useLayoutEffect,useMemo,useRef,useState,type MouseEvent} from 'react';
 import {SessionVideo} from '../SessionVideo';
-import {Icon} from '../Icon';
+import {Icon,type IconName} from '../Icon';
 import {binChanged,type Asset,type Status} from '../api';
 import {undoKeys,type HistoryEntry} from './history';
 
@@ -12,6 +12,25 @@ function format(asset:Asset){
   const extension=asset.path.includes('.')?asset.path.split('.').pop()!.toUpperCase():'';
   return asset.kind==='raw'?'RAW':extension;
 }
+
+type Box={left:number;top:number;width:number;height:number};
+/** The photograph's tile in the grid behind the viewer, when the page marks
+ * its tiles with `data-asset`. */
+function tileImage(id:number){return document.querySelector<HTMLImageElement>(`[data-asset="${id}"] img`)}
+/** Where a picture of this shape sits when fitted to the stage, as the stage
+ * will draw it. */
+function fitted(stage:DOMRect,width:number,height:number):Box{
+  const scale=Math.min(stage.width/width,stage.height/height,1);
+  const w=width*scale,h=height*scale;
+  return {left:stage.left+(stage.width-w)/2,top:stage.top+(stage.height-h)/2,width:w,height:h};
+}
+const box=(rect:DOMRect):Box=>({left:rect.left,top:rect.top,width:rect.width,height:rect.height});
+const stillMotion=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** A picture in flight between its tile and the stage: the tile grows into
+ * the photograph on opening, and the photograph shrinks back into its tile
+ * on Back, as in Google Photos. */
+type Flight={mode:'open'|'close';src:string;from:Box;to:Box;radius:string};
+const flightTime=320;
 
 /** `dayOf`, when given, turns the date into a link to the file's own day, for
  * pages that show files from many days. */
@@ -30,23 +49,28 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     });
   }
   const [help,setHelp]=useState(false);
+  const [menu,setMenu]=useState(false);
   const [zoom,setZoom]=useState(false);
   const [bare,setBare]=useState(false);
   const [related,setRelated]=useState<Asset[]|null>(null);
   const [focus,setFocus]=useState(0);
   const [error,setError]=useState('');
+  const [copied,setCopied]=useState(false);
   // Why the current file could not be drawn, keyed by its id so the next file
   // starts clean. A file moved off the archive between scans answers 404.
   const [broken,setBroken]=useState<{id:number;gone:boolean}|null>(null);
   const current=assets[Math.min(at,Math.max(0,assets.length-1))];
   const capture=current?.capturedAt?new Date(current.capturedAt*1000):null;
   const name=current?.path.split('/').pop()??'';
+  const folder=current?.path.split('/').slice(0,-1).join('/')??'';
   const date=capture?.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'})??'Date unknown';
+  const weekday=capture?.toLocaleDateString(undefined,{weekday:'short'})??'';
   const time=capture?.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})??'';
   const compareFiles=useMemo(()=>related??[],[related]);
   // The badge sits on the photograph's own top-left corner, which moves with
   // the picture's shape and the window, so it follows the drawn media.
   const media=useRef<HTMLImageElement&HTMLVideoElement>(null);
+  const stage=useRef<HTMLDivElement>(null);
   const [corner,setCorner]=useState<{left:number;top:number}|null>(null);
   useLayoutEffect(()=>{
     const element=media.current;
@@ -59,16 +83,69 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     return()=>{observer.disconnect();element.removeEventListener('load',place);element.removeEventListener('loadedmetadata',place)};
   },[current?.id,zoom]);
 
+  // The opening flight: the tile's own thumbnail grows to where the large
+  // preview will be drawn, and stays there until that preview has arrived.
+  const [flight,setFlight]=useState<Flight|null>(null);
+  const [landed,setLanded]=useState(false);
+  const [shown,setShown]=useState<number|null>(null);
+  const leaving=useRef(false);
+  const flyer=useRef<HTMLImageElement>(null);
+  useLayoutEffect(()=>{
+    const tile=tileImage(initialID);
+    const stageBox=stage.current?.getBoundingClientRect();
+    if(stillMotion()||!tile||!stageBox||!tile.naturalWidth||tile.getBoundingClientRect().width===0)return;
+    const radius=getComputedStyle(tile.closest('figure')??tile).borderRadius;
+    setFlight({mode:'open',src:tile.currentSrc||tile.src,from:box(tile.getBoundingClientRect()),to:fitted(stageBox,tile.naturalWidth,tile.naturalHeight),radius});
+  },[]);
+  useEffect(()=>{
+    const element=flyer.current;
+    if(!flight||!element)return;
+    const frame=(b:Box,radius:string)=>({left:`${b.left}px`,top:`${b.top}px`,width:`${b.width}px`,height:`${b.height}px`,borderRadius:radius});
+    const animation=element.animate([frame(flight.from,flight.mode==='open'?flight.radius:'0px'),frame(flight.to,flight.mode==='open'?'0px':flight.radius)],{duration:flightTime,easing:'cubic-bezier(.2,0,0,1)',fill:'forwards'});
+    let settled=false;
+    const finish=()=>{if(settled)return;settled=true;if(flight.mode==='close')onClose();else setLanded(true)};
+    animation.onfinish=finish;
+    // A tab in the background gets no animation frames; the flight still ends.
+    const fallback=window.setTimeout(finish,flightTime+200);
+    return()=>window.clearTimeout(fallback);
+  },[flight]);
+  // The thumbnail lifts once the large preview is drawn, or after a moment
+  // when the preview is slow, so a stalled fetch never leaves it stuck.
+  useEffect(()=>{
+    if(!flight||flight.mode!=='open'||!landed)return;
+    if(shown===initialID||broken?.id===initialID){setFlight(null);return}
+    const timer=window.setTimeout(()=>setFlight(null),1500);
+    return()=>window.clearTimeout(timer);
+  },[flight,landed,shown,broken]);
+  /** Back: the photograph shrinks into its tile, then the viewer is gone. */
+  function leave(){
+    if(leaving.current)return;
+    const element=media.current;
+    const tile=current?tileImage(current.id):null;
+    if(stillMotion()||!element||!tile||element.offsetWidth===0){onClose();return}
+    leaving.current=true;
+    // The grid behind the viewer scrolls its tile into view, so the picture
+    // lands where the reviewer will find it.
+    tile.scrollIntoView({block:'center',behavior:'instant'});
+    const radius=getComputedStyle(tile.closest('figure')??tile).borderRadius;
+    const src=current.kind==='video'?preview(current):(element as HTMLImageElement).currentSrc||preview(current);
+    setFlight({mode:'close',src,from:box(element.getBoundingClientRect()),to:box(tile.getBoundingClientRect()),radius});
+  }
+
   function failed(id:number){
     void fetch(`/api/media/${id}/original`,{method:'HEAD'}).then(response=>response.status===404,()=>false).then(gone=>setBroken({id,gone}));
   }
-  function step(change:number){if(assets.length)setAt(index=>(index+change+assets.length)%assets.length);setZoom(false);setBare(false);setRelated(null)}
+  function step(change:number){if(assets.length)setAt(index=>(index+change+assets.length)%assets.length);setZoom(false);setBare(false);setRelated(null);setMenu(false)}
   function choose(status:Status,favourite?:boolean,advance=false){if(!current)return;if(onSave(current,status,favourite)&&advance)step(1)}
   // K and X each undo themselves and stay on the photo. A heart on a removed
   // photo brings it back, since the Bin never holds a favourite.
   function keep(){if(current)choose(current.status==='keep'?'unreviewed':'keep',undefined,current.status!=='keep')}
   function remove(){if(current)choose(current.status==='cull'?'unreviewed':'cull',undefined,current.status!=='cull')}
   function favourite(){if(current)choose(current.status==='cull'?'unreviewed':current.status,!current.favourite)}
+  function copyPath(){
+    if(!current)return;
+    navigator.clipboard.writeText(current.path).then(()=>{setCopied(true);window.setTimeout(()=>setCopied(false),1500)},()=>setError('The path could not be copied.'));
+  }
   async function openCompare(){
     if(!current||(current.relatedCount??0)<1)return;
     setError('');
@@ -116,6 +193,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       if(event.ctrlKey||event.metaKey||event.altKey||event.target instanceof HTMLInputElement)return;
       const key=event.key.toLowerCase();
       if(['arrowright','arrowleft','x','k','f','i','z','c','g','escape',' ','?','1','2','3','4','5','6','7','8','9'].includes(key))event.preventDefault();
+      if(menu){if(key==='escape')setMenu(false);return}
       if(related){
         if(/^[1-9]$/.test(key))setFocus(Math.min(Number(key)-1,related.length-1));
         else if(key==='c'||key==='escape')setRelated(null);
@@ -131,7 +209,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       else if(key==='z')setZoom(value=>!value);
       else if(key==='c')void openCompare();
       else if(key==='?')setHelp(value=>!value);
-      else if(key==='g'||key==='escape'||key===' ')onClose();
+      else if(key==='g'||key==='escape'||key===' ')leave();
     }
     window.addEventListener('keydown',key);
     return()=>window.removeEventListener('keydown',key);
@@ -140,22 +218,52 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   // Clicking anywhere but the photograph or a control leaves the review, the
   // way a lightbox is expected to close.
   function outside(event:MouseEvent){
+    if(menu){setMenu(false);return}
     if((event.target as HTMLElement).closest('img,video,button,a,input,.rvinfo,.rvcmp,.rvkeys,.toast'))return;
-    onClose();
+    leave();
   }
-  return <div className={`rv on${bare?' bare':''}${info?' info':''}${current.favourite?' isfav':''}${related?' cmp':''}`} role="dialog" aria-modal="true" aria-label="Photo review" onClick={outside}>
-    <div className="rvtop">{dayOf?<a className="rvday" href={dayOf(current)} target="_blank" rel="noopener" title="Open this day in a new tab">{date}<Icon name="open_in_new"/></a>:<span className="rvday">{date}</span>}<span className="rvwhen">{time}</span><span className="rvpos">{at+1} / {assets.length}</span><button type="button" className="rvx" aria-label="Close review" title="Close (Esc)" onClick={onClose}>×</button></div>
-    <div className={`rvstage${zoom?' zoom':''}${current.kind==='video'?' hasvideo':''}`} onClick={event=>{if((event.target as HTMLElement).tagName==='IMG')setBare(value=>!value)}}>
+  const mediaIcon:IconName=current.kind==='video'?'videocam':current.kind==='raw'?'raw_on':'image';
+  const decision=current.status==='keep'?{icon:'check_circle' as IconName,text:'Kept'}
+    :current.status==='cull'?{icon:'delete' as IconName,text:'Marked for the Bin'}
+    :{icon:'schedule' as IconName,text:'Not decided yet'};
+  return <div className={`rv on${bare?' bare':''}${info?' info':''}${related?' cmp':''}${flight?` flight ${flight.mode}`:''}`} role="dialog" aria-modal="true" aria-label="Photo review" onClick={outside}>
+    <div className="rvbody">
+    <div className="rvtop">
+      <button type="button" className="rvact rvback" aria-label="Back to the grid" title="Back (Esc)" onClick={leave}><Icon name="arrow_back"/></button>
+      <div className="rvacts">
+        {(current.relatedCount??0)>0&&<button type="button" className="rvact cmp" aria-label="Compare similar photos" title="Compare (C)" onClick={()=>void openCompare()}><Icon name="compare"/></button>}
+        <button type="button" className="rvact zoom" aria-label="Zoom" aria-pressed={zoom} title="Zoom (Z)" onClick={()=>setZoom(value=>!value)}><Icon name="zoom_in" filled={zoom}/></button>
+        <button type="button" className="rvact infobtn" aria-label="Info" aria-pressed={info} title="Info (I)" onClick={()=>setInfo(value=>!value)}><Icon name="info" filled={info}/></button>
+        <button type="button" className={`rvact fav${current.favourite?' on':''}`} aria-label={current.favourite?'Favourited':'Favourite'} aria-pressed={current.favourite} title={current.favourite?'Favourited. Press F again to undo':'Favourite (F)'} onClick={favourite}><Icon name="favorite" filled={current.favourite}/></button>
+        <button type="button" className={`rvact keep${current.status==='keep'?' on':''}`} aria-label={current.status==='keep'?'Kept':'Keep'} aria-pressed={current.status==='keep'} title={current.status==='keep'?'Kept. Press K again to undo':'Keep (K)'} onClick={keep}><Icon name="check_circle" filled={current.status==='keep'}/></button>
+        <button type="button" className={`rvact cull${current.status==='cull'?' on':''}`} aria-label={current.status==='cull'?'Undo remove':'Remove'} aria-pressed={current.status==='cull'} title={current.status==='cull'?'Marked for the Bin. Press X again to undo':'Remove (X)'} onClick={remove}><Icon name={current.status==='cull'?'restore_from_trash':'delete'}/></button>
+        <button type="button" className="rvact more" aria-label="More" aria-haspopup="menu" aria-expanded={menu} title="More" onClick={event=>{event.stopPropagation();setMenu(value=>!value)}}><Icon name="more_vert"/></button>
+        {menu&&<div className="rvmenu" role="menu" onClick={event=>event.stopPropagation()}>
+          {dayOf&&<a role="menuitem" href={dayOf(current)} target="_blank" rel="noopener" onClick={()=>setMenu(false)}><Icon name="open_in_new"/>Open this day in a new tab</a>}
+          <button type="button" role="menuitem" onClick={()=>{setMenu(false);copyPath()}}><Icon name="content_copy"/>Copy file path</button>
+          <button type="button" role="menuitem" onClick={()=>{setMenu(false);setHelp(true)}}><Icon name="keyboard"/>Keyboard shortcuts<kbd>?</kbd></button>
+        </div>}
+      </div>
+    </div>
+    <div ref={stage} className={`rvstage${zoom?' zoom':''}${current.kind==='video'?' hasvideo':''}`} onClick={event=>{if((event.target as HTMLElement).tagName==='IMG')setBare(value=>!value)}}>
       <button type="button" className="rvnav prev" aria-label="Previous" onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
       {broken?.id===current.id?<div className="rvgone" role="status"><b>{broken.gone?'This file is no longer in the archive':'This file could not be shown'}</b><span>{broken.gone?'It was moved or removed on the server since the last scan. It leaves review at the next nightly scan.':'Try again in a moment.'}</span></div>
-        :current.kind==='video'?<SessionVideo ref={media} key={current.id} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onError={()=>failed(current.id)}/>:<img ref={media} key={current.id} src={preview(current)} alt={name} onError={()=>failed(current.id)}/>}
+        :current.kind==='video'?<SessionVideo ref={media} key={current.id} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onLoadedData={()=>setShown(current.id)} onError={()=>failed(current.id)}/>:<img ref={media} key={current.id} src={preview(current)} alt={name} onLoad={()=>setShown(current.id)} onError={()=>failed(current.id)}/>}
       {corner&&!zoom&&format(current)&&<span className="rvformat" style={{left:corner.left+12,top:corner.top+12}} title={name.split('.').pop()?.toUpperCase()}>{format(current)}</span>}
       <button type="button" className="rvnav next" aria-label="Next" onClick={event=>{event.stopPropagation();step(1)}}>›</button>
     </div>
-    <div className="rvbot"><button type="button" className="rvbtn cull" onClick={remove}><span className="ico">{current.status==='cull'?'↶':'🗑'}</span>{current.status==='cull'?'Undo remove':'Remove'} <kbd>X</kbd></button><button type="button" className={`rvbtn keep${current.status==='keep'?' on':''}`} aria-pressed={current.status==='keep'} title={current.status==='keep'?'Kept. Press K again to undo':undefined} onClick={keep}><span className="ico">✓</span>{current.status==='keep'?'Kept':'Keep'} <kbd>K</kbd></button><button type="button" className={`rvbtn fav${current.favourite?' on':''}`} aria-pressed={current.favourite} onClick={favourite}><span className="ico">{current.favourite?'★':'☆'}</span>{current.favourite?'Favourited':'Favourite'} <kbd>F</kbd></button>{(current.relatedCount??0)>0&&<button type="button" className="rvbtn cmp" onClick={()=>void openCompare()}>Compare <kbd>C</kbd></button>}<button type="button" className="rvbtn" onClick={()=>setInfo(value=>!value)}>Info <kbd>I</kbd></button></div>
-    <aside className="rvinfo"><h3>Info</h3><dl><div><dt>File</dt><dd>{name}</dd></div><div><dt>Captured</dt><dd>{date} {time}</dd></div><div><dt>Type</dt><dd>{current.kind.toUpperCase()}</dd></div><div><dt>Size</dt><dd>{(current.size/1048576).toFixed(2)} MB</dd></div><div><dt>Decision</dt><dd>{current.status}</dd></div><div><dt>Path</dt><dd className="mono">{current.path}</dd></div></dl></aside>
+    <aside className="rvinfo" aria-label="Info">
+      <div className="ihead"><button type="button" className="rvact" aria-label="Close info" title="Close (I)" onClick={()=>setInfo(false)}><Icon name="close"/></button><h3>Info</h3></div>
+      <h4>Details</h4>
+      <div className="irow"><Icon name="calendar_month"/><div><b>{date}</b><span>{weekday}{weekday&&time?', ':''}{time}</span></div></div>
+      <div className="irow"><Icon name={mediaIcon}/><div><b>{name}</b><span>{(current.size/1048576).toFixed(1)} MB · {format(current)||current.kind.toUpperCase()}</span></div></div>
+      <div className="irow"><Icon name={decision.icon}/><div><b>{decision.text}</b><span>{current.favourite?'Favourite · ':''}<span className="rvpos">{at+1} / {assets.length}</span> in this review</span></div></div>
+      <div className="irow"><Icon name="folder"/><div><b>{folder.split('/').pop()||folder}</b><span className="mono">{current.path}</span></div><button type="button" className="rvact copy" aria-label="Copy file path" title={copied?'Copied':'Copy file path'} onClick={copyPath}><Icon name={copied?'check':'content_copy'}/></button></div>
+    </aside>
     {related&&<div className="rvcmp"><div className="ctop"><b>Similar photos</b><span className="cpos">{focus+1} / {related.length}</span><span className="hint">1–9 focus a frame · X marks it · C back</span><button type="button" className="rvx cmpx" aria-label="Close compare" onClick={()=>setRelated(null)}>×</button></div><div className="cgrid">{compareFiles.map((asset,index)=><figure className={index===focus?'on':''} key={asset.id} onClick={()=>setFocus(index)}><img src={preview(asset)} alt={asset.path.split('/').pop()}/><span className="pick">{index+1}</span><figcaption>{asset.path.split('/').pop()} · {asset.status}</figcaption></figure>)}</div><div className="cfacts"><div className="verdict tied"><b>Possible copies or companion files</b><ul><li>Inspect before choosing</li><li>No file moves from this screen</li></ul></div></div><div className="cbot"><button type="button" className="rvbtn" onClick={()=>void saveGroup('keep-all')}>Keep all</button><button type="button" className="rvbtn cull" onClick={()=>void saveGroup('keep-focus')}>Keep the focused one, remove the rest</button><button type="button" className="rvbtn cull cmpall" onClick={()=>void saveGroup('cull-all')}>Remove all</button></div></div>}
     {help&&<div className="rvkeys" onClick={()=>setHelp(false)}><table><tbody><tr><td>→ ←</td><td>next / previous</td></tr><tr><td>K</td><td>keep and continue, again to undo</td></tr><tr><td>X</td><td>remove (clears keep and favourite), again to undo</td></tr><tr><td>F</td><td>favourite</td></tr><tr><td>I</td><td>info panel</td></tr><tr><td>Z</td><td>zoom</td></tr><tr><td>C</td><td>compare a group</td></tr><tr><td>{undoKeys.undo} / {undoKeys.redo}</td><td>{onRecord?'undo / redo the last choice':'undo / redo, on the day page'}</td></tr><tr><td>G / Esc / Space</td><td>back to the grid</td></tr><tr><td>?</td><td>this list</td></tr></tbody></table></div>}
     {error&&<div className="toast err">{error}</div>}
+    </div>
+    {flight&&<img ref={flyer} className="rvfly" src={flight.src} alt="" style={{left:flight.from.left,top:flight.from.top,width:flight.from.width,height:flight.from.height,borderRadius:flight.mode==='open'?flight.radius:0}}/>}
   </div>;
 }

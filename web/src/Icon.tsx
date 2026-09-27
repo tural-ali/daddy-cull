@@ -47,6 +47,34 @@ import Undo from '@material-symbols/svg-400/outlined/undo.svg?raw';
 import UndoFill from '@material-symbols/svg-400/outlined/undo-fill.svg?raw';
 import Done from '@material-symbols/svg-400/outlined/task_alt.svg?raw';
 import DoneFill from '@material-symbols/svg-400/outlined/task_alt-fill.svg?raw';
+import ArrowBack from '@material-symbols/svg-400/outlined/arrow_back.svg?raw';
+import ArrowBackFill from '@material-symbols/svg-400/outlined/arrow_back-fill.svg?raw';
+import ZoomIn from '@material-symbols/svg-400/outlined/zoom_in.svg?raw';
+import ZoomInFill from '@material-symbols/svg-400/outlined/zoom_in-fill.svg?raw';
+import Info from '@material-symbols/svg-400/outlined/info.svg?raw';
+import InfoFill from '@material-symbols/svg-400/outlined/info-fill.svg?raw';
+import Favorite from '@material-symbols/svg-400/outlined/favorite.svg?raw';
+import FavoriteFill from '@material-symbols/svg-400/outlined/favorite-fill.svg?raw';
+import CheckCircle from '@material-symbols/svg-400/outlined/check_circle.svg?raw';
+import CheckCircleFill from '@material-symbols/svg-400/outlined/check_circle-fill.svg?raw';
+import Compare from '@material-symbols/svg-400/outlined/compare.svg?raw';
+import CompareFill from '@material-symbols/svg-400/outlined/compare-fill.svg?raw';
+import MoreVert from '@material-symbols/svg-400/outlined/more_vert.svg?raw';
+import MoreVertFill from '@material-symbols/svg-400/outlined/more_vert-fill.svg?raw';
+import ContentCopy from '@material-symbols/svg-400/outlined/content_copy.svg?raw';
+import ContentCopyFill from '@material-symbols/svg-400/outlined/content_copy-fill.svg?raw';
+import Keyboard from '@material-symbols/svg-400/outlined/keyboard.svg?raw';
+import KeyboardFill from '@material-symbols/svg-400/outlined/keyboard-fill.svg?raw';
+import Image from '@material-symbols/svg-400/outlined/image.svg?raw';
+import ImageFill from '@material-symbols/svg-400/outlined/image-fill.svg?raw';
+import Videocam from '@material-symbols/svg-400/outlined/videocam.svg?raw';
+import VideocamFill from '@material-symbols/svg-400/outlined/videocam-fill.svg?raw';
+import RawOn from '@material-symbols/svg-400/outlined/raw_on.svg?raw';
+import RawOnFill from '@material-symbols/svg-400/outlined/raw_on-fill.svg?raw';
+import Folder from '@material-symbols/svg-400/outlined/folder.svg?raw';
+import FolderFill from '@material-symbols/svg-400/outlined/folder-fill.svg?raw';
+import Schedule from '@material-symbols/svg-400/outlined/schedule.svg?raw';
+import ScheduleFill from '@material-symbols/svg-400/outlined/schedule-fill.svg?raw';
 
 const icons={
   photo:[Photo,PhotoFill],
@@ -72,6 +100,20 @@ const icons={
   local_fire_department:[Fire,FireFill],
   drive_file_move:[FileMove,FileMoveFill],
   undo:[Undo,UndoFill],
+  arrow_back:[ArrowBack,ArrowBackFill],
+  zoom_in:[ZoomIn,ZoomInFill],
+  info:[Info,InfoFill],
+  favorite:[Favorite,FavoriteFill],
+  check_circle:[CheckCircle,CheckCircleFill],
+  compare:[Compare,CompareFill],
+  more_vert:[MoreVert,MoreVertFill],
+  content_copy:[ContentCopy,ContentCopyFill],
+  keyboard:[Keyboard,KeyboardFill],
+  image:[Image,ImageFill],
+  videocam:[Videocam,VideocamFill],
+  raw_on:[RawOn,RawOnFill],
+  folder:[Folder,FolderFill],
+  schedule:[Schedule,ScheduleFill],
 } as const;
 
 export type IconName=keyof typeof icons;

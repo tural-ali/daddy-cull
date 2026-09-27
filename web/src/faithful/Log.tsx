@@ -77,7 +77,7 @@ export function Log({initial}:{initial:HistoryEvent[]}){
       const name=event.asset.path.split('/').pop();
       return <Fragment key={event.requestId}>
         {opensDay&&<h3 className="lday">{dayHeading(at)}</h3>}
-        <figure className={`mo logtile${isUndone?' undone':''}${event.asset.favourite?' fav':''}`}>
+        <figure className={`mo logtile${isUndone?' undone':''}${event.asset.favourite?' fav':''}`} data-asset={event.asset.id}>
           <button type="button" className="shot" aria-label={`Look at ${name}`} onClick={()=>photo.show(event.asset.id)}><Media asset={event.asset}/></button>
           <div className="bdg"><span className={`b verb ${isUndone?'':tone}`}>{isUndone?'Undone':label}</span></div>
           {!isUndone&&<div className="acts"><button type="button" className="act" disabled={!!busy} onClick={()=>void undo(event)}>{busy===event.requestId?<Busy label="Undoing…" state="working"/>:'Undo'}</button></div>}

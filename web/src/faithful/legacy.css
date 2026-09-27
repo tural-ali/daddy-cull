@@ -887,32 +887,65 @@ ul.plain li { margin-bottom: .5rem; color: var(--muted); }
 
 html.rv-open, html.rv-open body { overflow: hidden; }
 
-.rv {
-  position: fixed; inset: 0; z-index: 100;
-  display: none; flex-direction: column;
-  background: #0a0b0e;
+.rv { position: fixed; inset: 0; z-index: 100; display: none; }
+.rv.on { display: block; }
+/* Google Photos' viewer: the photograph on a near-black stage, one row of
+   white icons over its top edge, and Back at the left. The chrome fades in
+   while the tile flies up to become the photograph, and out again on Back. */
+.rvbody {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  background: #101010;
+  animation: rvin 240ms ease-out both;
 }
-.rv.on { display: flex; }
+@keyframes rvin { from { opacity: 0; } }
+.rv.flight.close .rvbody { animation: rvout 260ms ease-in both; }
+@keyframes rvout { to { opacity: 0; } }
+/* While a picture is in flight the stage keeps its place but shows nothing,
+   so the flyer is the one copy of it on screen. */
+.rv.flight .rvstage img, .rv.flight .rvstage video, .rv.flight .rvformat, .rv.flight .rvnav { opacity: 0 !important; }
+.rvfly { position: fixed; z-index: 5; object-fit: cover; pointer-events: none; }
 
 .rvtop {
-  display: flex; align-items: center; gap: .8rem;
-  padding: .6rem 1rem;
-  color: #cdd0d7; font-size: 13px;
+  position: absolute; top: 0; left: 0; right: 0; z-index: 4;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 80px; padding: 8px 12px 0;
+  background: linear-gradient(rgba(0, 0, 0, .55), rgba(0, 0, 0, 0));
+  pointer-events: none;
   transition: opacity var(--ease);
 }
-.rvtop .rvwhen { color: #8b8f99; font-variant-numeric: tabular-nums; }
-.rvtop .rvpos { margin-left: auto; font-variant-numeric: tabular-nums; color: #8b8f99; }
-/* The file's own day, opened beside the viewer so its place here is kept. */
-.rvtop a.rvday, .rvtop .rvdaylink {
-  display: inline-flex; align-items: center; gap: .3rem;
-  color: inherit; text-decoration: none;
-  padding: .2rem .55rem; margin: -.2rem -.1rem; border-radius: 999px;
+.rvtop > * { pointer-events: auto; }
+.rvacts { position: relative; display: flex; align-items: center; gap: 4px; }
+.rvact {
+  display: grid; place-items: center; width: 48px; height: 48px; flex: none;
+  color: #fff; background: none; border: 0; border-radius: 50%; cursor: pointer;
+  transition: background var(--ease), color var(--ease);
 }
-.rvtop .rvdaylink { color: var(--accent); border: 1px solid #2c3038; }
-.rvtop a.rvday .icon, .rvtop .rvdaylink .icon, .rvtop a.rvday .icon svg, .rvtop .rvdaylink .icon svg { width: 15px; height: 15px; }
-.rvtop a.rvday .icon, .rvtop .rvdaylink .icon { opacity: .75; }
-.rvtop a.rvday:hover, .rvtop .rvdaylink:hover { background: #24262c; }
-.rvtop a.rvday:focus-visible, .rvtop .rvdaylink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rvact:hover { background: rgba(255, 255, 255, .12); }
+.rvact:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+.rvact .icon, .rvact .icon svg { width: 24px; height: 24px; }
+/* The three states that show on the icon itself: a red heart, a green tick,
+   and the Bin's restore arrow once the photo is marked. */
+.rvact.fav.on { color: var(--fav); }
+.rvact.keep.on { color: #7ed9b2; }
+.rvact.cull.on { color: #ffb4a8; }
+.rvmenu {
+  position: absolute; top: 52px; right: 0; z-index: 6; min-width: 240px;
+  display: flex; flex-direction: column; padding: 8px 0;
+  background: #2b2b2b; border-radius: 4px;
+  box-shadow: 0 4px 8px 3px rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .3);
+  animation: rvmenu 120ms ease-out;
+}
+@keyframes rvmenu { from { opacity: 0; transform: translateY(-4px); } }
+.rvmenu [role="menuitem"] {
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 16px; height: 48px;
+  font: inherit; font-size: 14px; color: #e3e3e3; text-decoration: none; text-align: left;
+  background: none; border: 0; cursor: pointer; white-space: nowrap;
+}
+.rvmenu [role="menuitem"]:hover { background: rgba(255, 255, 255, .08); }
+.rvmenu [role="menuitem"] .icon { color: #c4c7c5; }
+.rvmenu kbd { margin-left: auto; padding-left: 24px; font: inherit; font-size: 12px; color: #9a9d9b; }
 
 /* Flex, not grid, and deliberately so. A grid with no explicit rows sizes its
    row to its content, so the image's `max-height: 100%` had no definite height
@@ -924,7 +957,6 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .rvstage {
   flex: 1 1 0; position: relative; min-height: 0; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
-  padding: 0 1rem;
 }
 .rvstage img, .rvstage video {
   /* No `width: 100%`: a photograph is never upscaled past its own pixels. */
@@ -984,11 +1016,6 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .rvstage .rvnav:hover, .rvnav:focus-visible { opacity: .9; }
 .rvnav.prev { left: .5rem; } .rvnav.next { right: .5rem; }
 
-.rvbot {
-  display: flex; align-items: center; justify-content: center; gap: .5rem;
-  padding: .7rem 1rem 1rem;
-  transition: opacity var(--ease);
-}
 .rvbtn {
   font: inherit; font-size: 13px;
   display: inline-flex; align-items: center; gap: .4rem;
@@ -1015,19 +1042,6 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   border-color: color-mix(in oklab, var(--bad) 40%, transparent);
 }
 .rvbtn .ico { font-size: 13px; margin-right: .15rem; }
-/* Favourite lost its button, so the state it carried shows on the frame itself. */
-/* The one control here that is a state rather than an action, so it is the one
-   that carries a colour when it is on. */
-.rvbtn.fav.on {
-  color: var(--fav);
-  border-color: color-mix(in oklab, var(--fav) 45%, transparent);
-}
-.rvbtn.fav.on .ico { color: var(--fav); }
-/* The viewer is dark in either theme, so Keep uses the dark theme's green. */
-.rvbtn.keep:hover, .rvbtn.keep.on { color: #7ed9b2; border-color: color-mix(in oklab, #7ed9b2 45%, transparent); }
-
-.rv.isfav .rvstage { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--fav) 60%, transparent); }
-
 /* The close control, top-right where a full-screen overlay is always expected
    to carry one. */
 .rvx {
@@ -1042,34 +1056,38 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 
 /* Tapping hides the chrome, per §17. The close button is the one exception:
    whatever else fades, there is always a visible way out. */
-.rv.bare .rvtop, .rv.bare .rvbot { opacity: 0; pointer-events: none; }
-.rv.bare .rvtop { opacity: 1; }
-.rv.bare .rvtop > :not(.rvx) { opacity: 0; }
-.rv.bare .rvx { opacity: 1; pointer-events: auto; }
+.rv.bare .rvtop { background: none; }
+.rv.bare .rvtop .rvacts { opacity: 0; pointer-events: none; }
 
-/* Info panel: everything technical, one keystroke away and nowhere else. */
+/* Info panel, laid out as Google Photos does it: a close button and title,
+   a section label, then rows of an icon, a line of text and a quieter line
+   under it. It sits beside the photograph when there is room. */
 .rvinfo {
-  position: absolute; top: 0; right: 0; bottom: 0; width: min(23rem, 82vw);
+  position: absolute; top: 0; right: 0; bottom: 0; width: min(360px, 88vw);
   z-index: 3; overflow-y: auto;
-  padding: 1rem 1.1rem;
-  background: rgba(14, 15, 19, .96);
-  border-left: 1px solid #23262c;
-  transform: translateX(100%); transition: transform 160ms cubic-bezier(.4,0,.2,1);
+  padding: 8px 24px 24px;
+  color: #e3e3e3; background: #1f1f1f;
+  transform: translateX(100%); transition: transform 200ms cubic-bezier(.2,0,0,1);
 }
 .rv.info .rvinfo { transform: none; }
-/* With room to spare the panel sits beside the photograph, as in Google
-   Photos, so the arrows, the counter and the close button stay in reach. */
+/* With no room beside the photograph the panel covers it, strip included. */
+@media (max-width: 899px) { .rv.info .rvinfo { z-index: 5; } }
 @media (min-width: 900px) {
-  .rvinfo { width: 23rem; }
-  .rv.info > :not(.rvinfo) { margin-right: 23rem; }
-  .rv > :not(.rvinfo) { transition: margin-right 160ms cubic-bezier(.4,0,.2,1); }
+  .rv.info .rvtop, .rv.info .rvstage, .rv.info .rvcmp { right: 360px; margin-right: 0; }
+  .rv.info .rvstage { margin-right: 360px; }
+  .rvtop, .rvstage { transition: right 200ms cubic-bezier(.2,0,0,1), margin-right 200ms cubic-bezier(.2,0,0,1), opacity var(--ease); }
 }
-.rvinfo h3 { margin: 0 0 .9rem; font-size: 16px; color: #cdd0d7; }
-.rvinfo dl { margin: 0; display: grid; gap: .55rem; }
-.rvinfo dl div { display: grid; grid-template-columns: 6.5rem 1fr; gap: .5rem; align-items: baseline; }
-.rvinfo dt { font-size: 13.5px; color: #6c717d; }
-.rvinfo dd { margin: 0; font-size: 14.5px; color: #cdd0d7; word-break: break-all; }
-.rvinfo dd.mono { font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+.rvinfo .ihead { display: flex; align-items: center; gap: 8px; height: 64px; margin: 0 0 8px -12px; }
+.rvinfo h3 { margin: 0; font-size: 22px; font-weight: 400; line-height: 28px; }
+.rvinfo h4 { margin: 24px 0 8px; font-size: 14px; font-weight: 500; line-height: 20px; color: #c4c7c5; }
+.rvinfo .irow { display: flex; align-items: flex-start; gap: 24px; padding: 12px 0; }
+.rvinfo .irow > .icon { flex: none; margin-top: 2px; color: #c4c7c5; }
+.rvinfo .irow > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rvinfo .irow b { font-size: 16px; font-weight: 400; line-height: 24px; color: #e3e3e3; overflow-wrap: anywhere; }
+.rvinfo .irow span { font-size: 14px; line-height: 20px; color: #c4c7c5; overflow-wrap: anywhere; }
+.rvinfo .irow .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+.rvinfo .irow .rvact.copy { width: 40px; height: 40px; margin: -8px -8px 0 0; color: #c4c7c5; }
+.rvinfo .irow .rvact.copy .icon, .rvinfo .irow .rvact.copy .icon svg { width: 20px; height: 20px; }
 .rvinfo .members { margin-top: 1rem; }
 .rvinfo .members li { font-size: 13px; color: #9297a3; word-break: break-all; margin-bottom: .3rem; }
 .rvinfo .members li.gh {
@@ -1216,8 +1234,10 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   .fbar.keys:not(:has(.fright > *)) { display: none; }
   /* The bar wraps to two rows here, so the page keeps room for both. */
   body:has(.fbar:not(.keys), .fbar.keys .fright > *) { padding-bottom: 7.5rem; }
-  .rvbtn kbd { display: none; }
   .rvnav { opacity: 0 !important; }
+  .rvtop { height: 64px; padding: 4px 4px 0; }
+  .rvact { width: 44px; height: 44px; }
+  .rvacts { gap: 0; }
   .tally { gap: 1.1rem; }
 }
 

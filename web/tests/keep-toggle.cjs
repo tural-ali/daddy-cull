@@ -20,8 +20,8 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
     return route.fulfill({status:404,json:{error:'not mocked'}});
   });
   const viewer=page.getByRole('dialog',{name:'Photo review'});
-  const keep=viewer.locator('.rvbtn.keep');
-  const heart=viewer.locator('.rvbtn.fav');
+  const keep=viewer.locator('.rvact.keep');
+  const heart=viewer.locator('.rvact.fav');
   const settled=async n=>{for(let i=0;i<50&&writes.length<n;i++)await page.waitForTimeout(50);assert.equal(writes.length,n,'decision count');return writes[n-1]};
 
   await page.goto(`${base}/on/09-07/photo/1`);
