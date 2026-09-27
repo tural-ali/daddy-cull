@@ -77,6 +77,8 @@ import Schedule from '@material-symbols/svg-400/outlined/schedule.svg?raw';
 import ScheduleFill from '@material-symbols/svg-400/outlined/schedule-fill.svg?raw';
 import Today from '@material-symbols/svg-400/outlined/today.svg?raw';
 import TodayFill from '@material-symbols/svg-400/outlined/today-fill.svg?raw';
+import FilterList from '@material-symbols/svg-400/outlined/filter_list.svg?raw';
+import FilterListFill from '@material-symbols/svg-400/outlined/filter_list-fill.svg?raw';
 import LinkOff from '@material-symbols/svg-400/outlined/link_off.svg?raw';
 import LinkOffFill from '@material-symbols/svg-400/outlined/link_off-fill.svg?raw';
 import DropDown from '@material-symbols/svg-400/outlined/arrow_drop_down.svg?raw';
@@ -123,6 +125,7 @@ const icons={
   today:[Today,TodayFill],
   arrow_drop_down:[DropDown,DropDownFill],
   link_off:[LinkOff,LinkOffFill],
+  filter_list:[FilterList,FilterListFill],
 } as const;
 
 export type IconName=keyof typeof icons;

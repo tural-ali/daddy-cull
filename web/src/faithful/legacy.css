@@ -156,8 +156,9 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   position: sticky; top: 0; z-index: 30;
   /* Three columns so the search sits in the middle of the bar whatever the
      two sides hold: the menu, logo and streak on the left, the page's own
-     actions on the right. */
-  display: grid; grid-template-columns: 1fr minmax(0, 720px) 1fr; align-items: center; column-gap: 12px;
+     actions on the right. The left never gives up room it needs, so a long
+     streak pushes the search along rather than sitting under it. */
+  display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, 720px) 1fr; align-items: center; column-gap: 12px;
   height: var(--head-h); padding: 0 16px 0 8px;
   background: var(--shell);
 }
@@ -165,6 +166,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .brand { display: flex; align-items: center; flex: none; padding: 6px 8px 6px 4px; border-radius: 999px; }
 .brand:hover { text-decoration: none; }
 .brand svg { display: block; height: 24px; width: auto; }
+.brand .brandmark { display: none; }
 .brand .ink { fill: var(--logo-ink); }
 .brand .mint, .brand .t2 { fill: var(--logo-mint); }
 .brand .t0 { fill: var(--logo-coral); }
@@ -187,6 +189,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   background: none; border: 0; outline: none;
 }
 .search input::placeholder { color: var(--muted); }
+.search input { text-overflow: ellipsis; }
 .search input::-webkit-search-cancel-button { filter: grayscale(1); }
 .searchgo { display: grid; place-items: center; width: 40px; height: 40px; flex: none; color: var(--muted); background: none; border: 0; border-radius: 999px; cursor: pointer; }
 .searchgo:hover { color: var(--text); background: var(--hover); }
@@ -311,6 +314,60 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .datepill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .search.dated { padding-left: 6px; }
 .searchwrap > .calpop { left: 44px; transform-origin: 40px 0; }
+
+/* The day's filters live in the search bar too. Each one that is on is a
+   tinted pill after the date that takes itself off; the funnel at the end of
+   the field lists every filter with its count; typing a filter's name offers
+   it below the field. */
+.filterpills { display: flex; align-items: center; gap: 4px; flex: none; }
+.filterpill {
+  display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 5px 0 9px;
+  color: var(--text); font: inherit; font-size: 13.5px; font-weight: 550; white-space: nowrap;
+  background: color-mix(in oklab, var(--accent) 20%, var(--bg-2)); border: 0; border-radius: 999px; cursor: pointer;
+  transition: background var(--ease);
+}
+.filterpill .icon, .filterpill .icon svg { width: 16px; height: 16px; }
+.filterpill > .icon:first-child { color: var(--accent); }
+.filterpill > .icon:last-child { color: var(--muted); }
+.filterpill:hover { background: color-mix(in oklab, var(--accent) 30%, var(--bg-2)); }
+.filterpill:hover > .icon:last-child { color: var(--text); }
+.filterpill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.filterbtn {
+  position: relative; display: grid; place-items: center; flex: none; width: 40px; height: 40px; margin-right: -8px;
+  color: var(--muted); background: none; border: 0; border-radius: 999px; cursor: pointer;
+}
+.filterbtn:hover, .filterbtn[aria-expanded="true"] { color: var(--text); background: var(--hover); }
+.filterbtn.on { color: var(--accent); }
+.filterbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.filterbtn .n {
+  position: absolute; top: 3px; right: 3px; min-width: 16px; height: 16px; padding: 0 4px;
+  color: var(--bg); background: var(--accent); border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; line-height: 16px; text-align: center; font-variant-numeric: tabular-nums;
+}
+.searchwrap > .filtermenu { left: auto; right: 0; width: 300px; padding: 12px 8px 8px; transform-origin: calc(100% - 24px) 0; }
+.filterhead { display: flex; align-items: center; justify-content: space-between; min-height: 32px; padding: 0 4px 6px 12px; font-size: 14px; }
+.filterhead .textbtn { height: 30px; padding: 0 10px; font-size: 13px; }
+.filtergroup { display: flex; flex-direction: column; padding: 4px 0; }
+.filtergroup + .filtergroup { border-top: 1px solid var(--line); }
+.filteropt, .searchsuggest li {
+  display: flex; align-items: center; gap: 14px; height: 40px; padding: 0 12px;
+  color: var(--text); font: inherit; font-size: 14px; text-align: left;
+  background: none; border: 0; border-radius: 10px; cursor: pointer;
+}
+.filteropt .icon, .filteropt .icon svg, .searchsuggest .icon, .searchsuggest .icon svg { width: 20px; height: 20px; }
+.filteropt > .icon, .searchsuggest li > .icon { color: var(--muted); }
+.filteropt .label, .searchsuggest .label { flex: 1; min-width: 0; }
+.filteropt .n, .searchsuggest .n { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.filteropt .tick { display: grid; color: var(--accent); visibility: hidden; }
+.filteropt.on .tick { visibility: visible; }
+.filteropt.on > .icon { color: var(--accent); }
+.filteropt:hover, .searchsuggest li[aria-selected="true"] { background: var(--hover); }
+.filteropt:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.searchsuggest {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 60; margin: 0; padding: 6px; list-style: none;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 12px 32px rgba(0, 0, 0, .35);
+}
+.searchsuggest b { font-weight: 600; }
 
 /* The date calendar: a reviewed date is a mint disc, a partly reviewed one
    carries a dot, a date with nothing filed is faint, and the page's own date
@@ -498,6 +555,8 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   .search input { font-size: 15px; }
   .datepill .long { display: none; }
   .datepill .short { display: inline; }
+  .filterpill { padding-left: 7px; }
+  .filterpill .label { display: none; }
 }
 /* A phone has no room for a field beside the logo and the streak, so search
    folds to its icon and the date pill, as in Google Photos, and opens across
@@ -513,6 +572,18 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
     padding-right: 12px; background: var(--bg-2);
   }
   .search:has(input:focus) input { flex: 1; }
+  /* The funnel's count stands in for the pills here, and a date's page keeps
+     only the logo's mark so the date, the funnel and the page's action fit. */
+  .filterpills { display: none; }
+  .filterbtn { margin-right: 0; }
+  .gbar:has(.datepill) .brand { margin-right: 0; padding-right: 4px; }
+  .gbar:has(.datepill) .brand svg:not(.brandmark) { display: none; }
+  .gbar:has(.datepill) .brand .brandmark { display: block; height: 22px; }
+  /* There the date pill picks dates and the funnel picks filters, so the
+     folded field has nothing left to do, as on a Google Photos results page. */
+  .search.dated:has(.filterbtn) > .searchgo, .search.dated:has(.filterbtn) > input { display: none; }
+  .search.dated:has(.filterbtn) { gap: 8px; padding-left: 4px; }
+  .gbarstart { flex: none; }
 }
 
 .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -611,25 +682,6 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 
 /* One bar. Not six statistic cards - those were the reason the photographs
    started below the fold. */
-/* Filter chips over the grid, in Material's shape: outlined at rest, tinted
-   and filled-in when chosen, each with its count. */
-.dfilters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 1.4rem; }
-.fchip {
-  display: inline-flex; align-items: center; gap: 8px;
-  height: 32px; padding: 0 12px 0 8px;
-  color: var(--text); background: none;
-  border: 1px solid var(--line-2); border-radius: 8px;
-  font: inherit; font-size: 14px; font-weight: 500; line-height: 20px;
-  cursor: pointer;
-  transition: background var(--ease), border-color var(--ease);
-}
-.fchip:hover { background: var(--bg-3); }
-.fchip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.fchip .icon, .fchip .icon svg { width: 18px; height: 18px; }
-.fchip .n { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
-.fchip.on { background: color-mix(in oklab, var(--accent) 22%, var(--bg-2)); border-color: transparent; }
-.fchip.on .icon { color: var(--accent); }
-.fchip.on .n { color: var(--text); }
 /* Named .pbar rather than .bar: the top navigation is already .bar, and a
    second rule on the same class quietly overwrote the header's height and
    background from further down the sheet. */

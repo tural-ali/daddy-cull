@@ -14,6 +14,7 @@ import {dayName} from './goto';
 import {requestID,sendDecisions} from './decisions';
 import {historyKey,undoKeys,useHistory,type HistoryEntry,type Snapshot} from './history';
 import {pairLabel,rawsBehind,setPaired} from './pairs';
+import {usePageFilters} from './SearchFilters';
 
 export type TodayYear={day:string;year:number;files:number;bytes:number;status:'pending'|'done';assets:Asset[]};
 export type TodayData={md:string;label:string;previous:string;next:string;years:TodayYear[];memories:number;bytes:number};
@@ -60,16 +61,16 @@ async function setProgress(day:string,status:'pending'|'done'){
   if(!response.ok)throw new Error('The review marker could not be saved.');
 }
 
-/** The chips over the grid. One from a group narrows the day to it; two from
- * the same group widen it to either; groups combine. */
+/** The day's filters, which live in the search bar. One from a group narrows
+ * the day to it; two from the same group widen it to either; groups combine. */
 type Filter='favourites'|'videos'|'photos'|'undecided'|'kept'|'removed';
-const filterChips:{id:Filter;label:string;icon:IconName}[]=[
-  {id:'favourites',label:'Favourites',icon:'favorite'},
-  {id:'videos',label:'Videos',icon:'videocam'},
-  {id:'photos',label:'Photos',icon:'image'},
-  {id:'undecided',label:'Undecided',icon:'schedule'},
-  {id:'kept',label:'Kept',icon:'check_circle'},
-  {id:'removed',label:'Removed',icon:'delete'},
+const filterChips:{id:Filter;label:string;icon:IconName;group:string;words:string[]}[]=[
+  {id:'favourites',label:'Favourites',icon:'favorite',group:'Favourites',words:['favourites','favorites','hearts']},
+  {id:'videos',label:'Videos',icon:'videocam',group:'Type',words:['videos','clips','movies']},
+  {id:'photos',label:'Photos',icon:'image',group:'Type',words:['photos','pictures','images','raw']},
+  {id:'undecided',label:'Undecided',icon:'schedule',group:'Decision',words:['undecided','unreviewed','to do','todo','not decided']},
+  {id:'kept',label:'Kept',icon:'check_circle',group:'Decision',words:['kept','keep']},
+  {id:'removed',label:'Removed',icon:'delete',group:'Decision',words:['removed','remove','deleted','bin']},
 ];
 const filterKey='cull.day-filters';
 const filterStatus:Record<'undecided'|'kept'|'removed',Status>={undecided:'unreviewed',kept:'keep',removed:'cull'};
@@ -139,11 +140,14 @@ export function Today({initial}:{initial:TodayData}){
   const hidden=useMemo(()=>new Set([...behind.values()].map(raw=>raw.id)),[behind]);
   const tiles=useMemo(()=>hidden.size===0?assets:assets.filter(asset=>!hidden.has(asset.id)),[assets,hidden]);
   const [filters,setFilters]=useState<ReadonlySet<Filter>>(()=>new Set(savedFilters()));
+  function saveFilters(next:ReadonlySet<Filter>){
+    setFilters(next);
+    try{sessionStorage.setItem(filterKey,JSON.stringify([...next]))}catch{/* storage blocked: the filters still work on this day */}
+  }
   function toggleFilter(id:Filter){
     const next=new Set(filters);
     if(next.has(id))next.delete(id);else next.add(id);
-    setFilters(next);
-    try{sessionStorage.setItem(filterKey,JSON.stringify([...next]))}catch{/* storage blocked: the chips still work on this day */}
+    saveFilters(next);
   }
   // What the chips leave: the grid, the arrow keys and the viewer all walk
   // this list, so a filtered day reviews as one.
@@ -342,6 +346,10 @@ export function Today({initial}:{initial:TodayData}){
   else if(walk.current===null)walk.current=filters.size>0&&shownIDs.has(viewing)?shownIDs:'all';
   const frozen=walk.current;
   const walked=useMemo(()=>frozen===null||frozen==='all'?tiles:tiles.filter(asset=>frozen.has(asset.id)),[tiles,frozen]);
+  usePageFilters(assets.length>0?{
+    options:filterChips.map(chip=>({...chip,on:filters.has(chip.id),count:tiles.filter(asset=>matches(asset,new Set([chip.id]))).length})),
+    toggle:id=>toggleFilter(id as Filter),clear:()=>saveFilters(new Set()),
+  }:null);
   usePageActions(assets.length>0&&doneYears<years.length?{actions:[{label:`Mark ${initial.label} reviewed`,short:'Mark reviewed',icon:'task_alt',disabled:saving||queue.pending>0,onClick:()=>void markDate()}]}:null);
   return <>
     <h1 className="vh">{pageLabel}</h1>
@@ -350,11 +358,7 @@ export function Today({initial}:{initial:TodayData}){
       <span className="sep">·</span><span>{years.length} {years.length===1?'year':'years'}</span>
       <span className="sep">·</span><span className="dim">{bytes(initial.bytes)}</span>
     </div>
-    {assets.length>0&&<div className="dfilters" role="group" aria-label="Show only">{filterChips.map(chip=>{
-      const on=filters.has(chip.id),count=tiles.filter(asset=>matches(asset,new Set([chip.id]))).length;
-      return <button type="button" key={chip.id} className={`fchip${on?' on':''}`} aria-pressed={on} onClick={()=>toggleFilter(chip.id)}><Icon name={chip.icon} filled={on}/>{chip.label}<span className="n">{count.toLocaleString()}</span></button>;
-    })}</div>}
-    {assets.length>0&&shown.length===0&&<p className="note">Nothing on this date matches the filters.</p>}
+    {assets.length>0&&shown.length===0&&<p className="note">Nothing on this date matches the filters. <button type="button" className="textbtn" onClick={()=>saveFilters(new Set())}>Clear filters</button></p>}
     {queue.error&&<p className="note warn" role="alert">{queue.error} <button className="btn small" onClick={queue.retry}>Retry the same save</button></p>}
     {years.length===0&&<p className="note">Nothing in the archive is filed under {initial.label}, so there is nothing to review.</p>}
     {duplicateGroups.length>0&&<section className="xdupes">

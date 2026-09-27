@@ -1,11 +1,12 @@
-import {useCallback,useEffect,useRef,useState,type CSSProperties,type FormEvent,type ReactNode} from 'react';
+import {useCallback,useEffect,useRef,useState,type CSSProperties,type FormEvent,type KeyboardEvent as ReactKeyboardEvent,type ReactNode} from 'react';
 import {Icon,type IconName} from '../Icon';
-import {Logo} from '../Logo';
+import {Logo,LogoMark} from '../Logo';
 import {pathForDate} from './goto';
 import {SelectionBar,SelectionProvider,type Selection} from './selection';
 import {PageActionButtons,PageActionsProvider,type PageActions} from './pageActions';
 import {StreakCalendar,StreakIntro,StreakPill,introDue} from './Streak';
 import {DateCalendar,DatePill,PageDateProvider,type PageDate} from './DatePicker';
+import {FilterButton,FilterMenu,FilterPills,PageFiltersProvider,matchFilters,type FilterOption,type PageFilters} from './SearchFilters';
 
 export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'log'|'bin'|'settings';
 type Item={href:string;route:LegacyRoute;label:string;icon:IconName};
@@ -39,33 +40,71 @@ const sections:{title?:string;items:Item[]}[]=[
 const gridRoutes=new Set<LegacyRoute>(['today','dupes','upgrades','shadows','shots','social','log','bin']);
 
 /** The search field goes to a typed date. On a date's page that date sits in
- * the field as a pill, and the pill opens a calendar to pick another. */
-function DateSearch({date}:{date:PageDate|null}){
+ * the field as a pill, and the pill opens a calendar to pick another. A page
+ * with filters puts them here too: each one that is on is a pill, the filter
+ * button lists them all, and typing a filter's name offers it. */
+function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}){
   const [value,setValue]=useState('');
   const [problem,setProblem]=useState('');
-  const [open,setOpen]=useState(false);
+  const [open,setOpen]=useState<'date'|'filters'|null>(null);
+  const [active,setActive]=useState(0);
   const input=useRef<HTMLInputElement>(null);
   const pill=useRef<HTMLButtonElement>(null);
-  const close=useCallback(()=>setOpen(false),[]);
+  const filterButton=useRef<HTMLButtonElement>(null);
+  const close=useCallback(()=>setOpen(null),[]);
+  const suggestions=filters?matchFilters(filters.options,value):[];
+  function pick(option:FilterOption){
+    filters?.toggle(option.id);
+    setValue('');setActive(0);
+    input.current?.focus();
+  }
   function go(event:FormEvent){
     event.preventDefault();
     // On a phone the field is folded to its icon, so the icon opens it.
     if(!value.trim()){input.current?.focus();return}
+    if(suggestions.length>0){pick(suggestions[Math.min(active,suggestions.length-1)]);return}
     const path=pathForDate(value);
     if(path)location.assign(path);
-    else setProblem('Type a date, such as 14 Aug 2019, or 14 Aug for every year.');
+    else setProblem(filters?'Type a date, such as 14 Aug 2019, or a filter, such as videos.':'Type a date, such as 14 Aug 2019, or 14 Aug for every year.');
   }
+  function keys(event:ReactKeyboardEvent<HTMLInputElement>){
+    if(suggestions.length>0&&(event.key==='ArrowDown'||event.key==='ArrowUp')){
+      event.preventDefault();
+      const by=event.key==='ArrowDown'?1:-1;
+      setActive(current=>(current+by+suggestions.length)%suggestions.length);
+    }else if(event.key==='Escape'&&value){
+      setValue('');setActive(0);
+    }else if(event.key==='Backspace'&&!value&&filters){
+      // As in a field of chips, Backspace in an empty field takes the last
+      // filter off.
+      const last=filters.options.filter(option=>option.on).at(-1);
+      if(last){event.preventDefault();filters.toggle(last.id)}
+    }
+  }
+  const listing=suggestions.length>0;
+  const on=filters?.options.filter(option=>option.on).length??0;
   return <div className="searchwrap">
-    <form className={`search${date?' dated':''}`} role="search" onSubmit={go}>
-      <button type="submit" className="searchgo" aria-label="Go to the date"
+    <form className={`search${date?' dated':''}${on?' filtered':''}`} role="search" onSubmit={go}>
+      <button type="submit" className="searchgo" aria-label={listing?'Apply the filter':'Go to the date'}
         onPointerDown={event=>{if(!value.trim())event.preventDefault()}}><Icon name="search"/></button>
-      {date&&<DatePill date={date} pill={pill} open={open} onToggle={()=>setOpen(current=>!current)}/>}
-      <input ref={input} type="search" value={value} aria-label="Go to a date" aria-invalid={problem?true:undefined} aria-describedby={problem?'search-problem':undefined}
-        placeholder={date?'Go to another date':'Go to a date, like 14 Aug 2019'} autoComplete="off" enterKeyHint="go"
-        onChange={event=>{setValue(event.target.value);setProblem('')}}/>
+      {date&&<DatePill date={date} pill={pill} open={open==='date'} onToggle={()=>setOpen(current=>current==='date'?null:'date')}/>}
+      {filters&&<FilterPills filters={filters}/>}
+      <input ref={input} type="search" value={value} role="combobox" aria-expanded={listing} aria-controls={listing?'search-suggestions':undefined}
+        aria-activedescendant={listing?`search-suggestion-${Math.min(active,suggestions.length-1)}`:undefined} aria-autocomplete="list"
+        aria-label={filters?'Filter, or go to a date':'Go to a date'} aria-invalid={problem?true:undefined} aria-describedby={problem?'search-problem':undefined}
+        placeholder={filters?(on?'Add a filter or date':'Filter, or go to another date'):date?'Go to another date':'Go to a date, like 14 Aug 2019'} autoComplete="off" enterKeyHint="go"
+        onChange={event=>{setValue(event.target.value);setProblem('');setActive(0)}} onKeyDown={keys}/>
+      {filters&&<FilterButton filters={filters} button={filterButton} open={open==='filters'} onToggle={()=>setOpen(current=>current==='filters'?null:'filters')}/>}
       {problem&&<p id="search-problem" className="searchproblem" role="alert">{problem}</p>}
+      {listing&&<ul id="search-suggestions" className="searchsuggest" role="listbox" aria-label="Filters">
+        {suggestions.map((option,index)=><li key={option.id} id={`search-suggestion-${index}`} role="option" aria-selected={index===Math.min(active,suggestions.length-1)}
+          onPointerDown={event=>event.preventDefault()} onClick={()=>pick(option)} onPointerEnter={()=>setActive(index)}>
+          <Icon name={option.icon} filled={option.on}/><span className="label">{option.on?'Stop showing only':'Show only'} <b>{option.label.toLowerCase()}</b></span><span className="n">{option.count.toLocaleString()}</span>
+        </li>)}
+      </ul>}
     </form>
-    {open&&date&&<DateCalendar date={date} anchor={pill} onClose={close}/>}
+    {open==='date'&&date&&<DateCalendar date={date} anchor={pill} onClose={close}/>}
+    {open==='filters'&&filters&&<FilterMenu filters={filters} anchor={filterButton} onClose={close}/>}
   </div>;
 }
 
@@ -82,6 +121,7 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
   const [selection,setSelection]=useState<Selection|null>(null);
   const [pageActions,setPageActions]=useState<PageActions|null>(null);
   const [pageDate,setPageDate]=useState<PageDate|null>(null);
+  const [pageFilters,setPageFilters]=useState<PageFilters|null>(null);
   // On a wide screen the menu button hides the sidebar, as in Google Photos,
   // and the choice is remembered; on a narrow one it opens the drawer.
   const [sideHidden,setSideHidden]=useState(readSideHidden);
@@ -130,13 +170,13 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
     {selection?<SelectionBar selection={selection}/>:<header className="gbar">
       <div className="gbarstart">
         <button type="button" className="iconbtn menu" aria-label={narrow?(drawer?'Close the menu':'Open the menu'):(sideHidden?'Expand the menu':'Collapse the menu')} title="Main menu" aria-expanded={menuOpen} aria-controls="side" onClick={toggleMenu}><Icon name={narrow&&drawer?'close':'menu'}/></button>
-        <a className="brand" href="/" title="Today"><Logo/></a>
+        <a className="brand" href="/" title="Today"><Logo/><LogoMark className="brandmark"/></a>
         {streak&&<div className="streakwrap">
           <StreakPill streak={streak} pill={pill} open={calendarOpen} bump={bump} onToggle={()=>setCalendarOpen(open=>!open)}/>
           {calendarOpen&&<StreakCalendar streak={streak} anchor={pill} onClose={closeCalendar}/>}
         </div>}
       </div>
-      <DateSearch date={pageDate}/>
+      <DateSearch date={pageDate} filters={pageFilters}/>
       <div className="gbaracts">
         {pageActions&&<PageActionButtons page={pageActions}/>}
       </div>
@@ -170,7 +210,7 @@ export function Layout({route,binFiles,reviewed,streak,flash,children}:{route:Le
     {intro&&streak&&<StreakIntro streak={streak} target={pill} onDone={()=>{setIntro(false);setBump(true)}}/>}
     <div className="panel">
       {flash&&<p className="flash" role="status">{flash}</p>}
-      <main className={`${gridRoutes.has(route)?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}><PageActionsProvider value={setPageActions}><PageDateProvider value={setPageDate}>{children}</PageDateProvider></PageActionsProvider></SelectionProvider></main>
+      <main className={`${gridRoutes.has(route)?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}><PageActionsProvider value={setPageActions}><PageDateProvider value={setPageDate}><PageFiltersProvider value={setPageFilters}>{children}</PageFiltersProvider></PageDateProvider></PageActionsProvider></SelectionProvider></main>
     </div>
   </div>;
 }

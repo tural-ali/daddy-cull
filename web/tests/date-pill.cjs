@@ -41,7 +41,7 @@ const months=Array.from({length:12},(_,month)=>({name:'',cells:Array.from({lengt
   const pill=page.getByRole('search').getByRole('button',{name:/^7 September, reviewed/});
   await pill.waitFor();
   assert.equal(await pill.innerText(),'7 September');
-  assert.equal(await page.getByRole('searchbox').getAttribute('placeholder'),'Go to another date');
+  assert.equal(await page.getByRole('combobox').getAttribute('placeholder'),'Filter, or go to another date');
   const searchBox=await page.getByRole('search').boundingBox();
   const pillBox=await pill.boundingBox();
   assert.ok(pillBox.y>searchBox.y&&pillBox.y+pillBox.height<searchBox.y+searchBox.height,'the pill sits inside the search bar');
@@ -90,8 +90,8 @@ const months=Array.from({length:12},(_,month)=>({name:'',cells:Array.from({lengt
   assert.equal(await pill.evaluate(node=>node===document.activeElement),true,'Escape hands focus back to the pill');
 
   // Typing a date never reaches the photo shortcuts either.
-  await page.getByRole('searchbox').fill('');
-  await page.getByRole('searchbox').pressSequentially('5 feb');
+  await page.getByRole('combobox').fill('');
+  await page.getByRole('combobox').pressSequentially('5 feb');
   await page.clock.runFor(500);
   assert.equal(decisions,0,'typing in the search field changed no photo');
 
