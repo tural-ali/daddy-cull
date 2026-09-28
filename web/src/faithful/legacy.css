@@ -1203,15 +1203,15 @@ main.selecting .mo.sel:not(:focus-visible) { box-shadow: none; transform: none; 
 /* Each band runs from a pale tint of its logo colour to the logo colour
    itself by --depth, how busy the date is within its band. The band's ink
    reads at 4.5:1 or better along the whole run, in both themes. */
-.cell.low, .legend .key.low {
+.cell.low, .lgkey.low {
   --pale: color-mix(in oklab, var(--heat-low) 40%, #fff);
   --deep: var(--heat-low);
 }
-.cell.mid, .legend .key.mid, .legend .key.fresh {
+.cell.mid, .lgkey.mid {
   --pale: color-mix(in oklab, var(--heat-mid) 40%, #fff);
   --deep: var(--heat-mid);
 }
-.cell.high, .legend .key.high {
+.cell.high, .lgkey.high {
   --pale: color-mix(in oklab, var(--heat-high) 40%, #fff);
   --deep: var(--heat-high);
 }
@@ -1225,17 +1225,26 @@ main.selecting .mo.sel:not(:focus-visible) { box-shadow: none; transform: none; 
 .cell.done { background: var(--bg-3); color: var(--faint); font-weight: 500; }
 .cell.now  { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
 
-.legend { display: flex; flex-wrap: wrap; gap: .9rem; margin: 1rem 0; font-size: 12px; color: var(--muted); }
-.legend .lg { display: inline-flex; align-items: center; white-space: nowrap; }
-.legend .key { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: .3rem; vertical-align: -1px; }
-.legend .key.none { box-shadow: inset 0 0 0 1px var(--line-2); }
-.legend .key.todo { background: var(--bg-4); }
-.legend .key.low, .legend .key.mid, .legend .key.high { width: 28px; background: linear-gradient(90deg in oklab, var(--pale), var(--deep)); }
-.legend .key.done { background: var(--bg-3); box-shadow: inset 0 0 0 1px var(--line-2); }
-.legend .key.now  { box-shadow: 0 0 0 2px var(--accent); }
-/* A waiting date, as on the calendar, with the dot on its corner. */
-.legend .key.fresh { position: relative; background: color-mix(in oklab, var(--deep) 50%, var(--pale)); }
-.legend .key.fresh .freshdot { position: absolute; top: -3px; right: -3px; width: 7px; height: 7px; box-shadow: 0 0 0 1.5px var(--bg); }
+/* The legend is drawn in the calendar's own colours, as pale chips from the
+   light end of each band, then the states a date can be in. */
+.legend { display: grid; gap: .6rem; margin: 1.25rem 0 1rem; }
+.lgrow { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: 0; }
+.lgkey {
+  position: relative; display: inline-flex; align-items: center;
+  height: 2rem; padding: 0 .85rem; border-radius: 8px;
+  font-size: 14px; font-weight: 700; white-space: nowrap;
+  color: var(--faint); background: var(--bg-3);
+}
+.lgkey.low, .lgkey.mid, .lgkey.high { background: var(--pale); }
+.lgkey.low  { color: var(--heat-low-ink); }
+.lgkey.mid  { color: var(--heat-mid-ink); }
+.lgkey.high { color: var(--heat-high-ink); }
+.lgkey.done { font-weight: 500; }
+.lgkey.none { background: transparent; box-shadow: inset 0 0 0 1px var(--line-2); font-weight: 500; }
+.lgkey.now  { background: transparent; color: var(--text); box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); margin: 0 .2rem; font-weight: 500; }
+.lgkey.fresh { font-weight: 500; }
+.lgkey.fresh .freshdot { position: absolute; top: -3px; right: -3px; box-shadow: 0 0 0 2px var(--bg); }
+.lgnote { margin-left: .6rem; font-size: 14px; color: var(--text); }
 .cell > .freshdot { position: absolute; top: -3px; right: -3px; box-shadow: 0 0 0 2px var(--bg); }
 
 /* ------------------------------------------------------------- completion -- */
@@ -1811,9 +1820,6 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   border-radius: 999px; overflow: hidden; margin: 0 0 .5rem;
 }
 .progress > span { display: block; height: 100%; background: var(--accent); }
-
-.legend .key.pending { background: var(--bg-4); }
-.legend .key.flagged { background: color-mix(in oklab, var(--warn) 55%, var(--bg-4)); }
 
 .year { margin: 0 0 1.6rem; }
 .year h2 { margin: 0 0 .5rem; font-size: 17px; font-variant-numeric: tabular-nums; }

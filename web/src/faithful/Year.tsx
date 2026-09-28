@@ -62,9 +62,20 @@ export function Year({months,prog,streak,week,refreshed}:YearData){
         >{cell.dom}{(cell.fresh??0)>0&&<span className="freshdot" aria-hidden="true"/>}</a>)}
       </div>)}
     </div>
-    <p className="legend">{[['low','fewer than 30 waiting'],['mid','30 to 100'],['high',`more than 100, up to ${busiest.toLocaleString()}`],['done','reviewed'],['none','nothing filed'],['now','today']].map(([state,label])=><span className="lg" key={state}><span className={`key ${state}`}/>{label}</span>)}
-      <span className="lg"><span className="key fresh"><span className="freshdot"/></span>newly arrived files</span>
-      <span className="lg dim">Deeper shades have more waiting</span></p>
+    <div className="legend">
+      <p className="lgrow">
+        <span className="lgkey low">Fewer than 30</span>
+        <span className="lgkey mid">30 to 100</span>
+        <span className="lgkey high">More than 100</span>
+        <span className="lgnote">Files still waiting on each date.{busiest>0&&<> Deeper shades have more, up to {busiest.toLocaleString()} on the busiest.</>}</span>
+      </p>
+      <p className="lgrow">
+        <span className="lgkey done">Reviewed</span>
+        <span className="lgkey none">Nothing filed</span>
+        <span className="lgkey now">Today</span>
+        <span className="lgkey fresh">New files<span className="freshdot"/></span>
+      </p>
+    </div>
     <p className="hint">{prog.filesDone.toLocaleString()} of {prog.files.toLocaleString()} files sit under a date you have finished. A reviewed date comes back, with a red dot, when new files reach it.
       {week.days>0&&<> You reviewed on {week.days} of the last 7 days, {minutes(week.seconds)} in total.</>}
       {refreshed&&<> Index last refreshed {new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(refreshed))}.</>}
