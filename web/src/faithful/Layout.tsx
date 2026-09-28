@@ -1,5 +1,6 @@
-import {useCallback,useEffect,useRef,useState,type CSSProperties,type FormEvent,type KeyboardEvent as ReactKeyboardEvent,type ReactNode} from 'react';
-import {Icon,type IconName} from '../Icon';
+import {useCallback,useEffect,useMemo,useRef,useState,type CSSProperties,type FormEvent,type KeyboardEvent as ReactKeyboardEvent,type ReactNode} from 'react';
+import {Icon,addonIcon,type IconName} from '../Icon';
+import {useAddons,type Addon,type AddonSection} from './addonList';
 import {Logo,LogoMark} from '../Logo';
 import {pathForDate} from './goto';
 import {navigate} from './router';
@@ -13,36 +14,64 @@ import {GridZoom} from './gridZoom';
 import {FilterButton,FilterMenu,FilterPills,PageFiltersProvider,matchFilters,unusualSort,type PageFilters,type Suggestion} from './SearchFilters';
 import {Kbd,Tips,tipProps,useShortcut} from './keys';
 
-export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'log'|'bin'|'settings';
-type Item={href:string;route:LegacyRoute;label:string;icon:IconName};
+export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'log'|'bin'|'settings'|'addons'|'developers'|'frame';
+type Item={href:string;route?:LegacyRoute;label:string;icon:IconName};
+type Section={title?:string;items:Item[]};
 
-// The sidebar groups destinations by what they are for, the way Google Photos
-// separates its library from its collections: reviewing the archive, clearing
-// what should not be in it, keeping Apple Photos in step, and the record.
-const sections:{title?:string;items:Item[]}[]=[
-  {items:[
-    {href:'/',route:'today',label:'Today',icon:'photo'},
-    {href:'/year',route:'year',label:'Year',icon:'calendar_month'},
-  ]},
-  {title:'Collections',items:[
-    {href:'/duplicates',route:'dupes',label:'Duplicates',icon:'filter_none'},
+// Cull's own addons' pages, where the app draws them, in the order the
+// sidebar lists them.
+const addonRoutes:Record<string,LegacyRoute>={'/shadows':'shadows','/screenshots':'shots','/social':'social','/upgrades':'upgrades','/photos':'photos'};
+const addonOrder=Object.keys(addonRoutes);
+// Before the addons are read, or if they cannot be, the sidebar offers what
+// it always has.
+const usualPages:Record<AddonSection,Item[]>={
+  collections:[
     {href:'/shadows',route:'shadows',label:'Shadowed',icon:'layers'},
     {href:'/screenshots',route:'shots',label:'Screenshots',icon:'screenshot_region'},
     {href:'/social',route:'social',label:'Saved from social',icon:'forum'},
-  ]},
-  {title:'Sync',items:[
-    {href:'/photos',route:'photos',label:'Apple Photos',icon:'cloud_sync'},
-  ]},
-  {title:'History',items:[
-    {href:'/log',route:'log',label:'Log',icon:'history'},
-    {href:'/bin',route:'bin',label:'Bin',icon:'delete'},
-  ]},
-];
+  ],
+  sync:[{href:'/photos',route:'photos',label:'Apple Photos',icon:'cloud_sync'}],
+  tools:[],
+};
+
+/** Each section's pages from the addons that are on: Cull's own in their
+ * usual order, then yours by name. */
+function addonPages(addons:Addon[]|null):Record<AddonSection,Item[]>{
+  if(!addons)return usualPages;
+  const pages={collections:[],sync:[],tools:[]} as Record<AddonSection,Item[]>;
+  const rank=(path:string)=>{const index=addonOrder.indexOf(path);return index<0?addonOrder.length:index};
+  const on=addons.filter(addon=>addon.on).flatMap(addon=>(addon.pages??[]).map(page=>({addon,page})));
+  on.sort((a,b)=>Number(!a.addon.builtIn)-Number(!b.addon.builtIn)||rank(a.page.path)-rank(b.page.path));
+  for(const {page} of on)pages[page.section]?.push({href:page.path,route:addonRoutes[page.path],label:page.label,icon:addonIcon(page.icon)});
+  return pages;
+}
+
+// The sidebar groups destinations by what they are for, the way Google Photos
+// separates its library from its collections: reviewing the archive, clearing
+// what should not be in it, keeping other apps in step, the addons' own
+// tools, and the record. A section with nothing in it is left out.
+function sidebar(addons:Addon[]|null):Section[]{
+  const pages=addonPages(addons);
+  const sections:Section[]=[
+    {items:[
+      {href:'/',route:'today',label:'Today',icon:'photo'},
+      {href:'/year',route:'year',label:'Year',icon:'calendar_month'},
+    ]},
+    {title:'Collections',items:[{href:'/duplicates',route:'dupes',label:'Duplicates',icon:'filter_none'},...pages.collections]},
+    {title:'Sync',items:pages.sync},
+    {title:'Tools',items:pages.tools},
+    {title:'History',items:[
+      {href:'/log',route:'log',label:'Log',icon:'history'},
+      {href:'/bin',route:'bin',label:'Bin',icon:'delete'},
+    ]},
+  ];
+  return sections.filter(section=>section.items.length>0);
+}
 
 // Pages built around a grid run the full width of the panel, as in Google
 // Photos; the Year calendar, Settings and Apple Photos keep a reading measure,
 // since a calendar stretched across a wide screen is hard to read along a row.
-const gridRoutes=new Set<LegacyRoute>(['today','dupes','upgrades','shadows','shots','social','log','bin']);
+const gridRoutes=new Set<LegacyRoute>(['today','dupes','upgrades','shadows','shots','social','log','bin','frame']);
 
 /** The search field goes to a typed date. On a date's page that date sits in
  * the field as a pill, and the pill opens a calendar to pick another. A page
@@ -131,8 +160,10 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
  * into a rail of icons, so there is no menu button to reach for. */
 const narrowQuery='(max-width: 1000px)';
 
-export function Layout({route,visit,binFiles,reviewed,streak,notifications,onNotificationsRead,flash,children}:{route:LegacyRoute;visit:number;binFiles:number;reviewed?:{done:number;total:number};streak?:{days:number;today:boolean};notifications?:number;onNotificationsRead?:()=>void;flash?:string;children:ReactNode}){
+export function Layout({route,path,visit,binFiles,reviewed,streak,notifications,onNotificationsRead,flash,children}:{route:LegacyRoute;path:string;visit:number;binFiles:number;reviewed?:{done:number;total:number};streak?:{days:number;today:boolean};notifications?:number;onNotificationsRead?:()=>void;flash?:string;children:ReactNode}){
   const [selection,setSelection]=useState<Selection|null>(null);
+  const addons=useAddons();
+  const sections=useMemo(()=>sidebar(addons),[addons]);
   const [pageActions,setPageActions]=useState<PageActions|null>(null);
   const [pageDate,setPageDate]=useState<PageDate|null>(null);
   const [pageFilters,setPageFilters]=useState<PageFilters|null>(null);
@@ -182,11 +213,11 @@ export function Layout({route,visit,binFiles,reviewed,streak,notifications,onNot
     </header>}
     <aside id="side" className="side">
       <nav aria-label="Main navigation">
-        {sections.map((section,index)=><div key={index} className="sidesec">
+        {sections.map(section=><div key={section.title??'library'} className="sidesec">
           {section.title&&<h2 className="sidetitle">{section.title}</h2>}
           {section.items.map(item=>{
-            const on=route===item.route;
-            return <a key={item.route} href={item.href} className={on?'on':undefined} aria-current={on?'page':undefined} {...(rail?tipProps(item.label):{})}>
+            const on=item.route?route===item.route:path===item.href;
+            return <a key={item.href} href={item.href} className={on?'on':undefined} aria-current={on?'page':undefined} {...(rail?tipProps(item.label):{})}>
               <Icon name={item.icon} filled={on}/><span className="sidelabel">{item.label}</span>
               {item.route==='bin'&&binFiles>0&&<span className="count" aria-label={`${binFiles.toLocaleString()} file${binFiles===1?'':'s'}`}>{binFiles.toLocaleString()}</span>}
             </a>;
@@ -200,6 +231,9 @@ export function Layout({route,visit,binFiles,reviewed,streak,notifications,onNot
         <span className="sideprogressfoot"><span className="sideprogressnote">{reviewed.done.toLocaleString()} of {reviewed.total.toLocaleString()} dates</span></span>
       </a>}
       <nav className="sidefoot" aria-label="Settings">
+        <a href="/addons" className={route==='addons'?'on':undefined} aria-current={route==='addons'?'page':undefined} {...(rail?tipProps('Addons'):{})}>
+          <Icon name="extension" filled={route==='addons'}/><span className="sidelabel">Addons</span>
+        </a>
         <a href="/settings" className={route==='settings'?'on':undefined} aria-current={route==='settings'?'page':undefined} {...(rail?tipProps('Settings'):{})}>
           <Icon name="settings" filled={route==='settings'}/><span className="sidelabel">Settings</span>
         </a>

@@ -2553,3 +2553,177 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
   box-shadow: 0 2px 8px rgb(0 0 0 / 22%);
 }
 .binfly > div { position: absolute; inset: 0; background: var(--bg-3) center / cover no-repeat; }
+
+/* ---------------------------------------------------------------- addons -- */
+
+/* Addons: one row each, its tile lit while it is on, with a switch at the
+   end. The Developers page shares the head. */
+.addonshead { margin-bottom: 1.2rem; }
+.addonshead h1 { margin: 0 0 .3rem; font-size: 32px; font-weight: 400; }
+.addonshead .ysum { max-width: 72ch; line-height: 1.5; }
+.addonslinks { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; margin: .6rem 0 0; font-size: 13.5px; font-weight: 500; }
+.addons h2 { margin: 1.6rem 0 .5rem; font-size: 16px; }
+.addonlist { margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2); }
+.addon { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 16px 16px 14px; }
+.addon + .addon { border-top: 1px solid var(--line); }
+.addontile {
+  display: grid; place-items: center; width: 40px; height: 40px; flex: none;
+  border-radius: 12px; background: var(--bg-3); color: var(--muted);
+  transition: background var(--ease), color var(--ease);
+}
+.addontile.small { width: 32px; height: 32px; border-radius: 10px; }
+.addon.on .addontile, .framehead .addontile { background: var(--pill); color: var(--pill-ink); }
+.addonbody { min-width: 0; }
+.addonbody h3 { display: flex; align-items: baseline; gap: .5rem; margin: 1px 0 .15rem; font-size: 15px; }
+.addonver { color: var(--faint); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.addonsummary { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+.addonstatus { display: flex; align-items: baseline; gap: .4rem; margin: .45rem 0 0; font-size: 12.5px; color: var(--muted); }
+.addonstatus b { color: var(--text); font-weight: 500; }
+.addondot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); transform: translateY(-1px); }
+.addon.on .addonstatus.ready .addondot { background: var(--good); }
+.addon.on .addonstatus.setup .addondot { background: var(--warn); }
+.addonstatus.problem .addondot { background: var(--bad); }
+.addonstatus.problem b { color: var(--bad); }
+.addonbody .note { margin: .6rem 0 0; font-size: 13px; }
+.addonmore { margin-top: .5rem; font-size: 13px; }
+.addonmore > summary { width: fit-content; color: var(--accent); font-weight: 500; cursor: pointer; }
+.addonmore > p { margin: .6rem 0 0; max-width: 72ch; color: var(--muted); line-height: 1.5; }
+.addonmore .kv { margin: .6rem 0 0; }
+.addonmore .kv dt { flex-basis: 8rem; }
+.addonmore .kv ul { margin: 0; padding-left: 1.1rem; }
+.addonpage { display: inline-flex; align-items: center; gap: .3rem; margin-right: 1rem; }
+.addonpage .icon { color: var(--muted); }
+.addonpage .icon svg { width: 18px; height: 18px; }
+ul.addonperms { margin: .4rem 0; padding: 0; list-style: none; display: grid; gap: .25rem; }
+.addonperms b { display: inline-block; min-width: 4.2rem; font-weight: 500; }
+.addonperms .danger b { color: var(--bad); }
+dialog.confirm .addonperms { margin: .6rem 0 .8rem; font-size: 13.5px; }
+.addonempty { display: flex; gap: 14px; align-items: flex-start; padding: 16px; border: 1px dashed var(--line-2); border-radius: 12px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.addonempty p { margin: 0; max-width: 72ch; }
+
+/* A switch in the Material shape: a track that fills with the accent and a
+   knob that grows and slides across when it is on. */
+.switch {
+  position: relative; flex: none; width: 52px; height: 32px; margin-top: 4px; padding: 0;
+  background: var(--bg-4); border: 2px solid var(--line-2); border-radius: 16px; cursor: pointer;
+  transition: background var(--ease), border-color var(--ease);
+}
+.switch .knob {
+  position: absolute; top: 50%; left: 6px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--muted); transform: translateY(-50%);
+  transition: left var(--ease), width var(--ease), height var(--ease), background var(--ease);
+}
+.switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.switch[aria-checked="true"] .knob { left: 22px; width: 24px; height: 24px; background: var(--on-accent); }
+.switch:hover:not(:disabled) .knob { box-shadow: 0 0 0 8px var(--hover); }
+.switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch:disabled { cursor: default; opacity: .45; }
+.switch[aria-busy="true"] { opacity: .7; cursor: progress; }
+
+/* An addon's own page fills the panel, under a slim head that says whose
+   it is. */
+.addonframe { display: flex; flex-direction: column; height: calc(100vh - var(--head-h) - 1.5rem); }
+.framehead { display: flex; align-items: center; gap: 12px; padding: 0 0 12px; }
+.framehead h1 { flex: 1; min-width: 0; margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 20px; font-weight: 400; }
+.framefrom { margin-left: .6rem; color: var(--faint); font-size: 13px; }
+.addonframe iframe { flex: 1; width: 100%; border: 1px solid var(--line); border-radius: 12px 12px 0 0; border-bottom: 0; background: var(--bg-2); }
+.addonframe.missing { height: auto; padding-top: 1rem; }
+
+/* ------------------------------------------------------------ developers -- */
+
+.developers { padding-bottom: 4rem; }
+.devgrid { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; align-items: start; }
+.devmain { min-width: 0; }
+/* The side list has the same links, until it folds away. */
+.developers .addonslinks { display: none; }
+.devnav { position: sticky; top: calc(var(--head-h) + 16px); display: flex; flex-direction: column; gap: 1px; max-height: calc(100vh - var(--head-h) - 32px); overflow-y: auto; font-size: 13.5px; }
+.devnav a { display: flex; justify-content: space-between; gap: .5rem; padding: 5px 10px; border-radius: 16px; color: var(--text); }
+.devnav a:hover { background: var(--hover); text-decoration: none; }
+.devnav .n { color: var(--faint); font-variant-numeric: tabular-nums; }
+.devnav h2 { margin: 14px 10px 4px; color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+.devsec { scroll-margin-top: calc(var(--head-h) + 16px); margin-bottom: 2rem; }
+.devsec > h2 { margin: 0 0 .5rem; font-size: 20px; font-weight: 400; }
+.devsec > p, .steps p { max-width: 72ch; margin: 0 0 .7rem; color: var(--muted); font-size: 14px; line-height: 1.55; }
+:where(.devsec, .rbody, .addons) code { padding: .05em .3em; border-radius: 4px; background: var(--bg-3); font-size: .92em; }
+.devsec .kv dt { flex-basis: 6rem; }
+.steps { margin: 0 0 .8rem; padding-left: 1.3rem; }
+.steps li { margin-bottom: .6rem; padding-left: .2rem; }
+.codeblock { position: relative; margin: .4rem 0 .8rem; }
+.codeblock pre { margin: 0; padding: 12px 96px 12px 14px; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); font-size: 12.5px; line-height: 1.55; }
+.codeblock pre code, .answer pre code { padding: 0; border-radius: 0; background: none; font-size: inherit; }
+.copybtn { position: absolute; top: 6px; right: 6px; height: 30px; padding: 0 10px 0 8px; font-size: 12.5px; }
+.copybtn .icon svg { width: 16px; height: 16px; }
+.devfilter {
+  position: sticky; top: calc(var(--head-h) + 8px); z-index: 2; display: flex; align-items: center; gap: 10px;
+  height: 44px; margin: 0 0 1.4rem; padding: 0 16px; border-radius: 22px; background: var(--field); color: var(--muted);
+}
+.devfilter input { flex: 1; min-width: 0; font: inherit; font-size: 14px; color: var(--text); background: none; border: 0; outline: 0; }
+.tagdoc { margin-top: -.2rem; }
+.routes { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2); }
+.route + .route { border-top: 1px solid var(--line); }
+.route > summary {
+  display: grid; grid-template-columns: 4.2rem minmax(0, auto) minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 10px 14px; cursor: pointer; list-style: none;
+}
+.route > summary::-webkit-details-marker { display: none; }
+.route > summary:hover { background: var(--hover); }
+.route:first-child > summary { border-radius: 11px 11px 0 0; }
+.route:last-child:not([open]) > summary { border-radius: 0 0 11px 11px; }
+.route[open] > summary { border-bottom: 1px solid var(--line); }
+.method { justify-self: start; padding: 2px 7px; border-radius: 6px; font: 600 11.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .03em; background: var(--bg-3); color: var(--muted); }
+.method.get { background: color-mix(in oklab, var(--good) 16%, transparent); color: var(--good); }
+.method.post { background: color-mix(in oklab, var(--warn) 18%, transparent); color: var(--warn); }
+.method.delete { background: color-mix(in oklab, var(--bad) 16%, transparent); color: var(--bad); }
+.rpath { padding: 0; background: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.rsum { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13.5px; }
+.rchips { display: flex; gap: 6px; }
+.rchip { padding: 1px 8px; border-radius: 10px; font-size: 11.5px; font-weight: 500; white-space: nowrap; background: var(--bg-3); color: var(--muted); }
+.rchip.perm { background: color-mix(in oklab, var(--warn) 14%, transparent); color: var(--warn); }
+.rchip.perm.delete { background: color-mix(in oklab, var(--bad) 14%, transparent); color: var(--bad); }
+.rchip.addon { background: var(--pill); color: var(--pill-ink); }
+.rchip.addon.off { background: var(--bg-3); color: var(--faint); }
+.rbody { padding: 4px 16px 16px; font-size: 13.5px; }
+.rbody h4 { margin: 1.1rem 0 .4rem; color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+.rdoc { max-width: 76ch; margin: .8rem 0 0; line-height: 1.55; }
+.params { width: 100%; border-collapse: collapse; }
+.params th, .params td { padding: 7px 0; border-top: 1px solid var(--line); text-align: left; vertical-align: top; font-weight: 400; }
+.params th { width: 11rem; padding-right: 12px; }
+.params th .pin { display: block; margin-top: 2px; color: var(--faint); font-size: 12px; }
+.pvalue { display: block; width: min(22rem, 100%); height: 32px; margin-top: 6px; padding: 0 10px; font: inherit; font-size: 13px; color: var(--text); background: var(--field); border: 1px solid transparent; border-radius: 8px; }
+.pvalue:focus { border-color: var(--accent); outline: 0; }
+.ftype { margin-right: .4rem; color: var(--accent); font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.freq { margin-left: .4rem; color: var(--warn); font-size: 11.5px; }
+.schema .stype { margin: 0 0 .3rem; color: var(--muted); line-height: 1.5; }
+ul.fields { margin: 0; padding: 0 0 0 12px; list-style: none; border-left: 2px solid var(--line); }
+.fields li { padding: 5px 0; }
+.fields .fhead, .fields summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .5rem; }
+.fields summary { cursor: pointer; }
+.fname { padding: 0; background: none; font-weight: 600; }
+.fdoc { margin: 2px 0 0; max-width: 72ch; color: var(--muted); line-height: 1.5; }
+.fields details > ul.fields { margin-top: 4px; }
+ul.answers { margin: 0; padding: 0; list-style: none; display: grid; gap: .5rem; }
+.answers b { display: inline-block; min-width: 2.4rem; color: var(--good); font-variant-numeric: tabular-nums; }
+.answers b.bad, .answer.bad .answerhead b { color: var(--bad); }
+.answers .schema { margin: .4rem 0 0 2.4rem; }
+.tryit { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.tryit .icon svg { width: 18px; height: 18px; }
+.answer { flex-basis: 100%; min-width: 0; }
+.answerhead { display: flex; gap: .8rem; margin: 0 0 .3rem; color: var(--muted); font-size: 12.5px; }
+.answerhead b { color: var(--good); }
+.answer pre { max-height: 24rem; margin: 0; padding: 12px 14px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); font-size: 12px; line-height: 1.5; }
+@media (width <= 1000px) {
+  .devgrid { grid-template-columns: minmax(0, 1fr); }
+  .devnav { display: none; }
+  .developers .addonslinks { display: flex; }
+}
+@media (width <= 600px) {
+  .addon { grid-template-columns: auto minmax(0, 1fr); }
+  .framefrom, .framelinklabel { display: none; }
+  .addon .switch { grid-column: 2; grid-row: 1; justify-self: end; margin-top: 0; }
+  .addon .addonbody { grid-column: 1 / -1; }
+  .addonshead h1 { font-size: 26px; }
+  .route > summary { grid-template-columns: 3.6rem minmax(0, 1fr); gap: 4px 10px; }
+  .route .rsum, .route .rchips { grid-column: 2; }
+  .params th { width: 7.5rem; }
+  .addonframe { height: calc(100vh - var(--head-h) - 1rem); }
+}

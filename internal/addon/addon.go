@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -178,6 +179,10 @@ type Registry struct {
 	mu        sync.Mutex
 	externals map[string]*external
 	scanned   time.Time
+	// seen sums up the addons folder as last read, once it has been read,
+	// so a change to it can be told to every page following along.
+	seen string
+	read bool
 	// on caches each addon's state briefly, since every request to an
 	// addon's route asks.
 	on      map[string]cached
@@ -316,6 +321,45 @@ func (r *Registry) scan(force bool) {
 		}
 	}
 	r.externals = found
+	// The first read is how things are; after that, an addon put in, taken
+	// out or edited is news, as a switch is.
+	seen := summarise(found)
+	if r.read && seen != r.seen {
+		close(r.changed)
+		r.changed = make(chan struct{})
+	}
+	r.seen, r.read = seen, true
+}
+
+// summarise sums up what was found in the addons folder: each addon, what
+// its manifest says, whether it has a key and what is wrong with it.
+func summarise(found map[string]*external) string {
+	folders := slices.Sorted(maps.Keys(found))
+	var b strings.Builder
+	for _, folder := range folders {
+		e := found[folder]
+		manifest, _ := json.Marshal(e.manifest)
+		fmt.Fprintf(&b, "%s\x00%s\x00%t\x00%s\x00", folder, manifest, e.hasKey, e.problem)
+	}
+	return b.String()
+}
+
+// Watch reads the addons folder every second until ctx ends, so an addon
+// put there shows on the Addons page without anyone asking again.
+func (r *Registry) Watch(ctx context.Context) {
+	if r.dir == "" {
+		return
+	}
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			r.scan(false)
+		}
+	}
 }
 
 // state says whether an addon is on, from the cache when it is fresh.
@@ -409,6 +453,9 @@ func (r *Registry) writeKey(e *external) error {
 	r.mu.Lock()
 	e.keyHash = sha256.Sum256([]byte(key))
 	e.hasKey = true
+	// Turning the addon on already tells of it; the key it was given is
+	// not news on the next read of the folder.
+	r.seen = summarise(r.externals)
 	r.mu.Unlock()
 	return nil
 }
@@ -456,7 +503,8 @@ func (r *Registry) List(ctx context.Context) []View {
 	return views
 }
 
-// Changed is closed the next time any addon is turned on or off.
+// Changed is closed the next time any addon is turned on or off, or an
+// addon of your own is put in the addons folder, taken out or edited.
 func (r *Registry) Changed() <-chan struct{} {
 	r.mu.Lock()
 	defer r.mu.Unlock()

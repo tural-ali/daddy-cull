@@ -103,6 +103,22 @@ import Newest from '@material-symbols/svg-400/outlined/arrow_downward.svg?raw';
 import NewestFill from '@material-symbols/svg-400/outlined/arrow_downward-fill.svg?raw';
 import Oldest from '@material-symbols/svg-400/outlined/arrow_upward.svg?raw';
 import OldestFill from '@material-symbols/svg-400/outlined/arrow_upward-fill.svg?raw';
+import Extension from '@material-symbols/svg-400/outlined/extension.svg?raw';
+import ExtensionFill from '@material-symbols/svg-400/outlined/extension-fill.svg?raw';
+import HighQuality from '@material-symbols/svg-400/outlined/high_quality.svg?raw';
+import HighQualityFill from '@material-symbols/svg-400/outlined/high_quality-fill.svg?raw';
+import Api from '@material-symbols/svg-400/outlined/api.svg?raw';
+import ApiFill from '@material-symbols/svg-400/outlined/api-fill.svg?raw';
+import Code from '@material-symbols/svg-400/outlined/code.svg?raw';
+import CodeFill from '@material-symbols/svg-400/outlined/code-fill.svg?raw';
+import Key from '@material-symbols/svg-400/outlined/key.svg?raw';
+import KeyFill from '@material-symbols/svg-400/outlined/key-fill.svg?raw';
+import ChevronRight from '@material-symbols/svg-400/outlined/chevron_right.svg?raw';
+import ChevronRightFill from '@material-symbols/svg-400/outlined/chevron_right-fill.svg?raw';
+import Link from '@material-symbols/svg-400/outlined/link.svg?raw';
+import LinkFill from '@material-symbols/svg-400/outlined/link-fill.svg?raw';
+import Tune from '@material-symbols/svg-400/outlined/tune.svg?raw';
+import TuneFill from '@material-symbols/svg-400/outlined/tune-fill.svg?raw';
 
 const icons={
   photo:[Photo,PhotoFill],
@@ -156,9 +172,25 @@ const icons={
   notifications:[Bell,BellFill],
   arrow_downward:[Newest,NewestFill],
   arrow_upward:[Oldest,OldestFill],
+  extension:[Extension,ExtensionFill],
+  high_quality:[HighQuality,HighQualityFill],
+  api:[Api,ApiFill],
+  code:[Code,CodeFill],
+  key:[Key,KeyFill],
+  chevron_right:[ChevronRight,ChevronRightFill],
+  link:[Link,LinkFill],
+  tune:[Tune,TuneFill],
 } as const;
 
 export type IconName=keyof typeof icons;
+
+/** Every icon Cull ships, which an addon's manifest can name. */
+export const iconNames=Object.keys(icons) as IconName[];
+
+/** The icon an addon named, or the puzzle piece when Cull does not ship it. */
+export function addonIcon(name:string|undefined):IconName{
+  return name&&Object.hasOwn(icons,name)?name as IconName:'extension';
+}
 
 export function Icon({name,filled=false}:{name:IconName;filled?:boolean}){
   return <span className="icon" aria-hidden="true" dangerouslySetInnerHTML={{__html:icons[name][filled?1:0]}}/>;

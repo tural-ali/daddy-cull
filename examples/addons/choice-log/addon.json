@@ -1,0 +1,11 @@
+{
+  "id": "choice-log",
+  "name": "Choice log",
+  "version": "0.1.0",
+  "summary": "Writes every choice made in Cull to a file as it is saved.",
+  "description": "Follows GET /api/events and appends one line of JSON for each keep, remove or heart to choices.jsonl beside this file. It carries on from the last choice it wrote after a restart.",
+  "author": "Daddy Cull",
+  "icon": "history",
+  "needs": ["Python 3.9 or later, running follow.py beside this file"],
+  "work": ["Appends each choice to choices.jsonl as it is saved"]
+}

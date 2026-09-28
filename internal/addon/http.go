@@ -1,6 +1,7 @@
 package addon
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -41,7 +42,11 @@ func (r *Registry) Guard(route api.Route, next http.Handler) http.Handler {
 				api.Fail(w, 403, r.Name(id)+" has not asked for the "+route.Needs+" permission this needs. Add it to the addon's "+ManifestFile+" and turn the addon off and on again.")
 				return
 			}
-			req = req.WithContext(api.WithCaller(req.Context(), id, owner.manifest.Permissions))
+			// A request that runs on, such as the event stream, ends the
+			// moment the addon is turned off or its key is taken away.
+			ctx, stop := r.whileAllowed(req.Context(), strings.TrimSpace(key), id)
+			defer stop()
+			req = req.WithContext(api.WithCaller(ctx, id, owner.manifest.Permissions))
 		}
 		if route.Addon != "" && !r.On(req.Context(), route.Addon) {
 			api.Fail(w, 404, r.Name(route.Addon)+" is turned off. Turn it on in Addons.")
@@ -49,6 +54,30 @@ func (r *Registry) Guard(route api.Route, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, req)
 	})
+}
+
+// whileAllowed is a context that ends when the addon id is turned off,
+// cannot be loaded any more, or no longer has this key.
+func (r *Registry) whileAllowed(parent context.Context, key, id string) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(parent)
+	go func() {
+		for {
+			// The change channel is taken before the addon is read, so a
+			// change made between the two still wakes this.
+			changed := r.Changed()
+			owner, known := r.keyOwner(key)
+			if !known || owner.manifest.ID != id || owner.problem != "" || !r.On(ctx, id) {
+				cancel()
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-changed:
+			}
+		}
+	}()
+	return ctx, cancel
 }
 
 // Choice is the body that turns an addon on or off.

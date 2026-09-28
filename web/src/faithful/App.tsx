@@ -13,13 +13,17 @@ import {Shadows} from './Shadows';
 import {Social,type SocialPage} from './Social';
 import {Upgrades,type UpgradePage} from './Upgrades';
 import {Photos} from './Photos';
+import {Addons} from './Addons';
+import {Developers} from './Developers';
+import {AddonFrame,AddonMissing} from './AddonFrame';
+import {currentAddons,framePage,ownerOf,readAddons,useAddons} from './addonList';
 import {recoverPending} from '../recoverPending';
 import {BIN_CHANGED} from '../api';
 import {pagePath} from './photoURL';
 import {Busy} from '../Busy';
 import {Snacks} from './Snacks';
 import {CATALOGUE_CHANGED,catalogueGeneration,quietEnough,watchCatalogue} from './catalogueWatch';
-import {NAVIGATED,RELOAD_PAGE,currentVisit,followLinks,savedScroll} from './router';
+import {NAVIGATED,RELOAD_PAGE,currentVisit,followLinks,reloadPage,savedScroll} from './router';
 import {settled} from '../saving';
 
 type PageState={route:LegacyRoute;content:ReactNode};
@@ -47,10 +51,16 @@ function routeFor(path:string):LegacyRoute{
   if(path==='/log')return 'log';
   if(path==='/bin')return 'bin';
   if(path==='/settings')return 'settings';
+  if(path==='/addons')return 'addons';
+  if(path==='/developers')return 'developers';
+  if(path.startsWith('/addons/'))return 'frame';
   return 'today';
 }
 
-const routeTitles:Record<LegacyRoute,string>={today:'Today',year:'Year',dupes:'Duplicates',upgrades:'Upgrades',shadows:'Shadowed',shots:'Screenshots',social:'Saved from social',photos:'Apple Photos',log:'Log',bin:'Bin',settings:'Settings'};
+// Cull's own pages that belong to an addon.
+const addonPaths=new Set(['/screenshots','/social','/shadows','/upgrades','/photos']);
+
+const routeTitles:Record<LegacyRoute,string>={today:'Today',year:'Year',dupes:'Duplicates',upgrades:'Upgrades',shadows:'Shadowed',shots:'Screenshots',social:'Saved from social',photos:'Apple Photos',log:'Log',bin:'Bin',settings:'Settings',addons:'Addons',developers:'Developers',frame:'Addon'};
 
 /** The browser tab names the page, and the date for a day, so several open
  * tabs can be told apart. */
@@ -139,6 +149,20 @@ export function App(){
   },[recovered,readStats]);
   const load=useCallback(async():Promise<PageState>=>{
     const route=routeFor(path);
+      // A page that belongs to an addon shows only while the addon is on.
+      if(route==='frame'||ownerOf(currentAddons(),path)||addonPaths.has(path)){
+        await readAddons();
+        const addons=currentAddons();
+        if(route==='frame'){
+          const found=framePage(addons,path);
+          if(!found||!found.addon.on)return {route,content:<AddonMissing addon={found?.addon} label={found?.page.label??'This page'}/>};
+          return {route,content:<AddonFrame addon={found.addon} page={found.page}/>};
+        }
+        const owner=ownerOf(addons,path);
+        if(owner&&!owner.on)return {route,content:<AddonMissing addon={owner} label={routeTitles[route]}/>};
+      }
+      if(path==='/addons')return {route,content:<Addons/>};
+      if(path==='/developers')return {route,content:<Developers/>};
       if(path.startsWith('/on/')){
         const md=path.slice(4);
         const data=await json<TodayData>(`/api/today/${md}`);
@@ -277,7 +301,20 @@ export function App(){
     window.addEventListener(RELOAD_PAGE,again);
     return()=>window.removeEventListener(RELOAD_PAGE,again);
   },[load,readStats]);
-  return <Layout route={page.route} visit={place.visit} binFiles={stats?.bin??stats?.marked??0} reviewed={stats?.calendarDates?{done:stats.reviewedDates??0,total:stats.calendarDates}:undefined} streak={stats?.streak!==undefined?{days:stats.streak,today:!!stats.reviewedToday}:undefined} notifications={stats?.notifications} onNotificationsRead={()=>setStats(current=>current&&{...current,notifications:0})}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:<Fragment key={`${place.visit}:${version}`}>{page.content}</Fragment>}
+  // An addon turned on or off, here or in another tab, changes whether the
+  // page it owns can show, so that page is drawn again at once.
+  const addons=useAddons();
+  const gate=addons===null?null:`${path}|${(()=>{
+    if(routeFor(path)==='frame'){const found=framePage(addons,path);return found?`${found.addon.on}:${found.page.url}`:'none'}
+    return String(ownerOf(addons,path)?.on??'none');
+  })()}`;
+  const lastGate=useRef<string|null>(null);
+  useEffect(()=>{
+    const previous=lastGate.current;
+    lastGate.current=gate;
+    if(previous&&gate&&previous!==gate&&previous.startsWith(`${path}|`))reloadPage();
+  },[gate,path]);
+  return <Layout route={page.route} path={place.path} visit={place.visit} binFiles={stats?.bin??stats?.marked??0} reviewed={stats?.calendarDates?{done:stats.reviewedDates??0,total:stats.calendarDates}:undefined} streak={stats?.streak!==undefined?{days:stats.streak,today:!!stats.reviewedToday}:undefined} notifications={stats?.notifications} onNotificationsRead={()=>setStats(current=>current&&{...current,notifications:0})}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:<Fragment key={`${place.visit}:${version}`}>{page.content}</Fragment>}
     {notice&&<Snacks><div className="snack" role="status">{notice==='refreshed'?'Updated with new files from the archive.':<>New files arrived in the archive. <button type="button" className="snackact" onClick={()=>void refreshNow()}>Refresh</button></>}</div></Snacks>}
   </Layout>;
 }

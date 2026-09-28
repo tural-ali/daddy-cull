@@ -1,0 +1,19 @@
+{
+  "id": "hello-cull",
+  "name": "Hello, Cull",
+  "version": "0.1.0",
+  "summary": "A page in Cull's sidebar that shows what the library holds, to start an addon from.",
+  "description": "Serves one page, which Cull shows in its frame. The page asks its own server for Cull's counts, and the server asks Cull with the addon's key, so the key never reaches a browser.",
+  "author": "Daddy Cull",
+  "icon": "extension",
+  "pages": [
+    {
+      "id": "hello",
+      "label": "Hello",
+      "icon": "extension",
+      "section": "tools",
+      "url": "http://127.0.0.1:8900/"
+    }
+  ],
+  "needs": ["Node.js 18 or later, running server.mjs beside this file"]
+}

@@ -361,3 +361,120 @@ func TestWhileFollowsTheAddon(t *testing.T) {
 	expect(stopped, "stopped when its context ended")
 	expect(returned, "left behind when its context ended")
 }
+
+func TestWatchTellsOfTheAddonsFolderChanging(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	dir := t.TempDir()
+	r, err := NewRegistry(newMemoryStore(), api.NewBook(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go r.Watch(ctx)
+	waitFor := func(what string, changed <-chan struct{}) {
+		t.Helper()
+		select {
+		case <-changed:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no change was told when %s", what)
+		}
+	}
+	// The folder as it is at the start is not news.
+	changed := r.Changed()
+	select {
+	case <-changed:
+		t.Fatal("reading the folder for the first time was told as a change")
+	case <-time.After(1500 * time.Millisecond):
+	}
+	writeManifest(t, dir, "photo-frame", validManifestJSON)
+	waitFor("an addon was put in", changed)
+	if v := view(t, r, "photo-frame"); v.Problem != "" {
+		t.Fatalf("the new addon %+v", v)
+	}
+	// Turning it on is told once; the key it is given is not told again.
+	changed = r.Changed()
+	if err := r.Set(ctx, "photo-frame", true); err != nil {
+		t.Fatal(err)
+	}
+	waitFor("it was turned on", changed)
+	changed = r.Changed()
+	select {
+	case <-changed:
+		t.Fatal("the key written when it was turned on was told as a change")
+	case <-time.After(1500 * time.Millisecond):
+	}
+	writeManifest(t, dir, "photo-frame", strings.Replace(validManifestJSON, "Photo frame", "Picture frame", 1))
+	waitFor("its manifest was edited", changed)
+	if v := view(t, r, "photo-frame"); v.Name != "Picture frame" {
+		t.Fatalf("the edit was not read: %+v", v)
+	}
+	changed = r.Changed()
+	if err := os.RemoveAll(filepath.Join(dir, "photo-frame")); err != nil {
+		t.Fatal(err)
+	}
+	waitFor("it was taken out", changed)
+	for _, v := range r.List(ctx) {
+		if v.ID == "photo-frame" {
+			t.Fatal("an addon taken out is still listed")
+		}
+	}
+}
+
+func TestTurningAnAddonOffEndsItsOpenRequests(t *testing.T) {
+	ctx := context.Background()
+	for _, how := range []string{"turned off", "key taken away"} {
+		t.Run(how, func(t *testing.T) {
+			dir := t.TempDir()
+			writeManifest(t, dir, "photo-frame", validManifestJSON)
+			book := api.NewBook()
+			r, err := NewRegistry(newMemoryStore(), book, dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := api.NewMux(book)
+			m.Guard(r.Guard)
+			started := make(chan struct{})
+			// A route that runs until its request ends, as the event stream does.
+			m.HandleFunc(api.Route{Method: "GET", Path: "/api/stream", Tag: "Test", Needs: api.Read, Summary: "Stream", Returns: map[string]any{}}, func(w http.ResponseWriter, req *http.Request) {
+				close(started)
+				<-req.Context().Done()
+			})
+			if err := r.Set(ctx, "photo-frame", true); err != nil {
+				t.Fatal(err)
+			}
+			keyPath := filepath.Join(dir, "photo-frame", KeyFile)
+			raw, err := os.ReadFile(keyPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			done := make(chan struct{})
+			go func() {
+				req := httptest.NewRequest("GET", "/api/stream", nil)
+				req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(raw)))
+				m.ServeHTTP(httptest.NewRecorder(), req)
+				close(done)
+			}()
+			<-started
+			select {
+			case <-done:
+				t.Fatal("the request ended while the addon was on")
+			case <-time.After(200 * time.Millisecond):
+			}
+			if how == "turned off" {
+				if err := r.Set(ctx, "photo-frame", false); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				go r.Watch(t.Context())
+				if err := os.Remove(keyPath); err != nil {
+					t.Fatal(err)
+				}
+			}
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatalf("the request carried on after the addon's %s", how)
+			}
+		})
+	}
+}

@@ -316,6 +316,7 @@ func main() {
 		photos.Routes(apiMux)
 		addons.Routes(apiMux)
 		s.EventRoutes(apiMux, addons.Changed)
+		go addons.Watch(ctx)
 		// Long file operations queue here and run one batch at a time
 		// through the private writer, so a page never waits on them.
 		tasks := s.NewTaskRunner(*binUpstream, secret)

@@ -30,6 +30,8 @@ const fixture=()=>[
     const request=route.request(),url=new URL(request.url());
     if(queue.handle(route,url,request))return;
     if(url.pathname==='/api/catalogue')return route.fulfill({json:{generation:1}});
+    // Without the list of addons the sidebar shows Cull's usual pages.
+    if(url.pathname==='/api/addons'||url.pathname==='/api/events')return route.fulfill({status:404,json:{error:'not mocked'}});
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:10,synthetic:false,snapshotAt:'',candidates:0,calendarDays:0,reviewedDays:0,decisions:0,favourites:0,evidence:0,fullHashes:0,marked:1,bin:bin.length}});
     if(url.pathname==='/api/trash')return route.fulfill({json:bin});
     if(url.pathname==='/api/trash/deleting')return route.fulfill({json:{graceDays:grace,items:[],lastRun:'',lastDeleted:0,lastError:'',checkIntervalMinutes:15}});
