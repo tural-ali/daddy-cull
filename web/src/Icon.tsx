@@ -49,6 +49,8 @@ import FileMove from '@material-symbols/svg-400/outlined/drive_file_move.svg?raw
 import FileMoveFill from '@material-symbols/svg-400/outlined/drive_file_move-fill.svg?raw';
 import Undo from '@material-symbols/svg-400/outlined/undo.svg?raw';
 import UndoFill from '@material-symbols/svg-400/outlined/undo-fill.svg?raw';
+import Pending from '@material-symbols/svg-400/outlined/pending_actions.svg?raw';
+import PendingFill from '@material-symbols/svg-400/outlined/pending_actions-fill.svg?raw';
 import Done from '@material-symbols/svg-400/outlined/task_alt.svg?raw';
 import DoneFill from '@material-symbols/svg-400/outlined/task_alt-fill.svg?raw';
 import ArrowBack from '@material-symbols/svg-400/outlined/arrow_back.svg?raw';
@@ -118,6 +120,7 @@ const icons={
   menu:[Menu,MenuFill],
   close:[Close,CloseFill],
   task_alt:[Done,DoneFill],
+  pending_actions:[Pending,PendingFill],
   play_circle:[PlayCircle,PlayCircleFill],
   check:[Check,CheckFill],
   select_all:[SelectAll,SelectAllFill],

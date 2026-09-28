@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -64,11 +65,23 @@ const engineBatch = 20
 // so that nothing else can delete by accident.
 func DeleteConfirmation(items int) string { return fmt.Sprintf("DELETE %d", items) }
 
+// The ways a selection can fail to match the Bin.
+var (
+	errTrashEmptySelection = errors.New("nothing was selected")
+	errTrashChanged        = errors.New("the Bin has changed since this page was loaded; refresh and select again")
+)
+
 // resolve returns the current items for the given keys from one list, widened
 // to whole groups, in list order.
 func (t *TrashWriter) resolve(ctx context.Context, keys []string, list func(context.Context) ([]TrashItem, error)) ([]TrashItem, error) {
+	return resolveTrash(ctx, keys, list)
+}
+
+// resolveTrash is resolve for any process that can read the catalogue: the
+// web process checks a queued request the way the writer will.
+func resolveTrash(ctx context.Context, keys []string, list func(context.Context) ([]TrashItem, error)) ([]TrashItem, error) {
 	if len(keys) == 0 {
-		return nil, fmt.Errorf("nothing was selected")
+		return nil, errTrashEmptySelection
 	}
 	all, err := list(ctx)
 	if err != nil {
@@ -82,7 +95,7 @@ func (t *TrashWriter) resolve(ctx context.Context, keys []string, list func(cont
 	for _, key := range keys {
 		item, ok := byKey[key]
 		if !ok {
-			return nil, fmt.Errorf("the Bin has changed since this page was loaded; refresh and select again")
+			return nil, errTrashChanged
 		}
 		groups[item.Group] = true
 	}
@@ -104,11 +117,17 @@ func (t *TrashWriter) Selection(ctx context.Context, keys []string) (int, error)
 
 // deletingItems lists only the files deleted from the Bin and still waiting.
 func (t *TrashWriter) deletingItems(ctx context.Context) ([]TrashItem, error) {
-	grace, err := t.s.GraceDays(ctx)
+	return t.s.deletingTrash(ctx)
+}
+
+// deletingTrash lists the files deleted from the Bin and still waiting, as
+// cards.
+func (s *Store) deletingTrash(ctx context.Context) ([]TrashItem, error) {
+	grace, err := s.GraceDays(ctx)
 	if err != nil {
 		grace = 0
 	}
-	waiting, err := t.s.deleting(ctx, grace)
+	waiting, err := s.deleting(ctx, grace)
 	if err != nil {
 		return nil, err
 	}

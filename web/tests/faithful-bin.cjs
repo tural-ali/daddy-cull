@@ -1,5 +1,6 @@
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const assert=require('node:assert/strict');
+const taskQueue=require('./lib/taskQueue.cjs');
 
 // One Bin for files from both tools. Every name here is a synthetic fixture.
 const card=(key,group,source,name,extra={})=>({key,group,source,name,original:`/archive/2020/${name}`,kind:'image',size:1048576,sidecars:0,removedAt:'2026-09-06T10:00:00Z',preview:`/api/media/${key.replace(/\D/g,'')||1}`,...extra});
@@ -15,22 +16,23 @@ const fixture=()=>[
   const browser=await chromium.launch({channel:'chrome',headless:true});
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   let bin=fixture(),grace=0,locked=false;
-  const posts=[];
+  // Restoring and deleting are queued as tasks, which do their work at once.
+  const queue=taskQueue({apply:(kind,body)=>{
+    const groups=new Set(bin.filter(item=>(body.keys||bin.map(other=>other.key)).includes(item.key)).map(item=>item.group));
+    const hit=bin.filter(item=>groups.has(item.group));
+    // A folder the app may not change: nothing moves, each file says why.
+    if(locked)return {total:hit.length,done:0,failures:hit.map(item=>({name:item.name,error:'the app is not allowed to change the folder 2020/2020-01/2020-01-02; fix its permissions and try again'})),keptDays:grace};
+    bin=bin.filter(item=>!groups.has(item.group));
+    return {total:hit.length,bytes:hit.reduce((sum,item)=>sum+item.size,0),...(grace&&kind!=='bin.restore'?{keptDays:grace}:{})};
+  }});
+  const posts=queue.posts;
   await page.route('**/api/**',async route=>{
     const request=route.request(),url=new URL(request.url());
+    if(queue.handle(route,url,request))return;
     if(url.pathname==='/api/catalogue')return route.fulfill({json:{generation:1}});
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:10,synthetic:false,snapshotAt:'',candidates:0,calendarDays:0,reviewedDays:0,decisions:0,favourites:0,evidence:0,fullHashes:0,marked:1,bin:bin.length}});
     if(url.pathname==='/api/trash')return route.fulfill({json:bin});
     if(url.pathname==='/api/trash/deleting')return route.fulfill({json:{graceDays:grace,items:[],lastRun:'',lastDeleted:0,lastError:'',checkIntervalMinutes:15}});
-    if(url.pathname.startsWith('/api/trash/')){
-      const body=request.postDataJSON();posts.push({path:url.pathname,body});
-      const groups=new Set(bin.filter(item=>(body.keys||bin.map(other=>other.key)).includes(item.key)).map(item=>item.group));
-      const hit=bin.filter(item=>groups.has(item.group));
-      // A folder the app may not change: nothing moves, each file says why.
-      if(locked)return route.fulfill({json:{done:0,bytes:0,failures:hit.map(item=>({name:item.name,error:'the app is not allowed to change the folder 2020/2020-01/2020-01-02; fix its permissions and try again'})),keptDays:grace}});
-      bin=bin.filter(item=>!groups.has(item.group));
-      return route.fulfill({json:{done:hit.length,bytes:hit.reduce((sum,item)=>sum+item.size,0),failures:[],...(grace&&url.pathname!=='/api/trash/restore'?{keptDays:grace}:{})}});
-    }
     if(/^\/api\/(media|bin-media|binned-media)\//.test(url.pathname))return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="#6b5252"/></svg>'});
     throw new Error(`${request.method()} ${url.pathname}`);
   });
@@ -70,9 +72,12 @@ const fixture=()=>[
   assert.equal(await page.locator('.selcount').innerText(),'4 selected');
 
   // Restore needs no question; it only puts files back.
+  // It is queued and the cards leave at once; the page says when it is done.
   await bar.getByRole('button',{name:'Restore'}).click();
+  await page.getByText('Restoring 4 files. It carries on in the background under Tasks.').waitFor();
+  assert.equal(await page.locator('.bingrid figure').count(),1,'the restored cards left at once');
   await page.getByText('4 files put back where they came from.').waitFor();
-  assert.deepEqual(posts[0],{path:'/api/trash/restore',body:{keys:['marked:11','bin:aa:12','bin:aa:13','legacy:7']}});
+  assert.deepEqual(posts[0],{path:'/api/tasks/bin',body:{action:'restore',keys:['marked:11','bin:aa:12','bin:aa:13','legacy:7']}});
   assert.equal(await page.locator('.bingrid figure').count(),1);
   await page.getByRole('link',{name:/^Bin 1 file$/}).waitFor();
 
@@ -94,9 +99,8 @@ const fixture=()=>[
   assert.equal(posts.length,1,'Cancel sent a deletion');
   await bar.getByRole('button',{name:'Delete for good'}).click();
   await dialog.getByRole('button',{name:'Delete 2 files'}).click();
-  await page.locator('.flash .busy').waitFor();
   await page.getByText('2 files permanently deleted, freeing 2.0 MB.').waitFor();
-  assert.deepEqual(posts[1],{path:'/api/trash/delete',body:{keys:['bin:aa:12','bin:aa:13'],confirmation:'DELETE 2'}});
+  assert.deepEqual(posts[1],{path:'/api/tasks/bin',body:{action:'delete',keys:['bin:aa:12','bin:aa:13'],confirmation:'DELETE 2'}});
 
   // Empty the Bin names the count it was shown.
   // Empty Bin is the page's one action, top right.
@@ -105,10 +109,8 @@ const fixture=()=>[
   await empty.waitFor();
   assert.match(await empty.innerText(),/All 3 files in the Bin/);
   await empty.getByRole('button',{name:'Empty the Bin'}).click();
-  // The orb shows in the button that was pressed, even when the answer is instant.
-  await page.locator('.pageacts button .busy').waitFor();
   await page.getByText(/The Bin was emptied: 3 files permanently deleted/).waitFor();
-  assert.deepEqual(posts[2],{path:'/api/trash/empty',body:{confirmation:'DELETE 3'}});
+  assert.deepEqual(posts[2],{path:'/api/tasks/bin',body:{action:'empty',confirmation:'DELETE 3'}});
   await page.getByText(/The Bin is empty/).waitFor();
   assert.equal(await page.locator('.gbar.selecting').count(),0);
 
@@ -124,7 +126,7 @@ const fixture=()=>[
   assert.match(await kept.innerText(),/stay on disk for 30 days, restorable from the Log, and are then deleted automatically/);
   await kept.getByRole('button',{name:'Delete 1 file'}).click();
   await page.getByText(/1 file deleted from the Bin\. They stay on disk until .+ and can be restored from the Log until then\./).waitFor();
-  assert.deepEqual(posts[3],{path:'/api/trash/delete',body:{keys:['marked:11'],confirmation:'DELETE 1'}});
+  assert.deepEqual(posts[3],{path:'/api/tasks/bin',body:{action:'delete',keys:['marked:11'],confirmation:'DELETE 1'}});
   assert.equal(await page.locator('.bingrid figure').count(),4);
 
   // Emptying into a locked folder deletes nothing: no "0 files deleted"

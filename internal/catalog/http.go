@@ -544,6 +544,10 @@ func (s *Store) Routes(m *api.Mux) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 		items, err := s.Trash(ctx)
+		if err == nil {
+			// What a task is still restoring or deleting has left the Bin.
+			items, err = s.notQueued(ctx, items)
+		}
 		if err != nil {
 			failFor(w, err, "")
 			return
@@ -560,6 +564,9 @@ func (s *Store) Routes(m *api.Mux) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 		report, err := s.Deleting(ctx)
+		if err == nil {
+			report.Items, err = s.deletingNotQueued(ctx, report.Items)
+		}
 		if err != nil {
 			failFor(w, err, "")
 			return
@@ -691,6 +698,9 @@ func (s *Store) Routes(m *api.Mux) {
 			return
 		}
 		report, err := s.Deleting(ctx)
+		if err == nil {
+			report.Items, err = s.deletingNotQueued(ctx, report.Items)
+		}
 		if err != nil {
 			failFor(w, err, "")
 			return

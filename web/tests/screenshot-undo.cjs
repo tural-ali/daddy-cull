@@ -1,9 +1,11 @@
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const assert=require('node:assert/strict');
+const taskQueue=require('./lib/taskQueue.cjs');
 
 // ⌘Z on Screenshots takes back what was done, one step at a time and not
 // just the last, from the grid or from the viewer, and ⇧⌘Z does it again.
-// Every undo is the server's own: the file comes back from the Bin. Every
+// Each move is queued as a task and leaves the grid at once; every undo is
+// the server's own, bringing back from the Bin what the task moved. Every
 // name is a synthetic fixture.
 const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
 const shots=process.env.SHOTS;
@@ -14,21 +16,21 @@ const shot=id=>({id,path:`/screenshots/IMG_${id}.PNG`,name:`IMG_${id}.PNG`,day:`
   const browser=await chromium.launch({channel:'chrome',headless:true});
   const page=await browser.newPage({viewport:{width:1280,height:800}});
   await page.addInitScript(key=>{const now=new Date();localStorage.setItem(key,`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`)},'cull.streak-intro');
-  // The holding area as the server keeps it: a plan per move, undone by id.
-  const waiting=new Set([1,2,3,4,5,6]),plans=new Map(),calls=[];
-  let next=0;
+  // The holding area as the server keeps it, and its queue.
+  const waiting=new Set([1,2,3,4,5,6]);
+  const queue=taskQueue({
+    apply:(kind,body)=>{
+      assert.equal(kind,'screenshots.remove');
+      for(const id of body.assetIds){assert.ok(waiting.has(id),'only a waiting screenshot is moved');waiting.delete(id)}
+      return {total:body.assetIds.length,moved:body.assetIds};
+    },
+    undo:source=>{for(const id of source.moved){assert.ok(!waiting.has(id),'only a moved screenshot comes back');waiting.add(id)}return {total:source.moved.length}},
+  });
   await page.route('**/api/**',route=>{
     const request=route.request(),url=new URL(request.url());
+    if(queue.handle(route,url,request))return;
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:6,synthetic:false,snapshotAt:'2026-09-06 01:49:00',screenshots:waiting.size,bin:6-waiting.size}});
     if(url.pathname==='/api/screenshots'){const items=[...waiting].sort((a,b)=>a-b).map(shot);return route.fulfill({json:{items,total:items.length,bytes:items.length*1000,unreviewed:items.length,reviewed:0,stills:items.length,recordings:0}})}
-    if(url.pathname.startsWith('/api/screenshot-actions/')){
-      const body=request.postDataJSON(),step=url.pathname.split('/').pop();
-      calls.push(step);
-      if(step==='preview'){const plan={id:`plan-${++next}`,assetId:body.assetId,action:body.action,state:'planned',created:'2026-09-28',files:[]};plans.set(plan.id,plan);return route.fulfill({json:plan})}
-      const plan=plans.get(body.id);
-      if(step==='execute'){waiting.delete(plan.assetId);plan.state='bin';return route.fulfill({json:plan})}
-      if(step==='undo'){assert.equal(plan.state,'bin','only a plan in the Bin is undone');waiting.add(plan.assetId);plan.state='restored';return route.fulfill({json:plan})}
-    }
     if(url.pathname.startsWith('/api/media/'))return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="118" height="256"><rect width="118" height="256" fill="#557"/></svg>'});
     return route.fulfill({status:404,json:{error:'not mocked'}});
   });
@@ -74,7 +76,8 @@ const shot=id=>({id,path:`/screenshots/IMG_${id}.PNG`,name:`IMG_${id}.PNG`,day:`
   await until([5,6],'X in the viewer moves it to the Bin');
   await page.keyboard.press('ControlOrMeta+z');
   await until([4,5,6],'and ⌘Z brings it back');
-  assert.ok(!calls.includes('purge'),'nothing is ever deleted');
+  assert.ok(queue.posts.every(post=>post.path!=='/api/tasks/bin'),'nothing is ever deleted');
+  assert.deepEqual(queue.posts.filter(post=>post.path==='/api/tasks/screenshots').map(post=>post.body.assetIds),[[1],[2,3],[1],[2,3],[4]],'each move is one task');
   await browser.close();
   console.log('screenshot undo: ok');
 })().catch(error=>{console.error(error);process.exit(1)});

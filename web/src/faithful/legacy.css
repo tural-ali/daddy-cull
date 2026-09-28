@@ -298,6 +298,33 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .noteacts { margin: 8px 0 0; font-size: 13px; }
 .noteacts a { color: var(--accent); font-weight: 500; }
 
+/* Tasks: the bell's neighbour. While something runs, a ring round the button
+   fills with how far it has got; a task that failed leaves a dot. */
+.taskwrap { position: relative; flex: none; }
+.taskwrap > .calpop { left: 0; right: auto; width: 400px; padding: 16px 8px 8px; transform-origin: 22px 0; }
+.tasks { position: relative; }
+.tasks.busy { color: var(--accent); }
+.taskring { position: absolute; inset: 2px; width: 40px; height: 40px; transform: rotate(-90deg); pointer-events: none; }
+.taskring circle { fill: none; stroke-width: 2.5; }
+.taskring .track { stroke: color-mix(in oklab, var(--accent) 18%, transparent); }
+.taskring .fill { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: calc(100 - max(4, var(--share) * 100)); transition: stroke-dashoffset 400ms ease; }
+.taskflag { position: absolute; top: 9px; right: 9px; width: 9px; height: 9px; border-radius: 999px; background: var(--dot); box-shadow: 0 0 0 2px var(--shell); pointer-events: none; }
+.taskhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; padding-top: 0; padding-bottom: 6px; }
+.taskhead .textbtn { margin-right: -4px; }
+.taskitem .meter { display: block; height: 4px; margin: 8px 0 2px; background: var(--bg-4); border-radius: 999px; overflow: hidden; }
+.taskitem .meter > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width 400ms ease; }
+.taskitem.failed .taskstate { color: var(--bad); }
+.taskitem.running .taskstate { color: var(--text); }
+.tasknote { margin: 6px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.tasknote a { color: var(--accent); }
+.taskfailures { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.taskfailures b { font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
+.taskfailures .dim { color: var(--faint); }
+.taskacts { display: flex; flex-wrap: wrap; gap: 4px; margin-left: -12px; }
+.taskacts:empty { display: none; }
+.taskacts .textbtn { height: 32px; padding: 0 12px; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .taskring .fill, .taskitem .meter > span { transition: none; } }
+
 /* The calendars that drop from the top bar, the streak's and the date
    pill's: the headline in large type, then a month of days. */
 .calpop {
@@ -498,7 +525,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 @media (width <= 600px) {
   .introflame, .introflame .icon, .introflame .icon svg { width: 128px; height: 128px; }
   .introcount b { font-size: 84px; }
-  .calpop, .searchwrap > .calpop, .bellwrap > .calpop, .streakwrap > .calpop { position: fixed; top: calc(var(--head-h) + 4px); left: 8px; right: 8px; width: auto; }
+  .calpop, .searchwrap > .calpop, .bellwrap > .calpop, .taskwrap > .calpop, .streakwrap > .calpop { position: fixed; top: calc(var(--head-h) + 4px); left: 8px; right: 8px; width: auto; }
 }
 
 /* Sidebar folded below tablet width: as in Google Photos it becomes a rail

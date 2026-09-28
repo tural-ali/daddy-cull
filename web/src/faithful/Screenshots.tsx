@@ -1,8 +1,8 @@
 import {Media} from '../Media';
-import {binChanged,type Asset,type Status} from '../api';
+import {type Asset,type Status} from '../api';
 import {Icon} from '../Icon';
 import {Viewer} from './Viewer';
-import {useRef,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {Pick,RowTile,Rows,useSelectionBar,usePicks,type SelectionAction} from './selection';
 import {usePageFilters} from './SearchFilters';
 import {MoreMarker,useMoreOnScroll} from './more';
@@ -13,21 +13,12 @@ import {undoableDecisions,usePageUndo,type Undoable} from './pageUndo';
 import {tipProps} from './keys';
 import {undoKeys} from './history';
 import {flyToBin} from './binFlight';
+import {TASK_FINISHED,queueScreenshots,taskAction,waitForTask,type Task} from './taskQueue';
 
 type ScreenshotItem=Asset&{day:string;name:string;state:string};
 export type ScreenshotPage={items:ScreenshotItem[];total:number;bytes:number;unreviewed:number;reviewed:number;stills:number;recordings:number};
-export type ScreenshotPlan={id:string;assetId:number;action:'keep'|'remove';state:string;created:string;files:{source:string;destination:string;size:number;hash:string;sidecar:boolean;phase:string}[];error?:string};
 function bytes(value:number){return value<1024**2?`${(value/1024).toFixed(1)} KB`:value<1024**3?`${(value/1024**2).toFixed(1)} MB`:`${(value/1024**3).toFixed(1)} GB`}
 function plural(count:number,one:string){return `${count.toLocaleString()} ${one}${count===1?'':'s'}`}
-async function post<T>(path:string,body:unknown):Promise<T>{
-  const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  const text=await response.text();
-  let result:unknown;
-  try{result=JSON.parse(text)}catch{throw new Error('The screenshot result could not be confirmed. Reload before retrying.')}
-  if(!response.ok)throw new Error((result as {error?:string}).error||'The screenshot action failed safely.');
-  binChanged();
-  return result as T;
-}
 
 // The filters live in the search bar: what has not been looked at yet and
 // what has been kept, as in Lightroom, and stills or screen recordings. Two
@@ -51,21 +42,18 @@ function filtersFrom(review:string,kind:string){
 }
 function query(review:string,kind:string,from:number){return `/api/screenshots?kind=${encodeURIComponent(kind)}&review=${review}&from=${from}`}
 
-/** Moving screenshots to the Bin as an undoable step: undo brings each file
- * back, last first, and redo moves them to the Bin again as new plans. */
-function undoableRemove(label:string,plans:ScreenshotPlan[]):Undoable{
-  let current=plans;
-  const ids=plans.map(plan=>plan.assetId);
+/** Moving screenshots to the Bin as an undoable step. The move runs in the
+ * background as a task; undo stops it if it is still going and waits while
+ * every screenshot it moved comes back, last first, and redo queues them
+ * again. */
+function undoableRemove(label:string,task:Task,ids:number[]):Undoable{
+  let current=task;
   return {label,
-    undo:async()=>{for(const plan of [...current].reverse())await post<ScreenshotPlan>('/api/screenshot-actions/undo',{id:plan.id})},
-    redo:async()=>{
-      const next:ScreenshotPlan[]=[];
-      for(const assetId of ids){
-        const plan=await post<ScreenshotPlan>('/api/screenshot-actions/preview',{assetId,action:'remove'});
-        next.push(await post<ScreenshotPlan>('/api/screenshot-actions/execute',{id:plan.id}));
-      }
-      current=next;
-    }};
+    undo:async()=>{
+      const back=await waitForTask((await taskAction(current.id,'undo')).id);
+      if(back.state==='failed')throw new Error(`${plural(back.failed,'screenshot')} could not be brought back from the Bin. Tasks says which.`);
+    },
+    redo:async()=>{current=await queueScreenshots(ids,'remove')}};
 }
 
 export function Screenshots({page,filter:initialKind,review:initialReview}:{page:ScreenshotPage;filter:string;review:string}){
@@ -162,30 +150,40 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
   }
 
   /** Remove sends files to the recoverable Bin; archive copies a kept file under
-   * the date in its name. Each file is its own verified plan, run one by one,
-   * and a failure stops the rest and says how far it got. */
+   * the date in its name. Either is queued as a task and leaves the page at
+   * once: the server plans and carries out each file in the background, and
+   * any it could not handle come back when the task finishes. */
   async function run(chosen:ScreenshotItem[],action:'keep'|'remove'){
     if(chosen.length===0||busy)return;
     setBusy(true);setError('');setMessage('');
-    const done:ScreenshotPlan[]=[];
     try{
-      for(const item of chosen){
-        const plan=await post<ScreenshotPlan>('/api/screenshot-actions/preview',{assetId:item.id,action});
-        done.push(await post<ScreenshotPlan>('/api/screenshot-actions/execute',{id:plan.id}));
-        if(action==='remove')flyToBin([document.querySelector(`main figure[data-asset="${item.id}"]`)]);
-      }
-    }catch(reason){setError(`${(reason as Error).message} ${done.length} of ${chosen.length} done before it stopped.`)}
-    const finished=new Set(done.map(plan=>plan.assetId));
-    const kept=chosen.filter(item=>finished.has(item.id)&&item.status==='keep').length;
-    drop(finished,{reviewed:-kept,unreviewed:-(finished.size-kept)});
-    picks.setPicked(previous=>new Set([...previous].filter(id=>!finished.has(id))));
-    if(done.length>0){
-      const label=plural(done.length,'screenshot');
-      if(action==='remove'){steps.record(undoableRemove(`moved ${label} to the Bin`,done));setMessage(`Moved ${label} to the recoverable Bin.`)}
-      else setMessage(done.length===1?`Copied ${chosen[0].name} into ${done[0].files[0].destination}.`:`Copied ${label} into the archive, each under the date in its name.`);
-    }
-    setBusy(false);
+      const ids=chosen.map(item=>item.id);
+      const task=await queueScreenshots(ids,action);
+      if(action==='remove')flyToBin(ids.map(id=>document.querySelector(`main figure[data-asset="${id}"]`)));
+      const gone=new Set(ids),kept=chosen.filter(item=>item.status==='keep').length;
+      drop(gone,{reviewed:-kept,unreviewed:-(gone.size-kept)});
+      picks.setPicked(previous=>new Set([...previous].filter(id=>!gone.has(id))));
+      const label=plural(chosen.length,'screenshot');
+      if(action==='remove'){
+        steps.record(undoableRemove(`moved ${label} to the Bin`,task,ids));
+        setMessage(chosen.length===1?'Moved to the recoverable Bin.':`Moving ${label} to the recoverable Bin. It carries on in the background under Tasks.`);
+      }else setMessage(chosen.length===1?`Copying ${chosen[0].name} into the archive, under the date in its name.`:`Copying ${label} into the archive, each under the date in its name. It carries on in the background under Tasks.`);
+    }catch(reason){setError((reason as Error).message)}finally{setBusy(false)}
   }
+
+  // A move that could not handle every file leaves those on the page: the
+  // list is read again to show them, and says so.
+  useEffect(()=>{
+    function finished(event:Event){
+      const task=(event as CustomEvent<Task>).detail;
+      if(!task.kind.startsWith('screenshots.')||task.failed+task.cancelled===0)return;
+      void choose(on).then(()=>{
+        if(task.failed>0)setError(`${plural(task.failed,'screenshot')} could not be ${task.kind==='screenshots.keep'?'copied into the archive':'moved to the Bin'} and ${task.failed===1?'is':'are'} back on the page. Tasks says why.`);
+      });
+    }
+    window.addEventListener(TASK_FINISHED,finished);
+    return()=>window.removeEventListener(TASK_FINISHED,finished);
+  });
 
   // The viewer speaks in photo decisions: Keep keeps, Remove goes to the Bin,
   // Favourite is saved as it is anywhere else. It never advances by itself,

@@ -131,7 +131,8 @@ func (s *Store) ScreenshotPage(ctx context.Context, kind, review string, from, l
 	if from < 0 || limit < 1 || limit > 200 {
 		return page, ErrInvalid
 	}
-	where := " WHERE shots.state='waiting'"
+	// A screenshot a task is still moving has left the page already.
+	where := " WHERE shots.state='waiting'" + screenshotNotQueued
 	args := make([]any, 0, 3)
 	if kind != "" {
 		where += " AND a.kind=?"
@@ -156,7 +157,7 @@ func (s *Store) ScreenshotPage(ctx context.Context, kind, review string, from, l
 	}
 	where += side
 	if err := s.read.QueryRowContext(ctx, `SELECT COALESCE(sum(a.kind='image'),0),COALESCE(sum(a.kind='video'),0)
-		FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id JOIN screenshot_items shots ON shots.asset_id=a.id WHERE shots.state='waiting'`+side).Scan(&page.Stills, &page.Recordings); err != nil {
+		FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id JOIN screenshot_items shots ON shots.asset_id=a.id WHERE shots.state='waiting'`+screenshotNotQueued+side).Scan(&page.Stills, &page.Recordings); err != nil {
 		return page, err
 	}
 	query := `SELECT a.id,a.relative_path,a.captured_at,a.kind,a.size_bytes,COALESCE(d.status,'unreviewed'),COALESCE(d.favourite,0),COALESCE(d.revision,0),a.source_id,(SELECT count(*) FROM assets alt WHERE alt.anchor_id=a.id),` + relatedCount + `,COALESCE(shots.day,''),shots.name,shots.state FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id JOIN screenshot_items shots ON shots.asset_id=a.id` + where

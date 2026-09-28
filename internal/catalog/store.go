@@ -272,6 +272,41 @@ CREATE TABLE IF NOT EXISTS immich_favourites (
  updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS immich_favourites_due ON immich_favourites(state,next_attempt_at);
+-- File operations queued from the pages, run one batch at a time by the
+-- task runner; see tasks.go. A file waiting in a task has left its page.
+CREATE TABLE IF NOT EXISTS tasks (
+ id TEXT PRIMARY KEY,
+ kind TEXT NOT NULL,
+ label TEXT NOT NULL,
+ state TEXT NOT NULL CHECK(state IN ('queued','running','done','failed','cancelled')),
+ created_at TEXT NOT NULL,
+ started_at TEXT,
+ finished_at TEXT,
+ note TEXT NOT NULL DEFAULT '',
+ kept_days INTEGER NOT NULL DEFAULT 0,
+ chunk_now INTEGER,
+ undo_of TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+ cleared INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS task_items (
+ task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+ seq INTEGER NOT NULL,
+ chunk INTEGER NOT NULL,
+ asset_id INTEGER,
+ trash_key TEXT,
+ trash_group TEXT,
+ source_task TEXT,
+ source_seq INTEGER NOT NULL DEFAULT 0,
+ name TEXT NOT NULL,
+ size INTEGER NOT NULL DEFAULT 0,
+ state TEXT NOT NULL CHECK(state IN ('queued','done','failed','cancelled')),
+ error TEXT NOT NULL DEFAULT '',
+ plan_id TEXT NOT NULL DEFAULT '',
+ PRIMARY KEY(task_id,seq)
+);
+CREATE INDEX IF NOT EXISTS task_items_queued_asset ON task_items(asset_id) WHERE state='queued';
+CREATE INDEX IF NOT EXISTS task_items_queued_key ON task_items(trash_key) WHERE state='queued';
+CREATE INDEX IF NOT EXISTS task_items_chunk ON task_items(task_id,state,chunk);
 CREATE TABLE IF NOT EXISTS trash_deletions (
  grp TEXT PRIMARY KEY,
  deleted_at TEXT NOT NULL,

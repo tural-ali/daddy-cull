@@ -24,6 +24,7 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
     if(url.pathname==='/api/decisions/batch'){writes.push(request.postDataJSON());return route.fulfill({json:[{revision:1,previousStatus:'unreviewed',previousFavourite:false},{revision:1,previousStatus:'unreviewed',previousFavourite:false}]})}
     if(url.pathname==='/api/decisions'){const body=request.postDataJSON();individualWrites.push(body);await new Promise(resolve=>setTimeout(resolve,200));return route.fulfill({json:{revision:body.expectedRevision+1,previousStatus:'unreviewed',previousFavourite:false}})}
     if(url.pathname.startsWith('/api/media/'))return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><rect width="800" height="800" fill="#526b52"/></svg>'});
+    if(url.pathname==='/api/tasks')return route.fulfill({json:{tasks:[],active:0}});
     throw new Error(`${request.method()} ${url.pathname}`);
   });
   await page.goto(process.env.APP_URL||'http://127.0.0.1:8842/');

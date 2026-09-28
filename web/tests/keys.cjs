@@ -1,5 +1,6 @@
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const assert=require('node:assert/strict');
+const taskQueue=require('./lib/taskQueue.cjs');
 
 // Every action shows its key the same way: a tooltip with the name then the
 // key for a control, a chip on a question's buttons, and the key works. Keys
@@ -14,9 +15,16 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   await page.addInitScript(key=>{const now=new Date();localStorage.setItem(key,`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`)},'cull.streak-intro');
   let bin=fixture();
-  const posts=[];
+  // Restoring and deleting are queued as tasks, which do their work at once.
+  const queue=taskQueue({apply:(kind,body)=>{
+    const hit=bin.filter(item=>!body.keys||body.keys.includes(item.key));
+    bin=bin.filter(item=>!hit.includes(item));
+    return {total:hit.length,bytes:hit.length*1048576};
+  }});
+  const posts=queue.posts;
   await page.route('**/api/**',async route=>{
     const request=route.request(),url=new URL(request.url());
+    if(queue.handle(route,url,request))return;
     if(url.pathname==='/api/catalogue')return route.fulfill({json:{generation:1}});
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:10,synthetic:false,snapshotAt:'',candidates:0,calendarDays:0,reviewedDays:0,decisions:0,favourites:0,evidence:0,fullHashes:0,marked:1,bin:bin.length,notifications:0}});
     if(url.pathname==='/api/trash')return route.fulfill({json:bin});
@@ -77,7 +85,7 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   await question.waitFor();
   await page.keyboard.press('Enter');
   await page.getByText(/The Bin was emptied: 3 files permanently deleted/).waitFor();
-  assert.deepEqual(posts.map(post=>post.path),['/api/trash/empty']);
+  assert.deepEqual(posts.map(post=>post.body.action),['empty']);
 
   // The selection bar's actions have keys too.
   bin=fixture();
@@ -96,7 +104,7 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   await page.mouse.move(700,500);
   await page.keyboard.press('r');
   await page.getByText(/1 file put back where they came from/).waitFor();
-  assert.deepEqual(posts.at(-1),{path:'/api/trash/restore',body:{keys:['marked:11']}});
+  assert.deepEqual(posts.at(-1),{path:'/api/tasks/bin',body:{action:'restore',keys:['marked:11']}});
 
   // The lightbox's own button carries its key on it, and the key works.
   await page.locator('.bingrid figure').first().click();

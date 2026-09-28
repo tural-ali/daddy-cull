@@ -109,6 +109,9 @@ export function Tips(){
   useEffect(()=>{
     let timer=0,recent=0,over:Element|null=null,shownRecently=false;
     const read=(element:Element):Shown|null=>{
+      // A button whose panel is open has said what it is; its tip would
+      // only cover the panel.
+      if(element.getAttribute('aria-expanded')==='true')return null;
       const text=element.getAttribute('data-tip')??'';
       const keys=element.getAttribute('data-keys')??'';
       return text||keys?{text,keys,box:element.getBoundingClientRect()}:null;

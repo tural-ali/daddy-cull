@@ -316,6 +316,11 @@ func main() {
 		photos.Routes(apiMux)
 		addons.Routes(apiMux)
 		s.EventRoutes(apiMux, addons.Changed)
+		// Long file operations queue here and run one batch at a time
+		// through the private writer, so a page never waits on them.
+		tasks := s.NewTaskRunner(*binUpstream, secret)
+		tasks.Routes(apiMux)
+		go tasks.Run(ctx)
 		apiMux.HandleFunc(api.Route{
 			Method: "GET", Path: "/api/openapi.json", Tag: "Reference", Needs: api.Read,
 			Summary: "Get this reference",

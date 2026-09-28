@@ -99,14 +99,16 @@ func (s *Store) Stats(ctx context.Context, loc *time.Location) (Stats, error) {
 	st.Marked = countQuery(ctx, s.read, "SELECT count(*) FROM decisions d WHERE d.status='cull' AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=d.asset_id AND fs.state!='restored')")
 	st.LegacyBin = countQuery(ctx, s.read, "SELECT count(*) FROM legacy_culled WHERE restored_at IS NULL AND purged_at IS NULL")
 	st.ShadowGroups = countQuery(ctx, s.read, "SELECT count(*) FROM (SELECT 1 FROM shadow_entries GROUP BY kind,group_key)")
-	st.Screenshots = countQuery(ctx, s.read, "SELECT count(*) FROM screenshot_items WHERE state='waiting'")
+	st.Screenshots = countQuery(ctx, s.read, "SELECT count(*) FROM screenshot_items shots JOIN assets a ON a.id=shots.asset_id WHERE shots.state='waiting'"+screenshotNotQueued)
 	st.Social = countQuery(ctx, s.read, "SELECT count(*) FROM social_items s LEFT JOIN decisions d ON d.asset_id=s.asset_id WHERE s.state='waiting'"+socialPending)
 	st.UpgradesAccepted = countQuery(ctx, s.read, "SELECT count(*) FROM upgrade_history")
 	st.UpgradeCandidates = countQuery(ctx, s.read, "SELECT count(DISTINCT archive_asset_id) FROM upgrade_candidates")
 	// The nav's Bin count is the number of cards the Bin page shows, from
 	// every source, so the two never disagree.
 	if items, err := s.Trash(ctx); err == nil {
-		st.Bin = len(items)
+		if items, err = s.notQueued(ctx, items); err == nil {
+			st.Bin = len(items)
+		}
 	}
 	st.ImmichSynced, st.ImmichPending, st.ImmichFailed, st.ImmichRefused = s.ImmichQueueCounts(ctx)
 	// Progress is counted in calendar dates, as on the Year page: a date is

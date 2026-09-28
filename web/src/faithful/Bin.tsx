@@ -9,6 +9,7 @@ import {Pick,RowTile,Rows,useSelectionBar,usePicks} from './selection';
 import {usePhotoURL} from './photoURL';
 import {usePageActions} from './pageActions';
 import {Kbd,keyProps,useDialogKeys} from './keys';
+import {TASK_FINISHED,queueBin,type Task} from './taskQueue';
 
 /** One card in the Bin, whichever tool put the file there. */
 export type TrashItem={key:string;group:string;source:'marked'|'bin'|'legacy'|'screenshot';name:string;original:string;kind:string;size:number;sidecars:number;removedAt:string;preview?:string;disk?:string};
@@ -27,6 +28,7 @@ function failureGroups(failures:Result['failures']){
 }
 type Pending={title:string;body:string;confirm:string;run:()=>Promise<void>};
 type Control='empty'|'restore'|'delete'|'lightbox';
+type BinAction='restore'|'delete'|'purge-now'|'empty';
 const minimumBusy=600;
 
 async function post(path:string,body:unknown):Promise<Result>{
@@ -138,8 +140,43 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   function face(control:Control,idle:string){
     return doing===control?<Busy label={busy} state="working"/>:idle;
   }
+  // Restoring and deleting are queued as tasks and answered at once: the
+  // cards leave the page straight away, whole batches as the server moves
+  // them, and the task carries on in the background under Tasks. When one
+  // this page queued finishes, what it did and anything it could not do is
+  // said here.
+  const queued=useRef(new Map<string,BinAction>());
+  const going='It carries on in the background under Tasks.';
+  async function queue(control:Control,label:string,action:BinAction,keys:string[],said:(count:number)=>string){
+    setBusy(label);setDoing(control);setError('');setMessage('');setFailures([]);
+    try{
+      const task=await queueBin(action,keys,action==='restore'?undefined:`DELETE ${action==='empty'?list.length:keys.length}`);
+      queued.current.set(task.id,action);
+      const asked=new Set(keys),groups=new Set(list.filter(item=>asked.has(item.key)).map(item=>item.group));
+      const left=action==='empty'?[]:list.filter(item=>!groups.has(item.group));
+      setItems(left);onCount?.(left.length);picks.clear();
+      setMessage(said(task.total));
+    }catch(reason){setError((reason as Error).message)}
+    finally{setBusy('');setDoing(null);binChanged()}
+  }
+  const finished=useEffectEvent((task:Task)=>{
+    void refresh();
+    const action=queued.current.get(task.id);
+    if(!action)return;
+    queued.current.delete(task.id);
+    const result:Result={done:task.done,bytes:task.bytes,failures:task.failures,keptDays:task.keptDays};
+    setFailures(task.failures);
+    if(task.done===0){setMessage('');return}
+    const left=task.cancelled>0?` The other ${task.cancelled===1?'one was':`${task.cancelled.toLocaleString()} were`} left ${mode==='bin'?'in the Bin':'waiting'}.`:'';
+    setMessage((task.kind==='bin.restore'?`${files(task.done)} put back where they came from.`:action==='empty'&&!task.keptDays?`The Bin was emptied: ${files(task.done)} permanently deleted, freeing ${bytes(task.bytes)}.`:deleted(result))+left);
+  });
+  useEffect(()=>{
+    function listen(event:Event){finished((event as CustomEvent<Task>).detail)}
+    window.addEventListener(TASK_FINISHED,listen);
+    return()=>window.removeEventListener(TASK_FINISHED,listen);
+  },[]);
   function restore(keys:string[],control:Control){
-    void act(control,'Restoring…',()=>post('/api/trash/restore',{keys}),result=>`${files(result.done)} put back where they came from.`);
+    void queue(control,'Restoring…','restore',keys,count=>`Restoring ${files(count)}. ${going}`);
   }
   function restoreFile(item:TrashItem){
     void act('lightbox','Restoring…',()=>post('/api/trash/restore-file',{keys:[item.key]}),result=>result.done?`${item.name} is back where it came from, sidecars included. The rest of its batch stays put.`:'');
@@ -163,7 +200,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
         title:`Delete ${files(count)} now?`,
         body:`${files(count)} (${bytes(chosenBytes)}) will be permanently deleted now instead of when their grace period ends, sidecars included. This cannot be undone.`,
         confirm:`Delete ${files(count)} now`,
-        run:()=>act('delete','Deleting…',()=>post('/api/trash/purge-now',{keys,confirmation:`DELETE ${count}`}),deleted),
+        run:()=>queue('delete','Deleting…','purge-now',keys,total=>`Permanently deleting ${files(total)} now. ${going}`),
       });
       return;
     }
@@ -171,7 +208,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
       title:grace>0?`Delete ${files(count)}?`:`Delete ${files(count)} for good?`,
       body:consequence(files(count),chosenBytes),
       confirm:`Delete ${files(count)}`,
-      run:()=>act('delete','Deleting…',()=>post('/api/trash/delete',{keys,confirmation:`DELETE ${count}`}),deleted),
+      run:()=>queue('delete','Deleting…','delete',keys,total=>grace>0?`Deleting ${files(total)} from the Bin. They stay on disk for ${grace} day${grace===1?'':'s'}, restorable from the Log. ${going}`:`Permanently deleting ${files(total)}. ${going}`),
     });
   }
   function empty(){
@@ -180,7 +217,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
       title:'Empty the Bin?',
       body:consequence(`All ${files(count)} in the Bin`,totalBytes),
       confirm:'Empty the Bin',
-      run:()=>act('empty','Emptying…',()=>post('/api/trash/empty',{confirmation:`DELETE ${count}`}),result=>result.keptDays?deleted(result):`The Bin was emptied: ${files(result.done)} permanently deleted, freeing ${bytes(result.bytes)}.`),
+      run:()=>queue('empty','Emptying…','empty',[],total=>`Emptying the Bin of ${files(total)}. ${going}`),
     });
   }
 

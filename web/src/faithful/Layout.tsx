@@ -7,6 +7,7 @@ import {SelectionBar,SelectionProvider,type Selection} from './selection';
 import {PageActionButtons,PageActionsProvider,type PageActions} from './pageActions';
 import {StreakCalendar,StreakIntro,StreakPill,introDue} from './Streak';
 import {NotificationBell} from './Notifications';
+import {TasksButton} from './Tasks';
 import {DateCalendar,DatePill,PageDateProvider,type PageDate} from './DatePicker';
 import {GridZoom} from './gridZoom';
 import {FilterButton,FilterMenu,FilterPills,PageFiltersProvider,matchFilters,unusualSort,type PageFilters,type Suggestion} from './SearchFilters';
@@ -172,6 +173,7 @@ export function Layout({route,visit,binFiles,reviewed,streak,notifications,onNot
           {calendarOpen&&<StreakCalendar streak={streak} anchor={pill} onClose={closeCalendar}/>}
         </div>}
         {notifications!==undefined&&<NotificationBell key={visit} unread={notifications} onRead={()=>onNotificationsRead?.()}/>}
+        <TasksButton/>
       </div>
       <DateSearch key={visit} date={pageDate} filters={pageFilters}/>
       <div className="gbaracts">
