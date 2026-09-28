@@ -35,6 +35,10 @@ import Check from '@material-symbols/svg-400/outlined/check.svg?raw';
 import CheckFill from '@material-symbols/svg-400/outlined/check-fill.svg?raw';
 import SelectAll from '@material-symbols/svg-400/outlined/select_all.svg?raw';
 import SelectAllFill from '@material-symbols/svg-400/outlined/select_all-fill.svg?raw';
+import RotateRight from '@material-symbols/svg-400/outlined/rotate_right.svg?raw';
+import RotateRightFill from '@material-symbols/svg-400/outlined/rotate_right-fill.svg?raw';
+import RotateLeft from '@material-symbols/svg-400/outlined/rotate_left.svg?raw';
+import RotateLeftFill from '@material-symbols/svg-400/outlined/rotate_left-fill.svg?raw';
 import RestoreBin from '@material-symbols/svg-400/outlined/restore_from_trash.svg?raw';
 import RestoreBinFill from '@material-symbols/svg-400/outlined/restore_from_trash-fill.svg?raw';
 import DeleteForever from '@material-symbols/svg-400/outlined/delete_forever.svg?raw';
@@ -109,6 +113,8 @@ const icons={
   play_circle:[PlayCircle,PlayCircleFill],
   check:[Check,CheckFill],
   select_all:[SelectAll,SelectAllFill],
+  rotate_right:[RotateRight,RotateRightFill],
+  rotate_left:[RotateLeft,RotateLeftFill],
   restore_from_trash:[RestoreBin,RestoreBinFill],
   delete_forever:[DeleteForever,DeleteForeverFill],
   local_fire_department:[Fire,FireFill],

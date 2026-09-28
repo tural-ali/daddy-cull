@@ -40,7 +40,7 @@ const flightTime=320;
 /** `onRecord`, when given, hears a group choice so the page can undo it. */
 /** `rawOf` names the RAW behind a photo that stands for a RAW+JPEG pair, and
  * `onUnpair` splits the pair when the two turn out not to belong together. */
-export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onRecord,rawOf,onUnpair}:{assets:Asset[];initialID:number;onClose:()=>void;onSave:(asset:Asset,status:Status,favourite?:boolean)=>boolean;onPatch:(id:number,change:Partial<Asset>)=>void;dayOf?:(asset:Asset)=>string;onMove?:(id:number)=>void;onRecord?:(entry:HistoryEntry)=>void;rawOf?:(asset:Asset)=>Asset|undefined;onUnpair?:(photo:Asset,raw:Asset)=>void}){
+export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onRecord,rawOf,onUnpair,onTurn}:{assets:Asset[];initialID:number;onClose:()=>void;onSave:(asset:Asset,status:Status,favourite?:boolean)=>boolean;onPatch:(id:number,change:Partial<Asset>)=>void;dayOf?:(asset:Asset)=>string;onMove?:(id:number)=>void;onRecord?:(entry:HistoryEntry)=>void;rawOf?:(asset:Asset)=>Asset|undefined;onUnpair?:(photo:Asset,raw:Asset)=>void;onTurn?:(asset:Asset,quarters:number)=>void}){
   const initialIndex=Math.max(0,assets.findIndex(asset=>asset.id===initialID));
   const [at,setAt]=useState(initialIndex);
   // The file the reviewer is on, or moving to. When the list changes under
@@ -77,6 +77,18 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   const raw=current?rawOf?.(current):undefined;
   // What the stage draws: the photo, or the RAW behind it when asked for.
   const onStage=side==='raw'&&raw?raw:current;
+  // How far the reviewer turned it in Cull; the file itself is as it was.
+  const turn=onStage?.turn??0;
+  // A picture zoomed while turned a quarter needs its own size to make room
+  // for the turned shape; see .rvstage.zoom in the stylesheet.
+  useLayoutEffect(()=>{
+    const element=media.current;
+    if(!(element instanceof HTMLImageElement)||!zoom||turn%2===0)return;
+    const size=()=>{element.style.setProperty('--natural-w',`${element.naturalWidth}px`);element.style.setProperty('--natural-h',`${element.naturalHeight}px`)};
+    if(element.complete)size();
+    element.addEventListener('load',size);
+    return()=>{element.removeEventListener('load',size);element.style.removeProperty('--natural-w');element.style.removeProperty('--natural-h')};
+  },[zoom,turn,onStage?.id]);
   const capture=current?.capturedAt?new Date(current.capturedAt*1000):null;
   const name=current?.path.split('/').pop()??'';
   const folder=current?.path.split('/').slice(0,-1).join('/')??'';
@@ -101,7 +113,8 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   useLayoutEffect(()=>{
     const tile=tileImage(openedOn);
     const stageBox=stage.current?.getBoundingClientRect();
-    if(stillMotion()||!tile||!stageBox||!tile.naturalWidth||tile.getBoundingClientRect().width===0)return;
+    // A turned picture fades in rather than flying, since the flyer is drawn upright.
+    if(stillMotion()||!tile||!stageBox||!tile.naturalWidth||tile.getBoundingClientRect().width===0||tile.closest('[data-turn]'))return;
     const radius=getComputedStyle(tile.closest('figure')??tile).borderRadius;
     setFlight({mode:'open',src:tile.currentSrc||tile.src,from:box(tile.getBoundingClientRect()),to:fitted(stageBox,tile.naturalWidth,tile.naturalHeight),radius});
   },[openedOn]);
@@ -131,7 +144,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     if(leaving.current)return;
     const element=media.current;
     const tile=current?tileImage(current.id):null;
-    if(stillMotion()||!element||!tile||element.offsetWidth===0){onClose();return}
+    if(stillMotion()||!element||!tile||element.offsetWidth===0||turn){onClose();return}
     leaving.current=true;
     // The grid behind the viewer scrolls its tile into view, so the picture
     // lands where the reviewer will find it.
@@ -214,7 +227,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       // clocks are coarse, so the same tick counts as before.
       if(event.timeStamp<=openedAt)return;
       const key=event.key.toLowerCase();
-      if(['arrowright','arrowleft','x','k','f','i','z','c','r','g','h','escape',' ','?','1','2','3','4','5','6','7','8','9'].includes(key))event.preventDefault();
+      if(['arrowright','arrowleft','x','k','f','i','z','c','r','g','h','escape',' ','?','[',']','1','2','3','4','5','6','7','8','9'].includes(key))event.preventDefault();
       if(menu){if(key==='escape')setMenu(false);return}
       if(help&&key==='escape'){setHelp(false);return}
       if(related){
@@ -233,6 +246,8 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       else if(key==='h')setBare(value=>!value);
       else if(key==='c')void openCompare();
       else if(key==='r'&&raw)setSide(value=>value==='raw'?'photo':'raw');
+      else if(key===']'&&onTurn)onTurn(current,1);
+      else if(key==='['&&onTurn)onTurn(current,-1);
       else if(key==='?')setHelp(value=>!value);
       else if(key==='g'||key==='escape'||key===' ')leave();
     }
@@ -263,6 +278,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
           <button type="button" aria-pressed={side==='raw'} title={raw.path.split('/').pop()} onClick={()=>setSide('raw')}>RAW</button>
         </div>:format(current)&&<span className="rvformat" title={name.split('.').pop()?.toUpperCase()}>{format(current)}</span>}
         {similar>0&&<button type="button" className="rvact cmp" aria-label="Compare similar photos" {...tipProps('Compare','C')} onClick={()=>void openCompare()}><Icon name="compare"/></button>}
+        {onTurn&&<button type="button" className="rvact turn" aria-label="Rotate clockwise" {...tipProps('Rotate clockwise',']')} onClick={()=>onTurn(current,1)}><Icon name="rotate_right"/></button>}
         <button type="button" className="rvact zoom" aria-label="Zoom" aria-pressed={zoom} {...tipProps('Zoom','Z')} onClick={()=>setZoom(value=>!value)}><Icon name="zoom_in" filled={zoom}/></button>
         <button type="button" className="rvact infobtn" aria-label="Info" aria-pressed={info} {...tipProps('Info','I')} onClick={()=>setInfo(value=>!value)}><Icon name="info" filled={info}/></button>
         <button type="button" className={`rvact fav${current.favourite?' on':''}`} aria-label={current.favourite?'Favourited':'Favourite'} aria-pressed={current.favourite} {...tipProps(current.favourite?'Favourited, again to undo':'Favourite','F')} onClick={favourite}><Icon name="favorite" filled={current.favourite}/></button>
@@ -282,7 +298,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     <div ref={stage} className={`rvstage${zoom?' zoom':''}${current.kind==='video'?' hasvideo':''}`} onClick={event=>{if((event.target as HTMLElement).tagName==='IMG')setBare(value=>!value)}}>
       <button type="button" className="rvnav prev" aria-label="Previous" {...tipProps('Previous','ArrowLeft')} onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
       {broken?.id===onStage.id?<div className="rvgone" role="status"><b>{broken.gone?'This file is no longer in the archive':'This file could not be shown'}</b><span>{broken.gone?'It was moved or removed on the server since the last scan. It leaves review at the next nightly scan.':'Try again in a moment.'}</span></div>
-        :current.kind==='video'?<SessionVideo ref={media} key={current.id} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onLoadedData={()=>setShown(current.id)} onError={()=>failed(current.id)}/>:<img ref={media} key={onStage.id} src={preview(onStage)} alt={onStage.path.split('/').pop()} onLoad={()=>setShown(current.id)} onError={()=>failed(onStage.id)}/>}
+        :current.kind==='video'?<SessionVideo ref={media} key={current.id} data-turn={turn||undefined} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onLoadedData={()=>setShown(current.id)} onError={()=>failed(current.id)}/>:<img ref={media} key={onStage.id} data-turn={turn||undefined} src={preview(onStage)} alt={onStage.path.split('/').pop()} onLoad={()=>setShown(current.id)} onError={()=>failed(onStage.id)}/>}
       <button type="button" className="rvnav next" aria-label="Next" {...tipProps('Next','ArrowRight')} onClick={event=>{event.stopPropagation();step(1)}}>›</button>
     </div>
     <aside className="rvinfo" aria-label="Info">
@@ -298,7 +314,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- 1 to 9 focus a frame from the keyboard
       <figure className={index===focus?'on':''} key={asset.id} onClick={()=>setFocus(index)}><img src={preview(asset)} alt={asset.path.split('/').pop()}/><span className="pick">{index+1}</span><figcaption>{asset.path.split('/').pop()} · {asset.status}</figcaption></figure>)}</div><div className="cfacts"><div className="verdict tied"><b>Possible copies or companion files</b><ul><li>Inspect before choosing</li><li>No file moves from this screen</li></ul></div></div><div className="cbot"><button type="button" className="rvbtn" onClick={()=>void saveGroup('keep-all')}>Keep all</button><button type="button" className="rvbtn cull" onClick={()=>void saveGroup('keep-focus')}>Keep the focused one, remove the rest</button><button type="button" className="rvbtn cull cmpall" onClick={()=>void saveGroup('cull-all')}>Remove all</button></div></div>}
     {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- a click dismisses the sheet; ? and Esc do the same */}
-    {help&&<div className="rvkeys" onClick={()=>setHelp(false)}><table><tbody><tr><td>→ ←</td><td>next / previous</td></tr><tr><td>K</td><td>keep and continue, again to undo</td></tr><tr><td>X</td><td>remove (clears keep and favourite), again to undo</td></tr><tr><td>F</td><td>favourite</td></tr><tr><td>I</td><td>info panel</td></tr><tr><td>Z</td><td>zoom</td></tr><tr><td>H</td><td>hide the controls, again to show them</td></tr><tr><td>C</td><td>compare a group</td></tr>{raw&&<tr><td>R</td><td>show the RAW of this pair</td></tr>}<tr><td>{undoKeys.undo} / {undoKeys.redo}</td><td>{onRecord?'undo / redo the last choice':'undo / redo, on the day page'}</td></tr><tr><td>G / Esc / Space</td><td>back to the grid</td></tr><tr><td>?</td><td>this list</td></tr></tbody></table></div>}
+    {help&&<div className="rvkeys" onClick={()=>setHelp(false)}><table><tbody><tr><td>→ ←</td><td>next / previous</td></tr><tr><td>K</td><td>keep and continue, again to undo</td></tr><tr><td>X</td><td>remove (clears keep and favourite), again to undo</td></tr><tr><td>F</td><td>favourite</td></tr><tr><td>I</td><td>info panel</td></tr><tr><td>Z</td><td>zoom</td></tr>{onTurn&&<tr><td>] / [</td><td>rotate clockwise / anticlockwise, in Cull only</td></tr>}<tr><td>H</td><td>hide the controls, again to show them</td></tr><tr><td>C</td><td>compare a group</td></tr>{raw&&<tr><td>R</td><td>show the RAW of this pair</td></tr>}<tr><td>{undoKeys.undo} / {undoKeys.redo}</td><td>{onRecord?'undo / redo the last choice':'undo / redo, on the day page'}</td></tr><tr><td>G / Esc / Space</td><td>back to the grid</td></tr><tr><td>?</td><td>this list</td></tr></tbody></table></div>}
     {error&&<div className="toast err">{error}</div>}
     </div>
     {flight&&<img ref={flyer} className="rvfly" src={flight.src} alt="" style={{left:flight.from.left,top:flight.from.top,width:flight.from.width,height:flight.from.height,borderRadius:flight.mode==='open'?flight.radius:0}}/>}

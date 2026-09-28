@@ -29,6 +29,8 @@
   /* The frame (top bar and sidebar) sits a step lighter than the panel the
      page is on, as in Google Photos, so photographs sit on the deepest ground. */
   --shell:     #1b1c21;
+  /* The search field, a step off the frame so it reads as a field on it. */
+  --field:     #282a31;
   --bg:        #121317;
   --bg-2:      #18191e;
   --bg-3:      #1e2027;
@@ -87,6 +89,7 @@
 :root[data-theme="day"] {
   color-scheme: light;
   --shell:  #f1f5f3;
+  --field:  #e3eae6;
   --pill:   #c4eedb;
   --pill-ink:#00210f;
   --hover:  rgb(22 24 29 / 6%);
@@ -160,16 +163,16 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .gbar {
   grid-column: 1 / -1;
   position: sticky; top: 0; z-index: 30;
-  /* Three columns so the search sits in the middle of the bar whatever the
-     two sides hold: the menu, logo and streak on the left, the page's own
-     actions on the right. Neither side gives up room it needs, so a long
-     streak or a page's note narrows the search rather than sitting under it. */
-  display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, 720px) minmax(max-content, 1fr); align-items: center; column-gap: 12px;
+  /* As in Google Photos, the logo has the sidebar's width and the search
+     starts where the panel does, with the page's own actions, the streak and
+     the bell at the right. The right side never gives up room it needs, so a
+     page's note narrows the search rather than sitting under it. */
+  display: grid; grid-template-columns: calc(var(--side-w) - 20px) minmax(0, 720px) minmax(max-content, 1fr); align-items: center; column-gap: 12px;
   height: var(--head-h); padding: 0 16px 0 8px;
   background: var(--shell);
 }
 .gbarstart { display: flex; align-items: center; gap: 4px; min-width: 0; }
-.brand { display: flex; align-items: center; flex: none; padding: 6px 8px 6px 4px; border-radius: 999px; }
+.brand { display: flex; align-items: center; flex: none; margin-left: 20px; padding: 6px 8px 6px 4px; border-radius: 999px; }
 .brand:hover { text-decoration: none; }
 .brand svg { display: block; height: 24px; width: auto; }
 .brand .brandmark { display: none; }
@@ -185,7 +188,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   position: relative; min-width: 0;
   display: flex; align-items: center; gap: 4px;
   height: 48px; padding: 0 16px 0 6px;
-  background: var(--bg-3); border-radius: 999px;
+  background: var(--field); border-radius: 999px;
   transition: background var(--ease), box-shadow var(--ease);
 }
 .search:has(input:focus) { background: var(--bg-2); box-shadow: 0 1px 3px rgb(0 0 0 / 25%), 0 0 0 1px var(--line-2); }
@@ -208,8 +211,12 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .pageacts { display: flex; align-items: center; gap: 8px; margin-right: 8px; }
 .pagenote { font-size: 14px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .pageacts .btn.primary { padding: 0 18px; }
-.pageacts .textbtn { white-space: nowrap; }
-.pageacts .short, .pageacts .icon { display: none; }
+.pageacts .btn.primary.hasicon { padding-left: 14px; }
+/* A page's own action leads with its icon inside a barely-there outline, as
+   Google Photos draws its outlined buttons. */
+.pageacts .textbtn { white-space: nowrap; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--text) 13%, transparent); }
+.pageacts .textbtn .icon, .pageacts .textbtn .icon svg { width: 18px; height: 18px; }
+.pageacts .short { display: none; }
 @media (width <= 1000px) {
   .pagenote { display: none; }
   .pageacts .long { display: none; }
@@ -217,7 +224,6 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 }
 @media (width <= 600px) {
   .pageacts .hasicon .short { display: none; }
-  .pageacts .hasicon .icon { display: grid; }
   .pageacts .hasicon { width: 40px; height: 40px; padding: 0; justify-content: center; border-radius: 999px; }
   .pageacts .btn.primary.hasicon { padding: 0; }
 }
@@ -233,6 +239,8 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 /* The review streak beside the logo, as Duolingo keeps it at the top: a flame
    and the run of days, grey until today has a review and then lit. */
 .streakwrap { position: relative; flex: none; }
+/* The pill is at the right of the bar, so its calendar opens leftwards from it. */
+.streakwrap > .calpop { left: auto; right: 0; transform-origin: calc(100% - 30px) 0; }
 .streakpill {
   display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 0 12px 0 8px;
   color: var(--muted); font: inherit; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums;
@@ -490,7 +498,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 @media (width <= 600px) {
   .introflame, .introflame .icon, .introflame .icon svg { width: 128px; height: 128px; }
   .introcount b { font-size: 84px; }
-  .calpop, .searchwrap > .calpop, .bellwrap > .calpop { position: fixed; top: calc(var(--head-h) + 4px); left: 8px; right: 8px; width: auto; }
+  .calpop, .searchwrap > .calpop, .bellwrap > .calpop, .streakwrap > .calpop { position: fixed; top: calc(var(--head-h) + 4px); left: 8px; right: 8px; width: auto; }
 }
 
 /* Sidebar folded below tablet width: as in Google Photos it becomes a rail
@@ -594,7 +602,8 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   /* No room to centre the search: it takes what the logo and the page's
      actions leave, so neither side is squeezed out of the bar. */
   .gbar { grid-template-columns: max-content minmax(0, 1fr) max-content; padding: 0 8px; gap: 4px; }
-  .brand { width: auto; margin-right: 8px; }
+  /* The logo lines up with the rail's icons. */
+  .brand { width: auto; margin: 0 8px 0 16px; }
   .panel { margin-right: 0; border-radius: 20px 20px 0 0; }
 }
 @media (width <= 600px) {
@@ -617,6 +626,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   .searchwrap { position: static; flex: none; }
   .search { flex: none; width: auto; padding: 0 2px; background: none; transition: none; }
   .search input { width: 0; flex: 0; padding: 0; }
+  .search:not(:has(input:focus)) .searchkey { display: none; }
   .datepill { padding-right: 10px; margin-right: 0; }
   .datepill .drop { display: none; }
   .search:has(input:focus) {
@@ -878,7 +888,7 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
   pointer-events: none;
 }
 .mo.fav .acts .fav { color: var(--fav); }
-.mo.fav::before {
+.mo.fav:not(:has(.pick, .tfav))::before {
   content: "\2665"; position: absolute; top: 7px; right: 9px; z-index: 3;
   color: var(--fav); font-size: 14px; line-height: 1;
   text-shadow: 0 1px 3px rgb(0 0 0 / 60%);
@@ -955,6 +965,27 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 .act.fav:hover { color: var(--fav); }
 .act[aria-pressed="true"] { color: var(--fav); }
 
+/* A day's tile has one button of its own, the heart in the bottom corner, as
+   Google Photos has it: shown on hover, and kept in view once favourited so
+   the heart is also the mark. Removing is X, or the selection bar. */
+.tfav {
+  position: absolute; bottom: 4px; left: 4px; z-index: 4;
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0;
+  color: #fff; background: none; border: 0; border-radius: 50%; cursor: pointer;
+  opacity: 0; transition: opacity var(--ease), color var(--ease), background var(--ease);
+}
+.tfav .icon, .tfav .icon svg { width: 22px; height: 22px; }
+.tfav .icon { filter: drop-shadow(0 1px 2px rgb(0 0 0 / 55%)); }
+.tfav:hover { background: rgb(0 0 0 / 22%); }
+.tfav[aria-pressed="true"] { color: var(--fav); }
+.tfav:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 0; }
+.mo:hover .tfav, .tfav[aria-pressed="true"] { opacity: 1; }
+.tfav:disabled { cursor: default; }
+main.selecting .tfav { pointer-events: none; }
+main.selecting .tfav:not([aria-pressed="true"]) { opacity: 0; }
+.mo.picked .tfav { bottom: 10px; left: 10px; }
+@media (hover: none) { .tfav:not([aria-pressed="true"]) { display: none; } }
+
 /* Capture time: on hover, because it is context rather than identity. */
 .when {
   position: absolute; bottom: 7px; right: 8px; z-index: 2;
@@ -985,7 +1016,7 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
    already is. */
 .mo.culled { opacity: .5; }
 .mo.culled img { filter: grayscale(1); }
-.mo.culled .acts, .mo.culled .bdg, .mo.culled .when, .mo.culled .dur { display: none; }
+.mo.culled .acts, .mo.culled .tfav, .mo.culled .bdg, .mo.culled .when, .mo.culled .dur { display: none; }
 .mo .undo {
   position: absolute; inset: auto 0 0; z-index: 4;
   display: flex; align-items: center; justify-content: space-between; gap: .5rem;
@@ -1055,6 +1086,13 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
    covered - "keep this one" is precisely the label you need to still be able to
    read while deciding what the selection contains. */
 .mo.sel .bdg { padding-left: 22px; }
+/* Where the tile has a tick of its own, a check here would read as picked,
+   so the keyboard's place is the ring alone. */
+.mo.sel:has(.pick)::after { display: none; }
+.mo.sel:has(.pick) .bdg { padding-left: 0; }
+/* While picking with the pointer, a clicked tile's frame says it is picked;
+   the keyboard's ring shows only when the keyboard moved there. */
+main.selecting .mo.sel:not(:focus-visible) { box-shadow: none; transform: none; }
 /* ------------------------------------------------------ duplicate groups -- */
 
 .xdupes { margin: 0 0 2.2rem; }
@@ -1096,21 +1134,27 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 /* ------------------------------------------------------------- year view -- */
 
 /* The whole year on one screen, each date a square big enough to read and hit.
-   The columns share the width, so the grid fills a desktop and scrolls
-   sideways, never squeezes, on a phone. */
-.calendar { overflow-x: auto; padding-bottom: .4rem; }
+   The columns share the width and the dates shrink with it, down to a size
+   still easy to read, so any desktop window shows the year whole; only a
+   phone scrolls it sideways. */
+/* The dot on a date with new files, the ring on today and a date grown under
+   the pointer all reach a few pixels past the square. A scrolling box clips
+   and scrolls for anything past its edge, so the grid keeps that much room
+   on every side and gives it back with a negative margin, which keeps it
+   lined up with the text above. */
+.calendar { overflow: auto hidden; padding: 8px; margin: -8px -8px 0; container-type: inline-size; }
 .cmonth {
   display: grid;
-  grid-template-columns: 3rem repeat(31, minmax(28px, 1fr));
-  align-items: center; gap: 5px;
-  margin-bottom: 5px;
+  grid-template-columns: 2.75rem repeat(31, minmax(20px, 1fr));
+  align-items: center; gap: clamp(2px, .45cqi, 5px);
+  margin-bottom: clamp(2px, .45cqi, 5px);
 }
 .cmonth .mlabel { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .cell {
   position: relative; display: grid; place-items: center;
   aspect-ratio: 1; max-height: 48px;
-  border-radius: 7px;
-  font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums;
+  border-radius: clamp(4px, .65cqi, 7px);
+  font-size: clamp(11px, 1.3cqi, 14px); font-weight: 650; font-variant-numeric: tabular-nums;
   color: var(--faint); background: var(--bg-3);
   transition: transform var(--ease), box-shadow var(--ease);
 }
@@ -1293,6 +1337,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
    belt to that braces - nothing here may ever scroll the chrome away. */
 .rvstage {
   flex: 1 1 0; position: relative; min-height: 0; overflow: hidden;
+  container-type: size;
   display: flex; align-items: center; justify-content: center;
 }
 .rvstage img, .rvstage video {
@@ -1330,6 +1375,12 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .rvpair button:hover:not([aria-pressed="true"]) { background: rgb(255 255 255 / 8%); color: #eceef2; }
 .rvpair button[aria-pressed="true"] { background: #e3e3e3; color: #1f1f1f; }
 .rvpair button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* A turned picture is fitted to the stage with its sides swapped, then turned. */
+.rvstage [data-turn] { flex: none; }
+.rvstage :is([data-turn="1"], [data-turn="3"]) { max-width: 100cqh; max-height: 100cqw; }
+.rvstage [data-turn="1"] { rotate: 90deg; }
+.rvstage [data-turn="2"] { rotate: 180deg; }
+.rvstage [data-turn="3"] { rotate: 270deg; }
 .rvstage.zoom {
   padding: 0; overflow: auto; cursor: grab;
   align-items: flex-start; justify-content: flex-start;
@@ -1339,6 +1390,9 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   width: auto; height: auto; cursor: grab;
   margin: auto;  /* keeps an image smaller than the stage centred while zoomed */
 }
+/* A picture turned a quarter keeps its unturned box in the layout, so its
+   margins make up the difference and the scroll reaches every edge. */
+.rvstage.zoom :is([data-turn="1"], [data-turn="3"]) { --swing: calc((var(--natural-w, 0px) - var(--natural-h, 0px)) / 2); margin-block: var(--swing); margin-inline: calc(-1 * var(--swing)); }
 .rvstage .rvspin {
   position: absolute; color: #6c717d; font-size: 13px;
   display: flex; align-items: center; gap: .5rem;
@@ -1634,11 +1688,11 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   .gal { grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(180px * var(--zoom))), 1fr)); gap: 8px; }
   .gal.tight { grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(148px * var(--zoom))), 1fr)); }
   .mo .acts { opacity: 1; }
-  /* The actions always show here, so the time and the running time sit just
-     above them rather than under the heart. */
-  .mo .when { opacity: 1; bottom: 42px; }
-  .mo .dur, .mo:hover .dur, .mo:focus-within .dur { opacity: 1; bottom: 42px; }
-  .mo .dur ~ .when, .mo .when:has(~ .dur) { left: 10px; right: auto; }
+  /* Where a tile has a bar of actions it always shows here, so the time and
+     the running time sit just above it rather than under it. */
+  .mo:has(.acts) .when { opacity: 1; bottom: 42px; }
+  .mo:has(.acts) .dur, .mo:has(.acts):is(:hover, :focus-within) .dur { opacity: 1; bottom: 42px; }
+  .mo:has(.acts) .dur ~ .when, .mo:has(.acts) .when:has(~ .dur) { left: 10px; right: auto; }
   .kv div { flex-direction: column; gap: .1rem; }
   .kv dt { flex: none; }
   .fbar { flex-wrap: wrap; gap: .5rem; }
@@ -2355,6 +2409,23 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
 }
 .rt .dur .icon, .rt .dur .icon svg { width: 18px; height: 18px; }
 .rt .bdg { top: auto; bottom: 8px; left: 8px; }
+/* A tile that can be picked shrinks inside an accent frame once picked, and
+   its badges step aside while the tick shows so it never covers them. */
+.mo.picked { background: color-mix(in oklab, var(--accent) 22%, var(--bg-3)); }
+.mo > .actual-media { transition: transform var(--ease), border-radius var(--ease); }
+.mo.picked > .actual-media { transform: scale(.86); border-radius: 8px; }
+.mo.picked.seen::after { display: none; }
+.mo:has(.pick) .bdg { transition: left var(--ease); }
+.mo:has(.pick):hover .bdg, main.selecting .mo:has(.pick) .bdg { left: 44px; }
+@media (hover: none) { .mo:has(.pick) .bdg { left: 44px; } }
+
+/* A picture turned in Cull is drawn at its own shape and turned into the
+   tile, which already has the turned shape. The file is left as it is. */
+.mo[data-turn] > .actual-media { position: absolute; top: 50%; left: 50%; translate: -50% -50%; }
+.mo:is([data-turn="1"], [data-turn="3"]) > .actual-media { width: var(--tile-h); height: var(--tile-w); }
+.mo[data-turn="1"] > .actual-media { rotate: 90deg; }
+.mo[data-turn="2"] > .actual-media { rotate: 180deg; }
+.mo[data-turn="3"] > .actual-media { rotate: 270deg; }
 
 /* A page title with its one page-wide action at the far right, as Google
    Photos puts Empty trash. */

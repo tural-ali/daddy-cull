@@ -86,7 +86,8 @@ const square='<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48"><re
   let saved;
   holdDecision=new Promise(resolve=>{saved=resolve});
   await page.evaluate(()=>scrollTo(0,0));
-  await page.locator('main .jgrid figure').first().locator('.act.cull').click();
+  await page.locator('main .jgrid figure').first().focus();
+  await page.keyboard.press('x');
   log.length=0;
   await side.getByRole('link',{name:'Year'}).click();
   await page.waitForTimeout(400);

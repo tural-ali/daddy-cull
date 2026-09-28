@@ -58,7 +58,8 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   await refreshed.waitFor({state:'hidden'});
 
   // 3. After a decision the page holds an undo history, so it waits to be asked.
-  await tiles.nth(0).locator('.act.cull').click();
+  await tiles.nth(0).focus();
+  await page.keyboard.press('x');
   await page.clock.runFor(1000);
   generation=7;files=62;
   const reads=dayReads;

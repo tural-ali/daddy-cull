@@ -127,6 +127,9 @@ CREATE TABLE IF NOT EXISTS raw_pair_splits (
 );
 CREATE TABLE IF NOT EXISTS video_durations (asset_id INTEGER PRIMARY KEY REFERENCES assets(id), size_bytes INTEGER NOT NULL, seconds REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS media_shapes (asset_id INTEGER PRIMARY KEY REFERENCES assets(id), size_bytes INTEGER NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL);
+-- How far the reviewer turned a file in Cull, in quarter turns clockwise. The
+-- file itself is never changed; a file shown as it is has no row.
+CREATE TABLE IF NOT EXISTS asset_turns (asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE, quarters INTEGER NOT NULL CHECK(quarters BETWEEN 1 AND 3), turned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS asset_days (
  asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
  day TEXT NOT NULL CHECK(length(day)=10)

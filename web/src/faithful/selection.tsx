@@ -8,7 +8,7 @@ import {covered,matches,tipProps,typing} from './keys';
 // the page's actions as icons on the right, where they stay however far the
 // grid is scrolled. Each page owns its selection; the frame only draws it.
 
-export type SelectionAction={label:string;icon:IconName;keys:string;onClick:()=>void;disabled?:boolean;danger?:boolean};
+export type SelectionAction={label:string;icon:IconName;filled?:boolean;keys:string;onClick:()=>void;disabled?:boolean;danger?:boolean};
 export type Selection={count:number;clear:()=>void;actions:SelectionAction[];busy?:boolean};
 
 const SelectionContext=createContext<(selection:Selection|null)=>void>(()=>{});
@@ -21,7 +21,7 @@ export function useSelectionBar(selection:Selection|null){
   const latest=useRef(selection);
   latest.current=selection;
   const signature=selection&&selection.count>0
-    ?`${selection.count}|${selection.busy?1:0}|${selection.actions.map(action=>`${action.label}:${action.keys}:${action.disabled?0:1}`).join(',')}`
+    ?`${selection.count}|${selection.busy?1:0}|${selection.actions.map(action=>`${action.label}:${action.icon}:${action.filled?1:0}:${action.keys}:${action.disabled?0:1}`).join(',')}`
     :'';
   useLayoutEffect(()=>{
     const current=latest.current;
@@ -55,7 +55,7 @@ export function SelectionBar({selection}:{selection:Selection}){
     <span className="selcount" role="status">{selection.count.toLocaleString()} selected</span>
     <div className="gbaracts">
       {selection.actions.map(action=><button key={action.label} type="button" className={`iconbtn${action.danger?' danger':''}`}
-        aria-label={action.label} {...tipProps(action.label,action.keys)} disabled={selection.busy||action.disabled} onClick={action.onClick}><Icon name={action.icon}/></button>)}
+        aria-label={action.label} {...tipProps(action.label,action.keys)} disabled={selection.busy||action.disabled} onClick={action.onClick}><Icon name={action.icon} filled={action.filled}/></button>)}
     </div>
   </header>;
 }

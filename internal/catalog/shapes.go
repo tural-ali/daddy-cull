@@ -203,7 +203,8 @@ func parseShape(out []byte) (width, height int) {
 	return width, height
 }
 
-// markShapes sets Width and Height on the given files that have been read.
+// markShapes sets Width and Height on the given files that have been read,
+// and Turn on those the reviewer turned.
 func (s *Store) markShapes(ctx context.Context, assets []*Asset) error {
 	if len(assets) == 0 {
 		return nil
@@ -232,5 +233,8 @@ func (s *Store) markShapes(ctx context.Context, assets []*Asset) error {
 			a.Width, a.Height = int(width.Int64), int(height.Int64)
 		}
 	}
-	return rows.Err()
+	if err = rows.Err(); err != nil {
+		return err
+	}
+	return s.markTurns(ctx, byID, ids, marks)
 }

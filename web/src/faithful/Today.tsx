@@ -17,6 +17,8 @@ import {pairLabel,rawsBehind,setPaired} from './pairs';
 import {usePageFilters,type SortOption} from './SearchFilters';
 import {Snacks} from './Snacks';
 import {Justified,shapeOf,shapeProps,type Box} from './justified';
+import {Pick,usePicks,useSelectionBar} from './selection';
+import {tracked} from '../saving';
 
 // fresh counts files that reached the archive after the day was reviewed and
 // still wait; each carries new.
@@ -121,7 +123,7 @@ function tipDue():boolean{
 
 /** One year's photos in rows at their own shapes. */
 function YearGrid({assets,render}:{assets:Asset[];render:(asset:Asset,box:Box)=>ReactNode}){
-  const items=useMemo(()=>assets.map(asset=>({key:asset.id,ratio:shapeOf(asset)})),[assets]);
+  const items=useMemo(()=>assets.map(asset=>({key:asset.id,ratio:shapeOf(asset),turn:asset.turn})),[assets]);
   return <Justified className="gal" items={items} render={(index,box)=>render(assets[index],box)}/>;
 }
 
@@ -243,6 +245,57 @@ export function Today({initial}:{initial:TodayData}){
     }
     return true;
   }
+  /** Saves one choice on many photos at once, a selection, with their RAWs,
+   * as one step to undo. It goes as batches rather than through the queue,
+   * which holds a few choices at a time. */
+  async function saveMany(picked:Asset[],decide:(asset:Asset)=>Snapshot,label:string,remember=true){
+    if(saving)return false;
+    if(queue.pending>0){setMessage('Choices are still saving. Try again in a moment.');return false}
+    const targets=picked.flatMap(asset=>{
+      const {status,favourite}=decide(asset);
+      const raw=behind.get(asset.id);
+      return (raw?[asset,raw]:[asset]).map(file=>({file,status,favourite:status==='cull'?false:favourite}));
+    }).filter(target=>target.file.status!==target.status||target.file.favourite!==target.favourite);
+    if(targets.length===0)return true;
+    setSaving(true);
+    targets.forEach(target=>patchAsset(target.file.id,{status:target.status,favourite:target.favourite}));
+    try{
+      const saved=await sendDecisions(targets.map(target=>({assetId:target.file.id,status:target.status,favourite:target.favourite,expectedRevision:target.file.revision,requestId:requestID()})));
+      targets.forEach((target,index)=>patchAsset(target.file.id,{revision:saved[index].revision}));
+      if(remember)history.record({kind:'decisions',label,before:targets.map(target=>snapshot(target.file)),after:targets.map(target=>({id:target.file.id,status:target.status,favourite:target.favourite}))});
+      return true;
+    }catch(error){
+      targets.forEach(target=>patchAsset(target.file.id,{status:target.file.status,favourite:target.file.favourite}));
+      setMessage((error as Error).message);
+      return false;
+    }finally{setSaving(false)}
+  }
+  // Turns are sent one after another, so they land in the order pressed, and
+  // the server's answer is only shown once the last is in, so a quick second
+  // press never flicks back.
+  const turning=useRef<Promise<unknown>>(Promise.resolve());
+  const turnsOut=useRef(0);
+  /** Turns photos a quarter at a time, with their RAWs, in Cull only. */
+  function turn(picked:Asset[],quarters:number,remember=true){
+    const files=picked.flatMap(asset=>{const raw=behind.get(asset.id);return raw?[asset,raw]:[asset]});
+    if(files.length===0)return;
+    files.forEach(file=>patchAsset(file.id,{turn:(((file.turn??0)+quarters)%4+4)%4||undefined}));
+    if(remember)history.record({kind:'turn',label:`turned ${picked.length===1?fileName(picked[0]):`${picked.length.toLocaleString()} photos`}`,ids:files.map(file=>file.id),quarters});
+    turnsOut.current++;
+    const send=async()=>{
+      const response=await fetch('/api/turns',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:files.map(file=>file.id),quarters})});
+      if(!response.ok)throw new Error('The turn could not be saved. Reload to see how the photos are shown.');
+      return (await response.json() as {turns:Record<string,number>}).turns;
+    };
+    const run=turning.current.then(send);
+    turning.current=tracked(run.then(turns=>{
+      if(--turnsOut.current===0)files.forEach(file=>patchAsset(file.id,{turn:turns[String(file.id)]||undefined}));
+    },error=>{
+      turnsOut.current--;
+      files.forEach(file=>patchAsset(file.id,{turn:file.turn}));
+      setMessage((error as Error).message);
+    }));
+  }
   /** Splits a pair so the RAW is a photo of its own, or joins it again. */
   async function pairing(raw:number,partner:number,paired:boolean,remember=true){
     const partnerAsset=assets.find(asset=>asset.id===partner);
@@ -260,6 +313,12 @@ export function Today({initial}:{initial:TodayData}){
   // queue as any choice, so it is journaled and confirmed the same way. A file
   // already back in that state (undone by hand) is left alone.
   function restore(entry:HistoryEntry,direction:'before'|'after'){
+    if(entry.kind==='turn'){
+      const files=assets.filter(asset=>entry.ids.includes(asset.id)&&!hidden.has(asset.id));
+      const lone=assets.filter(asset=>entry.ids.includes(asset.id)&&hidden.has(asset.id)&&!files.some(still=>behind.get(still.id)?.id===asset.id));
+      turn([...files,...lone],direction==='before'?-entry.quarters:entry.quarters,false);
+      return true;
+    }
     if(entry.kind==='pair'){
       void pairing(entry.raw,entry.partner,entry[direction],false);
       return true;
@@ -285,6 +344,17 @@ export function Today({initial}:{initial:TodayData}){
         }
         binChanged();
       })().catch(error=>setMessage((error as Error).message)).finally(()=>setSaving(false));
+      return true;
+    }
+    // A choice on more than one photo, from a selection, goes back the way it
+    // came, as a batch. Each RAW rides with its photo, as it did when the
+    // choice was made, so a photo and its RAW count as one.
+    const targets=new Map(entry[direction].map(target=>[target.id,target]));
+    const riders=new Set([...behind.values()].map(raw=>raw.id));
+    const photos=assets.filter(asset=>targets.has(asset.id)&&!riders.has(asset.id));
+    if(photos.length>1){
+      if(saving||queue.pending>0)return false;
+      void saveMany(photos,asset=>targets.get(asset.id)!,entry.label,false);
       return true;
     }
     for(const target of entry[direction]){
@@ -323,17 +393,31 @@ export function Today({initial}:{initial:TodayData}){
 
   // Undo and redo work wherever the day is being reviewed, in the grid or in
   // the viewer, which leaves modifier keys alone.
+  const held=useRef<'undo'|'redo'|null>(null);
+  const runHeld=useEffectEvent(()=>{
+    const action=held.current;
+    held.current=null;
+    if(action==='undo')undo();else if(action==='redo')redo();
+  });
+  useEffect(()=>{if(!saving&&held.current)runHeld()},[saving]);
   useEffect(()=>{
     function key(event:KeyboardEvent){
       const action=historyKey(event);
       if(!action)return;
       event.preventDefault();
-      if(event.repeat||saving)return;
+      if(event.repeat)return;
+      // Pressed while a choice is still being confirmed, it waits for it,
+      // rather than being lost.
+      if(saving){held.current=action;return}
       if(action==='undo')undo();else redo();
     }
     window.addEventListener('keydown',key);
     return()=>window.removeEventListener('keydown',key);
   });
+  const picks=usePicks(shown,asset=>asset.id);
+  const place=useMemo(()=>new Map(shown.map((asset,index)=>[asset.id,index])),[shown]);
+  const chosen=shown.filter(asset=>picks.picked.has(asset.id));
+  const picking=chosen.length>0;
   const decideKey=useEffectEvent((asset:Asset,key:string)=>{
     if(key==='x')save(asset,asset.status==='cull'?'unreviewed':'cull');
     if(key==='f')save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite);
@@ -341,6 +425,8 @@ export function Today({initial}:{initial:TodayData}){
   useEffect(()=>{
     function key(event:KeyboardEvent){
       if(viewer!==null||event.ctrlKey||event.metaKey||event.altKey||event.target instanceof HTMLButtonElement||typing(event.target))return;
+      // A selection's keys are the selection bar's.
+      if(picking&&event.key!=='ArrowRight'&&event.key!=='ArrowLeft')return;
       const index=shown.findIndex(asset=>asset.id===selected);
       if(event.key==='ArrowRight'){
         event.preventDefault();
@@ -356,7 +442,7 @@ export function Today({initial}:{initial:TodayData}){
     }
     window.addEventListener('keydown',key);
     return()=>window.removeEventListener('keydown',key);
-  },[shown,selected,saving,viewer]);
+  },[shown,selected,saving,viewer,picking]);
 
   // Opening a date is seeing what newly arrived on it: the files keep their
   // badge while the page is open, and the date loses its red dot. A report
@@ -405,7 +491,26 @@ export function Today({initial}:{initial:TodayData}){
     toggle:id=>toggleFilter(id as Filter),clear:()=>saveFilters(new Set()),
     sort:years.length>1?{options:orders,value:order,set:saveOrder}:undefined,
   }:null);
-  usePageActions(assets.length>0&&doneYears<years.length?{actions:[{label:`Mark ${initial.label} reviewed`,short:'Mark reviewed',icon:'task_alt',keys:'Shift+R',disabled:saving||queue.pending>0,onClick:()=>void markDate()}]}:null);
+  // Many photos at once, as in Google Photos: the tick on a tile's corner
+  // starts a selection, and while there is one a click on a tile adds it or
+  // takes it out rather than opening it.
+  const allShown=shown.length>0&&chosen.length===shown.length;
+  const allFavourite=picking&&chosen.every(asset=>asset.favourite);
+  const allRemoved=picking&&chosen.every(asset=>asset.status==='cull');
+  const many=chosen.length===1?fileName(chosen[0]):`${chosen.length.toLocaleString()} photos`;
+  useSelectionBar({count:chosen.length,busy:saving,clear:picks.clear,actions:[
+    {label:allShown?'Deselect all':`Select all ${shown.length.toLocaleString()}`,icon:'select_all',keys:'Mod+A',onClick:()=>allShown?picks.clear():picks.all()},
+    {label:'Rotate clockwise',icon:'rotate_right',keys:']',onClick:()=>turn(chosen,1)},
+    {label:allFavourite?'Remove from favourites':'Favourite',icon:'favorite',filled:allFavourite,keys:'F',
+      onClick:()=>void saveMany(chosen,asset=>({id:asset.id,status:asset.status==='cull'?'unreviewed':asset.status,favourite:!allFavourite}),`${allFavourite?'unfavourited':'favourited'} ${many}`)},
+    {label:allRemoved?'Undo remove':'Remove',icon:allRemoved?'restore_from_trash':'delete',keys:'X',danger:!allRemoved,
+      onClick:()=>void saveMany(chosen,asset=>({id:asset.id,status:allRemoved?'unreviewed':'cull',favourite:asset.favourite}),`${allRemoved?'put back':'removed'} ${many}`).then(done=>{if(done&&!allRemoved)picks.clear()})},
+  ]});
+  function openOrPick(asset:Asset,extend:boolean){
+    if(picking){picks.toggle(place.get(asset.id)??0,extend);return}
+    setSelected(asset.id);photo.show(asset.id);
+  }
+  usePageActions(assets.length>0&&doneYears<years.length?{actions:[{label:`Mark ${initial.label} reviewed`,short:'Mark reviewed',icon:'check',keys:'Shift+R',disabled:saving||queue.pending>0,onClick:()=>void markDate()}]}:null);
   return <>
     <section className="dupehead dayhead">
       <h1>{pageLabel}</h1>
@@ -436,11 +541,13 @@ export function Today({initial}:{initial:TodayData}){
       <div className="yhead"><h2>{year.year}{year.status==='done'&&<span className="tag done">reviewed</span>}{(year.fresh??0)>0&&<span className="tag fresh" title="Reached the archive since this date was last opened"><span className="freshdot" aria-hidden="true"/>{year.fresh!.toLocaleString()} new</span>}</h2><p className="ymeta"><span>{memories.toLocaleString()} {memories===1?'memory':'memories'}{memories!==year.files&&<span className="dim"> from {year.files.toLocaleString()} files</span>}</span><span className="dim">{bytes(year.bytes)}</span></p></div>
       {year.assets.length===0?<p className="note">Nothing left in this folder.</p>:<YearGrid assets={year.assets.filter(asset=>shownIDs.has(asset.id))} render={(asset,box)=>
         // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex -- a tile holds its own buttons, so it cannot be one; it is the grid's focus stop and opens on Enter
-        <figure tabIndex={0} className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}`} key={asset.id} data-asset={asset.id} {...shapeProps({key:asset.id,ratio:shapeOf(asset)},box)} onClick={()=>{setSelected(asset.id);photo.show(asset.id)}}
-        onKeyDown={event=>{if(event.target===event.currentTarget&&(event.key==='Enter'||event.key===' ')){event.preventDefault();setSelected(asset.id);photo.show(asset.id)}}}>
+        <figure tabIndex={0} className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}${picks.picked.has(asset.id)?' picked':''}`} key={asset.id} data-asset={asset.id} {...shapeProps({key:asset.id,ratio:shapeOf(asset),turn:asset.turn},box)} onClick={event=>openOrPick(asset,event.shiftKey)}
+        onFocus={event=>{if(event.target===event.currentTarget)setSelected(asset.id)}}
+        onKeyDown={event=>{if(event.target===event.currentTarget&&(event.key==='Enter'||event.key===' ')){event.preventDefault();openOrPick(asset,event.shiftKey)}}}>
         <Media asset={asset}/>
+        <Pick checked={picks.picked.has(asset.id)} label={`Select ${fileName(asset)}`} onToggle={extend=>picks.toggle(place.get(asset.id)??0,extend)}/>
         <div className="bdg">{asset.new&&asset.status==='unreviewed'&&<span className="b new">new</span>}{behind.has(asset.id)&&<span className="b pair">{pairLabel(asset)}</span>}{(asset.relatedCount??0)>(behind.has(asset.id)?1:0)&&<span className="b dupe">duplicate</span>}</div>
-        <div className="acts"><button type="button" className="act cull" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':'cull')}}><Icon name="delete"/><span className="actlabel">{asset.status==='cull'?'Undo':'Remove'}</span></button><button type="button" className="act fav" disabled={!queue.ready} aria-pressed={asset.favourite} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite)}}>♡</button></div>
+        <button type="button" className="tfav" disabled={!queue.ready} aria-pressed={asset.favourite} aria-label={asset.favourite?'Remove from favourites':'Favourite'} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite)}}><Icon name="favorite" filled={asset.favourite}/></button>
         {captureTime(asset.capturedAt)&&<div className="when">{captureTime(asset.capturedAt)}</div>}
         {(asset.duration||asset.kind==='video')&&<span className="dur" aria-label={asset.duration?`Video, ${runningTime(asset.duration)}`:'Video'}>{asset.duration?runningTime(asset.duration):<Icon name="play_circle" filled/>}</span>}
         {asset.status==='cull'&&<div className="undo"><span>Removed</span><button type="button" className="act" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,'unreviewed')}}>Undo</button></div>}
@@ -451,7 +558,7 @@ export function Today({initial}:{initial:TodayData}){
       {tip&&assets.length>0&&<div className="snack" role="status">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>{undoKeys.undo}</b> undo, <b>{undoKeys.redo}</b> redo, <b>?</b> for the rest</div>}
     </Snacks>}
     {cheer&&<Celebration tally={cheer} nextHref={`/on/${initial.next}`} nextLabel={calendarLabel(initial.next)} onClose={()=>setCheer(null)}/>}
-    {viewing!==null&&<Viewer assets={walked} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset} onRecord={history.record}
+    {viewing!==null&&<Viewer assets={walked} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset} onRecord={history.record} onTurn={(asset,quarters)=>turn([asset],quarters)}
       rawOf={asset=>behind.get(asset.id)} onUnpair={(still,raw)=>void pairing(raw.id,still.id,false)}/>}
   </>;
 }

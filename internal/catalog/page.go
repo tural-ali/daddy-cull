@@ -31,6 +31,9 @@ type Asset struct {
 	// orientation, once it has been read.
 	Width  int `json:"width,omitempty"`
 	Height int `json:"height,omitempty"`
+	// Turn is how many quarter turns clockwise the reviewer turned the file
+	// in Cull, 0 to 3. Width and Height are before it.
+	Turn int `json:"turn,omitempty"`
 }
 type Cursor struct {
 	Version int    `json:"v"`

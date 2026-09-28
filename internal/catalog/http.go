@@ -258,6 +258,39 @@ func (s *Store) Handler() http.Handler {
 		}
 		writeJSON(w, report)
 	})
+	// Turning a file is Cull's own record of how it should be shown; the file
+	// in the archive is not touched.
+	mux.HandleFunc("POST /api/turns", func(w http.ResponseWriter, r *http.Request) {
+		if !sameOriginJSON(w, r) {
+			return
+		}
+		var input struct {
+			IDs      []int64 `json:"ids"`
+			Quarters int     `json:"quarters"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			http.Error(w, "ids and quarters required", 400)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		turned, err := s.Turn(ctx, input.IDs, input.Quarters)
+		if errors.Is(err, ErrInvalid) {
+			http.Error(w, "up to 500 different files and a turn of 1 to 3 quarters either way", 400)
+			return
+		}
+		if err != nil {
+			http.Error(w, "the turn could not be saved", 503)
+			return
+		}
+		out := make(map[string]int, len(turned))
+		for id, quarters := range turned {
+			out[strconv.FormatInt(id, 10)] = quarters
+		}
+		writeJSON(w, map[string]any{"turns": out})
+	})
 	// A RAW+JPEG pair shows as one photo until the reviewer splits it. Only
 	// the catalogue changes: both files stay where they are.
 	mux.HandleFunc("POST /api/pairs", func(w http.ResponseWriter, r *http.Request) {

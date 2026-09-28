@@ -1,4 +1,4 @@
-import {useEffect,useLayoutEffect,useMemo,useRef,useState,type ReactNode} from 'react';
+import {useEffect,useLayoutEffect,useMemo,useRef,useState,type CSSProperties,type ReactNode} from 'react';
 
 // Photos in rows at their own shapes, as Google Photos lays out a library:
 // each row is as tall as it needs to be for its pictures to fill the width
@@ -8,8 +8,9 @@ import {useEffect,useLayoutEffect,useMemo,useRef,useState,type ReactNode} from '
 // thumbnail zoom scales, so a hidden ruler is measured rather than the
 // number being kept in two places.
 
-/** One tile's shape, width over height, if known before it loads. */
-export type JustifiedItem={key:string|number;ratio?:number};
+/** One tile's shape, width over height, if known before it loads, and the
+ * quarter turns it is shown at, which swap a picture's sides when odd. */
+export type JustifiedItem={key:string|number;ratio?:number;turn?:number};
 export type Box={width:number;height:number};
 
 /** A picture wider than this, or narrower than its inverse, is shown cropped
@@ -122,7 +123,10 @@ export function Justified({items,className='',render}:{items:JustifiedItem[];cla
     node.addEventListener('load',loaded,true);
     return()=>{node.removeEventListener('load',loaded,true);cancelAnimationFrame(frame)};
   },[]);
-  const ratios=useMemo(()=>items.map(item=>clamp(item.ratio&&item.ratio>0?item.ratio:measured.get(String(item.key))??1)),[items,measured]);
+  const ratios=useMemo(()=>items.map(item=>{
+    const own=item.ratio&&item.ratio>0?item.ratio:measured.get(String(item.key))??1;
+    return clamp((item.turn??0)%2?1/own:own);
+  }),[items,measured]);
   const rows=useMemo(()=>layout(ratios,size.width,size.target,size.gap),[ratios,size]);
   return <div ref={grid} className={`jgrid ${className}`}>
     <span ref={ruler} className="jruler" aria-hidden="true"/>
@@ -137,7 +141,11 @@ export function shapeOf(asset:{width?:number;height?:number}){
   return asset.width&&asset.height?asset.width/asset.height:undefined;
 }
 
-/** The attributes a tile carries so the grid can measure its picture. */
+/** The attributes a tile carries so the grid can measure its picture, and
+ * turn it: a turned picture is drawn at its own shape and turned into the
+ * tile's, which needs the tile's size. */
 export function shapeProps(item:JustifiedItem,box:Box){
-  return {'data-key':String(item.key),'data-shape':item.ratio&&item.ratio>0?'known':'unknown',style:{width:box.width,height:box.height}};
+  const turn=item.turn??0;
+  return {'data-key':String(item.key),'data-shape':item.ratio&&item.ratio>0?'known':'unknown',...(turn?{'data-turn':turn}:{}),
+    style:{width:box.width,height:box.height,...(turn?{'--tile-w':`${box.width}px`,'--tile-h':`${box.height}px`}:{})} as CSSProperties};
 }

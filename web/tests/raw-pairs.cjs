@@ -59,8 +59,8 @@ const colours={1:'#7a5b3a',2:'#2f4f6f',3:'#4f6f2f',4:'#6f2f4f',5:'#3a6b6b'};
   if(shots)await page.screenshot({path:`${shots}/raw-pair-grid.png`});
 
   // Remove takes both files; one undo brings both back.
-  await pairTile.hover();
-  await pairTile.getByRole('button',{name:'Remove'}).click();
+  await pairTile.focus();
+  await page.keyboard.press('x');
   await saved(2);
   assert.deepEqual(decisions.map(d=>[d.assetId,d.status]),[[2,'cull'],[1,'cull']]);
   assert.deepEqual(await tileIDs(),[2,3,4,5],'the removed pair stays one tile');
@@ -116,8 +116,8 @@ const colours={1:'#7a5b3a',2:'#2f4f6f',3:'#4f6f2f',4:'#6f2f4f',5:'#3a6b6b'};
   await viewer.waitFor({state:'hidden'});
   assert.deepEqual(await tileIDs(),[1,2,3,4,5]);
   const kept=decisions.length;
-  await page.locator('[data-asset="2"]').hover();
-  await page.locator('[data-asset="2"]').getByRole('button',{name:'Remove'}).click();
+  await page.locator('[data-asset="2"]').focus();
+  await page.keyboard.press('x');
   await flush();
   assert.deepEqual(decisions.slice(kept).map(d=>d.assetId),[2],'a split JPEG is removed alone');
 

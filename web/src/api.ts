@@ -7,7 +7,10 @@ export type Asset = { id:number; path:string; capturedAt:number; kind:string; so
   /** How long a video runs, in seconds, once the server has read it. */
   duration?:number;
   /** The picture's size as it is shown, once the server has read it. */
-  width?:number; height?:number };
+  width?:number; height?:number;
+  /** Quarter turns clockwise the reviewer gave it in Cull, 1 to 3; the file
+   * itself is as it was. Width and height are before the turn. */
+  turn?:number };
 export type Page = {assets:Asset[];next:string};
 export type Saved = {revision:number;previousStatus:Status;previousFavourite:boolean};
 /** The frame listens for this and reads its counts again: the Bin badge, the

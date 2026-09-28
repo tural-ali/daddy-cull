@@ -2,10 +2,9 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const assert=require('node:assert/strict');
 
 // A video tile says how long the clip runs in its bottom-right corner, in
-// place of a play badge, and gives the corner up to the actions on hover. A
-// clip whose running time is not read yet still shows it is a video. On a
-// phone, where the actions always show, the running time and the capture time
-// sit above them and clear of each other.
+// place of a play badge, and gives the corner up to the capture time on hover.
+// A clip whose running time is not read yet still shows it is a video. The
+// heart has the other corner, so on a phone's narrow tiles nothing collides.
 const make=(id,name,kind,duration)=>({id,path:`/archive/2010/2010-09/2010-09-07/${name}`,capturedAt:Date.parse('2010-09-07T12:00:00Z')/1000+id*60,kind,source:'archive',size:100,status:'unreviewed',favourite:false,revision:0,alternativeCount:0,relatedCount:0,day:'2010-09-07',...(duration?{duration}:{})});
 const assets=[make(1,'CLIP.MOV','video',41.2),make(2,'LONG.MP4','video',3725),make(3,'NEW.MOV','video'),make(4,'PHOTO.JPG','image')];
 const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
@@ -46,25 +45,28 @@ const picture='<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480">
   assert.equal(await opacity(tile(1).locator('.dur')),'1');
   if(shots)await page.screenshot({path:`${shots}/video-duration.png`,clip:{x:256,y:180,width:1024,height:420}});
 
-  // The actions take the corner on hover.
+  // The capture time takes the corner on hover.
   await tile(1).hover();
   await settle();
   assert.equal(await opacity(tile(1).locator('.dur')),'0');
   assert.equal(await opacity(tile(2).locator('.dur')),'1','other tiles keep theirs');
+  assert.equal(await opacity(tile(1).locator('.when')),'1');
 
-  // On a phone the actions always show, and nothing sits under the heart.
+  // On a phone's narrow tiles the heart, the running time and the capture time stay clear of each other.
   await page.setViewportSize({width:375,height:760});
   await page.mouse.move(5,5);
   await settle();
   const overlap=(a,b)=>a.x<b.x+b.width&&b.x<a.x+a.width&&a.y<b.y+b.height&&b.y<a.y+a.height;
   for(const id of [1,2,3]){
-    const [heart,time,when]=await Promise.all([tile(id).locator('.act.fav').boundingBox(),tile(id).locator('.dur').boundingBox(),tile(id).locator('.when').boundingBox()]);
+    const [heart,time,when]=await Promise.all([tile(id).locator('.tfav').boundingBox(),tile(id).locator('.dur').boundingBox(),tile(id).locator('.when').boundingBox()]);
     assert.equal(await opacity(tile(id).locator('.dur')),'1');
     assert.ok(!overlap(heart,time),`tile ${id}: the running time clears the heart`);
-    assert.ok(!overlap(when,time),`tile ${id}: the running time clears the capture time`);
+    // The running time and the capture time share a corner and take turns.
+    assert.equal(await opacity(tile(id).locator('.when')),'0',`tile ${id}: the capture time waits for the pointer`);
+    void when;
     assert.ok(!overlap(heart,when),`tile ${id}: the capture time clears the heart`);
   }
-  const photoWhen=await tile(4).locator('.when').boundingBox(),photoHeart=await tile(4).locator('.act.fav').boundingBox();
+  const photoWhen=await tile(4).locator('.when').boundingBox(),photoHeart=await tile(4).locator('.tfav').boundingBox();
   assert.ok(!overlap(photoWhen,photoHeart),'a photo\'s capture time clears the heart');
   await tile(1).scrollIntoViewIfNeeded();
   await settle();

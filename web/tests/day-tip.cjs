@@ -30,7 +30,8 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   assert.ok(box.x>=side.x+side.width&&box.x<side.x+side.width+40&&box.y+box.height>760,`the tip sits in the panel's bottom-left corner, clear of the sidebar, not at ${JSON.stringify(box)}`);
   assert.equal(await page.locator('.fbar').count(),0,'the footer bar is gone');
   // Removing a photo shows no notice: the tile itself says what happened.
-  await page.locator('.gal figure').nth(0).locator('.act.cull').click();
+  await page.locator('.gal figure').nth(0).focus();
+  await page.keyboard.press('x');
   await page.clock.runFor(1000);
   assert.equal(await page.locator('.snack').count(),1,'only the tip is in the corner after a decision');
   assert.equal(await page.locator('.flash').count(),0,'no banner above the grid');

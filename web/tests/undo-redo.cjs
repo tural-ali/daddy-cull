@@ -68,7 +68,8 @@ const pick=({assetId,status,favourite})=>({assetId,status,favourite});
   // In the grid, with the viewer closed, the same keys work on the tiles.
   await page.keyboard.press('Escape');
   await viewer.waitFor({state:'hidden'});
-  await page.locator('.gal figure').nth(1).locator('.act.cull').click();
+  await page.locator('.gal figure').nth(1).focus();
+  await page.keyboard.press('x');
   assert.deepEqual(pick(await settled(10)),{assetId:2,status:'cull',favourite:false},'the tile removes the photo');
   await page.keyboard.press('Meta+z');
   assert.deepEqual(pick(await settled(11)),{assetId:2,status:'unreviewed',favourite:false},'⌘Z in the grid brings it back');
