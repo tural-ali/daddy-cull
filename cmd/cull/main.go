@@ -306,6 +306,9 @@ func main() {
 		} else if !photos.Enabled() {
 			log.Print("Apple Photos helper not set up yet: the Apple Photos page offers the setup command")
 		}
+		// Photos is checked again by itself while Cull Sync is online, so the
+		// Apple Photos page never shows a stale answer.
+		go photos.KeepChecking(ctx)
 		photosRoutes := photos.Handler()
 		mux.Handle("/api/photos", photosRoutes)
 		mux.Handle("/api/photos/", photosRoutes)

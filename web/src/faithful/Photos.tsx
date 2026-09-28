@@ -177,6 +177,10 @@ export function Photos(){
   const offered=useRef(false);
   const current=useRef<Status|null>(null);
   const selectionFor=useRef('');
+  // What the reviewer unticked, by entry, so a plan the server renews by
+  // itself while they are looking keeps their choices.
+  const unticked=useRef(new Set<string>());
+  const autoChecked=useRef(false);
   const lastState=useRef<JobState|''>('');
   const timer=useRef(0);
 
@@ -227,12 +231,13 @@ export function Photos(){
     if(was&&was!==state&&(state==='done'||state==='failed'||state==='cancelled'))loadOverview();
   },[state,loadOverview]);
 
-  // A fresh plan starts with everything ticked: the check already left out
-  // whatever the archive still holds, so each row is a real change to make.
+  // A fresh plan starts with everything ticked, bar what was unticked in an
+  // earlier one this visit: the check already left out whatever the archive
+  // still holds, so each row is a real change to make.
   useEffect(()=>{
     if(!job||job.state!=='planned'||selectionFor.current===job.id)return;
     selectionFor.current=job.id;
-    setChosen(new Set([...job.delete,...job.favourite].map(row=>row.id)));
+    setChosen(new Set([...job.delete,...job.favourite].map(row=>row.id).filter(id=>!unticked.current.has(id))));
   },[job]);
 
   async function act(label:string,path:string,body:unknown,after?:(result:Awaited<ReturnType<typeof send>>)=>void){
@@ -246,6 +251,15 @@ export function Photos(){
     finally{setPosting('');await poll()}
   }
   const check=()=>act('Starting a check…','/api/photos/check',{});
+  // Opening the page checks Photos straight away, once the helper is there,
+  // so what it shows is today's answer. The server checks again by itself
+  // every half hour while the helper is online.
+  useEffect(()=>{
+    if(autoChecked.current||!status?.configured||!status.agent.online||posting)return;
+    autoChecked.current=true;
+    if(status.job&&ACTIVE.includes(status.job.state))return;
+    void check();
+  });
   const cancel=()=>job&&act('Cancelling…','/api/photos/cancel',{job:job.id});
   // Apply is pressed from the bar at the foot of a long list, but what follows
   // happens at the top: the progress, and above all the prompt to confirm on
@@ -257,8 +271,9 @@ export function Photos(){
   },result=>{if(!result.error)window.scrollTo({top:0,behavior:'smooth'})});
   const forget=()=>overview&&act('Clearing the note…','/api/photos/forget',{keys:overview.restored.map(item=>item.key)},()=>loadOverview());
 
-  function toggle(id:string){setChosen(set=>{const next=new Set(set);if(next.has(id))next.delete(id);else next.add(id);return next})}
-  function all(ids:string[],on:boolean){setChosen(set=>{const next=new Set(set);for(const id of ids){if(on)next.add(id);else next.delete(id)}return next})}
+  function mark(id:string,on:boolean){if(on)unticked.current.delete(id);else unticked.current.add(id)}
+  function toggle(id:string){setChosen(set=>{const next=new Set(set);const on=!next.has(id);if(on)next.add(id);else next.delete(id);mark(id,on);return next})}
+  function all(ids:string[],on:boolean){setChosen(set=>{const next=new Set(set);for(const id of ids){if(on)next.add(id);else next.delete(id);mark(id,on)}return next})}
 
   const summary=status?.job??null;
   const view=job&&summary&&job.id===summary.id?job:null;
@@ -279,14 +294,23 @@ export function Photos(){
   const warning=agent?access(agent):'';
   const step=summary&&active?progress(summary,selectedDeletes):null;
   const restored=overview?.restored??[];
+  // The headline is what the last check found in Photos. Until there is one,
+  // it is what Cull has to look for there, which includes files Photos never
+  // had, so it is not called a number to delete.
+  const last=overview?.synced.last?<> · last synced {when(overview.synced.last)}</>:null;
+  const found=view&&(view.state==='planned'||view.state==='queued_apply'||view.state==='applying')?view:null;
+  const headline=found?<>
+    <b>{found.delete.length.toLocaleString()}</b> to delete from Photos · <b>{found.favourite.length.toLocaleString()}</b> favourite{found.favourite.length===1?'':'s'} to set
+    {found.missing.length>0&&<> · {found.missing.length.toLocaleString()} not in this Mac's Photos</>}{last}
+  </>:view&&(view.state==='queued_check'||view.state==='checking')?<>Looking for <b>{view.toCheck.toLocaleString()}</b> {view.toCheck===1?'file':'files'} in Photos…{last}</>
+    :overview===null?'Reading the catalogue…':<>
+    <b>{overview.delete.toLocaleString()}</b> removed and <b>{overview.favourite.toLocaleString()}</b> favourite{overview.favourite===1?'':'s'} in Cull to look for in Photos{last}
+  </>;
 
   return <>
     <section className="binhead photoshead">
       <h1>Apple Photos</h1>
-      <p className="ysum">{overview===null?'Reading the catalogue…':<>
-        <b>{overview.delete.toLocaleString()}</b> to delete from Photos · <b>{overview.favourite.toLocaleString()}</b> favourite{overview.favourite===1?'':'s'} to set
-        {overview.synced.last&&<> · last synced {when(overview.synced.last)}</>}
-      </>}</p>
+      <p className="ysum">{headline}</p>
       <p className="hint">What leaves the archive here should leave Photos too, and what is a favourite here should be one there. Cull Sync on the Mac finds each photograph in Photos, shows it to you below, and changes nothing until you apply. Deletions go to Recently Deleted, and Photos asks on the Mac first.</p>
     </section>
 
@@ -300,7 +324,8 @@ export function Photos(){
         :agent.lastSeen?<>Cull Sync is not answering. Last seen {ago(agent.lastSeen,status.now)}. Is the Mac awake?</>
         :status.settling?<>Waiting for Cull Sync to call in…</>
         :<>Cull Sync has not connected yet.</>}</span>
-      <button type="button" className={`btn small${agent.online&&agent.outdated?' primary':''}`} onClick={openSetup}>{agent.online&&agent.outdated?'Update Cull Sync':'Set up Cull Sync'}</button>
+      {agent.online&&agent.outdated?<button type="button" className="btn small primary" onClick={openSetup}>Update Cull Sync</button>
+        :(!status.configured||!agent.online)&&!status.settling&&<button type="button" className="btn small" onClick={openSetup}>Set up Cull Sync</button>}
     </div>}
     {setup&&<CullSyncSetup intro={setup.intro} auto={setup.auto} agent={agent} onClose={closeSetup}/>}
     {warning&&<p className="note warn" role="alert">{warning}</p>}

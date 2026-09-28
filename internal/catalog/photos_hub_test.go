@@ -576,3 +576,75 @@ func TestPhotosAgentVersionMatchesTheHelper(t *testing.T) {
 		t.Error("the current helper is offered an update")
 	}
 }
+
+// Photos is checked by itself while the helper is online: at once when there
+// is no answer yet, then again once the last one is photosAutoCheckEvery old.
+// A plan younger than that is left for the reviewer, and a job the helper is
+// working on is never replaced.
+func TestPhotosAutoCheck(t *testing.T) {
+	h, _, clock := photosHubFixture(t)
+	ctx := context.Background()
+	beat := func() { h.Seen(PhotosHeartbeat{Version: PhotosAgentVersion, Access: "authorized"}) }
+	auto := func(want bool, why string) {
+		t.Helper()
+		started, err := h.AutoCheck(ctx)
+		if err != nil || started != want {
+			t.Fatalf("%s: started %v (%v), want %v", why, started, err, want)
+		}
+	}
+
+	auto(false, "no helper has called in")
+	beat()
+	auto(true, "a helper online and no answer yet")
+	first := h.Status().Job
+	if first == nil || first.State != "queued_check" {
+		t.Fatalf("job %+v", first)
+	}
+	auto(false, "a check already waiting for the helper")
+	claimNow(t, h)
+	beat()
+	auto(false, "a check under way")
+	if h.Status().Job.ID != first.ID {
+		t.Fatal("the check under way was replaced")
+	}
+
+	// A fresh plan is the reviewer's to look at.
+	h.Cancel(first.ID)
+	view := checkAndMatch(t, h)
+	clock.advance(photosAutoCheckEvery - time.Minute)
+	beat()
+	auto(false, "a plan made minutes ago")
+	clock.advance(time.Minute)
+	beat()
+	auto(true, "a plan as old as the interval")
+	if job := h.Status().Job; job.ID == view.ID || job.State != "queued_check" {
+		t.Fatalf("the old plan was not checked again: %+v", job)
+	}
+
+	// Changing Photos is never interrupted, however long it takes.
+	h.Cancel(h.Status().Job.ID)
+	view = checkAndMatch(t, h)
+	if _, err := h.Apply(ctx, view.ID, []string{rowByName(view.Delete, "IMG_6748.PNG").ID}, nil); err != nil {
+		t.Fatal(err)
+	}
+	claimNow(t, h)
+	for range 4 {
+		clock.advance(photosApplySilence - time.Second)
+		h.Seen(PhotosHeartbeat{Version: PhotosAgentVersion, Access: "authorized", Job: view.ID, Stage: "confirm"})
+		auto(false, "an apply waiting on the Mac")
+	}
+	if job := h.Status().Job; job.ID != view.ID || job.State != "applying" {
+		t.Fatalf("the apply was disturbed: %+v", job)
+	}
+
+	// Once a job ends, the next check waits out the interval too.
+	h.Applied(ctx, view.ID, PhotosAppliedReport{Deletes: []PhotosAppliedItem{{ID: rowByName(view.Delete, "IMG_6748.PNG").ID, Done: true}}})
+	if job := h.Status().Job; job.State != "done" {
+		t.Fatalf("not done: %+v", job)
+	}
+	auto(false, "a sync that has just ended")
+	clock.advance(photosAutoCheckEvery)
+	auto(false, "the helper has since gone quiet")
+	beat()
+	auto(true, "the helper is back and the answer is old")
+}

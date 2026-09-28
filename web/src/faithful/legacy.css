@@ -162,9 +162,9 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   position: sticky; top: 0; z-index: 30;
   /* Three columns so the search sits in the middle of the bar whatever the
      two sides hold: the menu, logo and streak on the left, the page's own
-     actions on the right. The left never gives up room it needs, so a long
-     streak pushes the search along rather than sitting under it. */
-  display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, 720px) 1fr; align-items: center; column-gap: 12px;
+     actions on the right. Neither side gives up room it needs, so a long
+     streak or a page's note narrows the search rather than sitting under it. */
+  display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, 720px) minmax(max-content, 1fr); align-items: center; column-gap: 12px;
   height: var(--head-h); padding: 0 16px 0 8px;
   background: var(--shell);
 }

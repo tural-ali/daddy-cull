@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -53,6 +54,13 @@ const (
 	// Photos can change underneath an old check, so one this old must be run
 	// again before it can be applied.
 	photosPlanLifetime = time.Hour
+	// Photos is checked again by itself this often while the helper is
+	// online, so what the page shows is never older than this and a plan is
+	// renewed before it grows too old to apply. A plan is only replaced once
+	// it is this old, so a reviewer part way through one is left alone.
+	photosAutoCheckEvery = 30 * time.Minute
+	// How often the server looks whether a check is due.
+	photosAutoCheckLook = time.Minute
 	// Thumbnails are freed this long after a job ends.
 	photosThumbLifetime = time.Hour
 	// A 240 pixel JPEG is 10 to 40 KB; anything much larger is not one.
@@ -286,6 +294,12 @@ func newPhotosJobID() string {
 // helper. A plan nobody applied is replaced; a job still waiting on the helper
 // or changing Photos is not.
 func (h *PhotosHub) StartCheck(ctx context.Context) (PhotosJobView, error) {
+	return h.startCheck(ctx, nil)
+}
+
+// startCheck is StartCheck, going ahead only while due, if given, still holds
+// once the catalogue has been read.
+func (h *PhotosHub) startCheck(ctx context.Context, due func() bool) (PhotosJobView, error) {
 	if !h.Enabled() {
 		return PhotosJobView{}, ErrPhotosDisabled
 	}
@@ -303,6 +317,9 @@ func (h *PhotosHub) StartCheck(ctx context.Context) (PhotosJobView, error) {
 	h.tickLocked()
 	if h.job != nil && !h.job.terminal() && h.job.state != "planned" {
 		return h.viewLocked(h.job), ErrPhotosBusy
+	}
+	if due != nil && !due() {
+		return PhotosJobView{}, errPhotosNotDue
 	}
 	now := h.now()
 	j := &photosJob{
@@ -322,6 +339,59 @@ func (h *PhotosHub) StartCheck(ctx context.Context) (PhotosJobView, error) {
 		h.bumpLocked()
 	}
 	return h.viewLocked(j), nil
+}
+
+// errPhotosNotDue says an automatic check found it was no longer needed.
+var errPhotosNotDue = errors.New("no check is due")
+
+// KeepChecking checks Photos by itself whenever a check is due, until ctx
+// ends, so the page always has a recent answer and nobody has to ask for it.
+func (h *PhotosHub) KeepChecking(ctx context.Context) {
+	look := time.NewTicker(photosAutoCheckLook)
+	defer look.Stop()
+	for {
+		if _, err := h.AutoCheck(ctx); err != nil && ctx.Err() == nil {
+			log.Printf("Apple Photos check: %v", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-look.C:
+		}
+	}
+}
+
+// AutoCheck starts a check if one is due and says whether it did. One is due
+// while the helper is online and there is no job, or the last one ended, or
+// its plan was made, photosAutoCheckEvery ago. A job waiting on the helper or
+// changing Photos is never touched.
+func (h *PhotosHub) AutoCheck(ctx context.Context) (bool, error) {
+	due := func() bool {
+		if !h.enabled || h.agent.at.IsZero() || h.now().Sub(h.agent.at) > photosOnlineWindow {
+			return false
+		}
+		switch j := h.job; {
+		case j == nil:
+			return true
+		case j.state == "planned":
+			return h.now().Sub(j.created) >= photosAutoCheckEvery
+		case j.terminal():
+			return h.now().Sub(j.finished) >= photosAutoCheckEvery
+		}
+		return false
+	}
+	h.mu.Lock()
+	h.tickLocked()
+	now := due()
+	h.mu.Unlock()
+	if !now {
+		return false, nil
+	}
+	_, err := h.startCheck(ctx, due)
+	if errors.Is(err, errPhotosNotDue) || errors.Is(err, ErrPhotosBusy) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 func (h *PhotosHub) busyView() (PhotosJobView, bool) {

@@ -28,6 +28,8 @@ const summary=()=>stage?{id:'J1',state:'checking',rev:1,stage,done:40,total:120}
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:4,synthetic:false,snapshotAt:'2026-09-06 01:49:00',candidates:0,calendarDays:1,reviewedDays:0,decisions:0,favourites:0,evidence:0,fullHashes:0,marked:0}});
     if(url.pathname==='/api/photos')return route.fulfill({json:{configured:true,now,agent,job:summary()}});
     if(url.pathname==='/api/photos/overview')return route.fulfill({json:{delete:4,favourite:0,held:0,undated:0,restored:[],synced:{deleted:0,favourited:0,last:''}}});
+    // Opening the page checks Photos; the answer here is the same plan.
+    if(url.pathname==='/api/photos/check')return route.fulfill({json:{...summary(),created:now,updated:now,toCheck:4,delete:[],favourite:[],missing,held:[],undated:0,selected:[],skipped:0}});
     if(url.pathname==='/api/photos/jobs/J1')return route.fulfill({json:{...summary(),created:now,updated:now,toCheck:4,delete:[],favourite:[],missing:stage?[]:missing,held:[],undated:0,selected:[],skipped:0}});
     return route.fulfill({status:404,json:{error:'not mocked'}});
   });
@@ -68,8 +70,9 @@ const summary=()=>stage?{id:'J1',state:'checking',rev:1,stage,done:40,total:120}
   if(shots)await helper.screenshot({path:`${shots}/photos-outdated.png`});
   agent={...agent,version:'1.1',outdated:false,latest:undefined};
   await page.reload();
-  await helper.getByRole('button',{name:'Set up Cull Sync'}).waitFor();
+  await page.locator('details[data-why]').first().waitFor();
   assert.doesNotMatch(await helper.innerText(),/is ready/);
+  assert.equal(await helper.getByRole('button').count(),0,'a current Cull Sync needs no setting up');
 
   // Nothing pushes the page sideways on a phone.
   await page.setViewportSize({width:375,height:760});
