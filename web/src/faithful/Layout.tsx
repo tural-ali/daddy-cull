@@ -21,7 +21,7 @@ const sections:{title?:string;items:Item[]}[]=[
     {href:'/',route:'today',label:'Today',icon:'photo'},
     {href:'/year',route:'year',label:'Year',icon:'calendar_month'},
   ]},
-  {title:'Clean up',items:[
+  {title:'Collections',items:[
     {href:'/duplicates',route:'dupes',label:'Duplicates',icon:'filter_none'},
     {href:'/shadows',route:'shadows',label:'Shadowed',icon:'layers'},
     {href:'/screenshots',route:'shots',label:'Screenshots',icon:'screenshot_region'},
