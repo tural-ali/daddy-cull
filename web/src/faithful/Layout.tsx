@@ -10,6 +10,7 @@ import {NotificationBell} from './Notifications';
 import {DateCalendar,DatePill,PageDateProvider,type PageDate} from './DatePicker';
 import {GridZoom} from './gridZoom';
 import {FilterButton,FilterMenu,FilterPills,PageFiltersProvider,matchFilters,unusualSort,type PageFilters,type Suggestion} from './SearchFilters';
+import {Kbd,Tips,tipProps,useShortcut} from './keys';
 
 export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'log'|'bin'|'settings';
 type Item={href:string;route:LegacyRoute;label:string;icon:IconName};
@@ -56,6 +57,8 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
   const filterButton=useRef<HTMLButtonElement>(null);
   const close=useCallback(()=>setOpen(null),[]);
   const suggestions=filters?matchFilters(filters,value):[];
+  // / goes to the search, as in Google Photos; Esc in an empty field leaves it.
+  useShortcut('/',()=>{input.current?.focus();input.current?.select()});
   function pick(suggestion:Suggestion){
     if(suggestion.kind==='filter')filters?.toggle(suggestion.option.id);
     else filters?.sort?.set(suggestion.option.id);
@@ -78,6 +81,8 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
       setActive(current=>(current+by+suggestions.length)%suggestions.length);
     }else if(event.key==='Escape'&&value){
       setValue('');setActive(0);
+    }else if(event.key==='Escape'){
+      input.current?.blur();
     }else if(event.key==='Backspace'&&!value&&filters){
       // As in a field of chips, Backspace in an empty field takes the last
       // pill off: the order, which sits last, then the filters.
@@ -100,6 +105,7 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
         aria-label={filters?'Filter, or go to a date':'Go to a date'} aria-invalid={problem?true:undefined} aria-describedby={problem?'search-problem':undefined}
         placeholder={filters?(on?'Add a filter or date':'Filter, or go to another date'):date?'Go to another date':'Go to a date, like 14 Aug 2019'} autoComplete="off" enterKeyHint="go"
         onChange={event=>{setValue(event.target.value);setProblem('');setActive(0)}} onKeyDown={keys}/>
+      {!value&&<span className="searchkey"><Kbd keys="/"/></span>}
       {filters&&<FilterButton filters={filters} button={filterButton} open={open==='filters'} onToggle={()=>setOpen(current=>current==='filters'?null:'filters')}/>}
       {problem&&<p id="search-problem" className="searchproblem" role="alert">{problem}</p>}
       {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role -- the combobox's listbox, see the options below */}
@@ -160,7 +166,7 @@ export function Layout({route,visit,binFiles,reviewed,streak,notifications,onNot
   return <div className={`shell${rail?' side-hidden':''}`}>
     {selection?<SelectionBar selection={selection}/>:<header className="gbar">
       <div className="gbarstart">
-        <a className="brand" href="/" title="Today"><Logo/><LogoMark className="brandmark"/></a>
+        <a className="brand" href="/" {...tipProps('Today')}><Logo/><LogoMark className="brandmark"/></a>
         {streak&&<div className="streakwrap">
           <StreakPill streak={streak} pill={pill} open={calendarOpen} bump={bump} onToggle={()=>setCalendarOpen(open=>!open)}/>
           {calendarOpen&&<StreakCalendar streak={streak} anchor={pill} onClose={closeCalendar}/>}
@@ -178,7 +184,7 @@ export function Layout({route,visit,binFiles,reviewed,streak,notifications,onNot
           {section.title&&<h2 className="sidetitle">{section.title}</h2>}
           {section.items.map(item=>{
             const on=route===item.route;
-            return <a key={item.route} href={item.href} className={on?'on':undefined} aria-current={on?'page':undefined} title={rail?item.label:undefined}>
+            return <a key={item.route} href={item.href} className={on?'on':undefined} aria-current={on?'page':undefined} {...(rail?tipProps(item.label):{})}>
               <Icon name={item.icon} filled={on}/><span className="sidelabel">{item.label}</span>
               {item.route==='bin'&&binFiles>0&&<span className="count" aria-label={`${binFiles.toLocaleString()} file${binFiles===1?'':'s'}`}>{binFiles.toLocaleString()}</span>}
             </a>;
@@ -192,12 +198,13 @@ export function Layout({route,visit,binFiles,reviewed,streak,notifications,onNot
         <span className="sideprogressfoot"><span className="sideprogressnote">{reviewed.done.toLocaleString()} of {reviewed.total.toLocaleString()} dates</span></span>
       </a>}
       <nav className="sidefoot" aria-label="Settings">
-        <a href="/settings" className={route==='settings'?'on':undefined} aria-current={route==='settings'?'page':undefined} title={rail?'Settings':undefined}>
+        <a href="/settings" className={route==='settings'?'on':undefined} aria-current={route==='settings'?'page':undefined} {...(rail?tipProps('Settings'):{})}>
           <Icon name="settings" filled={route==='settings'}/><span className="sidelabel">Settings</span>
         </a>
       </nav>
     </aside>
     <GridZoom enabled={gridRoutes.has(route)}/>
+    <Tips/>
     {intro&&streak&&<StreakIntro streak={streak} target={pill} onDone={()=>{setIntro(false);setBump(true)}}/>}
     <div className="panel">
       {flash&&<p className="flash" role="status">{flash}</p>}

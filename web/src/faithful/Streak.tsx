@@ -2,6 +2,7 @@ import {useEffect,useLayoutEffect,useRef,useState,type RefObject} from 'react';
 import {Icon} from '../Icon';
 import {Confetti,stillMotion,useCountUp} from './Celebration';
 import {leadDays,MonthNav,usePopover,weekdays} from './CalendarPopover';
+import {tipProps,useShortcut} from './keys';
 
 export type StreakState={days:number;today:boolean};
 type StreakCalendarData={streak:number;reviewedToday:boolean;best:number;days:string[]};
@@ -36,7 +37,8 @@ export function StreakPill({streak,pill,open,bump,onToggle}:{streak:StreakState;
   const label=streak.today?`${streak.days} ${unit(streak.days)} in a row, today included`
     :streak.days>0?`${streak.days} ${unit(streak.days)} in a row. Review something today to keep it going`
     :'No streak yet. Review something today to start one';
-  return <button ref={pill} type="button" className={`streakpill${streak.today?' lit':''}${bump?' bump':''}`} aria-label={label} title={label} aria-expanded={open} aria-haspopup="dialog" onClick={onToggle}>
+  useShortcut('S',onToggle);
+  return <button ref={pill} type="button" className={`streakpill${streak.today?' lit':''}${bump?' bump':''}`} aria-label={label} {...tipProps(label,'S')} aria-expanded={open} aria-haspopup="dialog" onClick={onToggle}>
     <Icon name="local_fire_department" filled={streak.today}/><b>{streak.days.toLocaleString()}</b>
   </button>;
 }
@@ -89,7 +91,7 @@ export function StreakCalendar({streak,onClose,anchor}:{streak:StreakState;onClo
   const atEnd=shown.year===now.getFullYear()&&shown.month===now.getMonth();
   const step=(by:number)=>setShown(current=>{const index=current.year*12+current.month+by;return {year:Math.floor(index/12),month:index%12}});
   const cells=monthCells(shown.year,shown.month,days,today);
-  const monthName=new Date(shown.year,shown.month,1).toLocaleDateString(undefined,{month:'long',year:'numeric'});
+  const monthName=new Date(shown.year,shown.month,1).toLocaleDateString('en-GB',{month:'long',year:'numeric'});
   const reviewedThisMonth=cells.filter(cell=>cell?.on).length;
   const current=data?.streak??streak.days;
   const lit=data?data.reviewedToday:streak.today;

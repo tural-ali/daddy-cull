@@ -35,13 +35,11 @@ export function Upgrades({initial}:{initial:UpgradePage}){
     }catch(reason){setError((reason as Error).message)}finally{setBusy(null)}
   }
   return <>
-    <div className="summary">
-      <div className="stat"><b>{page.total.toLocaleString()}</b><span>photos with a better copy</span></div>
-      <div className="stat"><b>{page.pending.toLocaleString()}</b><span>still to decide</span></div>
-      <div className="stat"><b>{page.accepted.toLocaleString()}</b><span>added so far</span></div>
-      <div className="stat"><b>{bytes(page.bytes)}</b><span>added to the archive</span></div>
-    </div>
-    <p className="meta">Each pair is the same photograph: the archive copy on the left and Google’s higher-resolution copy on the right. Adding creates <strong>NAME (hi-res).ext</strong> beside the original. It never replaces or deletes either source.</p>
+    <section className="dupehead">
+      <h1>Upgrades</h1>
+      <p className="ysum"><b>{page.total.toLocaleString()}</b> photos with a better copy · <b>{page.pending.toLocaleString()}</b> still to decide · <b>{page.accepted.toLocaleString()}</b> added so far, <b>{bytes(page.bytes)}</b></p>
+      <p className="hint">Each pair is the same photograph: the archive copy on the left and Google’s higher-resolution copy on the right. Adding creates <strong>NAME (hi-res).ext</strong> beside the original. It never replaces or deletes either source.</p>
+    </section>
     {message&&<p className="flash" role="status">{message}</p>}
     {error&&<p className="note warn" role="alert">{error}</p>}
     {page.groups.length===0&&<p className="empty">No confirmed upgrades are indexed.</p>}

@@ -1,4 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
+import {Kbd,keyProps} from './keys';
+import {navigate} from './router';
 
 export type Tally={label:string;total:number;removed:number;bytes:number;favourites:number};
 
@@ -98,10 +100,13 @@ export function Celebration({tally,nextHref,nextLabel,onClose}:{tally:Tally;next
   const favourites=useCountUp(tally.favourites,animate);
   const freed=useCountUp(tally.bytes,animate);
   useEffect(()=>{
-    const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();onClose()}};
+    const key=(event:KeyboardEvent)=>{
+      if(event.key==='Escape'){event.preventDefault();onClose()}
+      else if(event.key==='Enter'&&!event.repeat){event.preventDefault();navigate(nextHref)}
+    };
     addEventListener('keydown',key);
     return()=>removeEventListener('keydown',key);
-  },[onClose]);
+  },[onClose,nextHref]);
   const size=freed<1024**2?`${(freed/1024).toFixed(0)} KB`:freed<1024**3?`${(freed/1024**2).toFixed(1)} MB`:`${(freed/1024**3).toFixed(2)} GB`;
   // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- a click on the backdrop is the mouse's Esc
   return <div className="cheer" role="dialog" aria-modal="true" aria-label={`${tally.label} reviewed`} onClick={onClose}>
@@ -116,8 +121,8 @@ export function Celebration({tally,nextHref,nextLabel,onClose}:{tally:Tally;next
         <div><dt>Favourited</dt><dd>{favourites.toLocaleString()}</dd></div>
       </dl>
       <p className="cheeracts">
-        <button type="button" className="btn" onClick={onClose}>Stay here</button>
-        <a className="btn primary" href={nextHref}>{nextLabel} →</a>
+        <button type="button" className="btn" {...keyProps('Escape')} onClick={onClose}>Stay here<Kbd keys="Escape"/></button>
+        <a className="btn primary" href={nextHref} {...keyProps('Enter')}>{nextLabel} →<Kbd keys="Enter"/></a>
       </p>
     </div>
   </div>;

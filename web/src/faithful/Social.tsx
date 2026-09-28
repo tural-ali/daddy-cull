@@ -143,9 +143,9 @@ export function Social({page,band:initialBand}:{page:SocialPage;band:string}){
   const allShown=items.length>0&&items.every(item=>selected.has(item.id));
   const viewing=photo.open===null?null:Number(photo.open);
   useSelectionBar({count:selected.size,busy,clear:picks.clear,actions:[
-    {label:allShown?'Deselect all':`Select all ${items.length} shown`,icon:'select_all',onClick:()=>allShown?picks.clear():picks.all()},
-    {label:'Keep',icon:'check',onClick:()=>void apply('keep')},
-    {label:'Move to Bin',icon:'delete',onClick:()=>void apply('cull'),danger:true},
+    {label:allShown?'Deselect all':`Select all ${items.length} shown`,icon:'select_all',keys:'Mod+A',onClick:()=>allShown?picks.clear():picks.all()},
+    {label:'Keep',icon:'check',keys:'K',onClick:()=>void apply('keep')},
+    {label:'Move to Bin',icon:'delete',keys:'X',onClick:()=>void apply('cull'),danger:true},
   ]});
   return <>
     <section className="dupehead">

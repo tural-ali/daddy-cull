@@ -106,7 +106,7 @@ const fixture=()=>[
   assert.match(await empty.innerText(),/All 3 files in the Bin/);
   await empty.getByRole('button',{name:'Empty the Bin'}).click();
   // The orb shows in the button that was pressed, even when the answer is instant.
-  await page.locator('.headrow .textbtn .busy').waitFor();
+  await page.locator('.pageacts button .busy').waitFor();
   await page.getByText(/The Bin was emptied: 3 files permanently deleted/).waitFor();
   assert.deepEqual(posts[2],{path:'/api/trash/empty',body:{confirmation:'DELETE 3'}});
   await page.getByText(/The Bin is empty/).waitFor();

@@ -201,13 +201,13 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
   const waiting=chosen.filter(item=>item.status!=='keep'),kept=chosen.filter(item=>item.status==='keep');
   const dated=kept.filter(item=>item.day);
   const actions:SelectionAction[]=[
-    {label:allShown?'Deselect all':`Select all ${items.length} shown`,icon:'select_all',onClick:()=>allShown?picks.clear():picks.all()},
-    ...(waiting.length>0?[{label:waiting.length===chosen.length?'Keep':`Keep the ${waiting.length} not reviewed`,icon:'check',onClick:()=>void decide(waiting,'keep')}] as SelectionAction[]:[]),
+    {label:allShown?'Deselect all':`Select all ${items.length} shown`,icon:'select_all',keys:'Mod+A',onClick:()=>allShown?picks.clear():picks.all()},
+    ...(waiting.length>0?[{label:waiting.length===chosen.length?'Keep':`Keep the ${waiting.length} not reviewed`,icon:'check',keys:'K',onClick:()=>void decide(waiting,'keep')}] as SelectionAction[]:[]),
     ...(kept.length>0?[
-      {label:kept.length===chosen.length?'Mark not reviewed':`Mark the ${kept.length} kept not reviewed`,icon:'undo',onClick:()=>void decide(kept,'unreviewed')},
-      {label:dated.length===chosen.length?'Copy into the archive':`Copy the ${dated.length} kept and dated into the archive`,icon:'drive_file_move',disabled:dated.length===0,onClick:()=>void run(dated,'keep')},
+      {label:kept.length===chosen.length?'Mark not reviewed':`Mark the ${kept.length} kept not reviewed`,icon:'undo',keys:'U',onClick:()=>void decide(kept,'unreviewed')},
+      {label:dated.length===chosen.length?'Copy into the archive':`Copy the ${dated.length} kept and dated into the archive`,icon:'drive_file_move',keys:'C',disabled:dated.length===0,onClick:()=>void run(dated,'keep')},
     ] as SelectionAction[]:[]),
-    {label:'Move to Bin',icon:'delete',danger:true,onClick:()=>void run(chosen,'remove')},
+    {label:'Move to Bin',icon:'delete',keys:'X',danger:true,onClick:()=>void run(chosen,'remove')},
   ];
   useSelectionBar({count:picks.picked.size,busy,clear:picks.clear,actions});
   const viewing=photo.open===null?null:Number(photo.open);

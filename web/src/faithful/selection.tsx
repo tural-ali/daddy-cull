@@ -1,13 +1,14 @@
 import {Children,cloneElement,createContext,isValidElement,useContext,useEffect,useLayoutEffect,useRef,useState,type ReactElement,type ReactNode} from 'react';
 import {Justified,shapeProps,type Box} from './justified';
 import {Icon,type IconName} from '../Icon';
+import {covered,matches,tipProps,typing} from './keys';
 
 // Multi-select as in Google Photos. While anything is selected the top bar
 // turns into the selection bar: a close button and the count on the left, and
 // the page's actions as icons on the right, where they stay however far the
 // grid is scrolled. Each page owns its selection; the frame only draws it.
 
-export type SelectionAction={label:string;icon:IconName;onClick:()=>void;disabled?:boolean;danger?:boolean};
+export type SelectionAction={label:string;icon:IconName;keys:string;onClick:()=>void;disabled?:boolean;danger?:boolean};
 export type Selection={count:number;clear:()=>void;actions:SelectionAction[];busy?:boolean};
 
 const SelectionContext=createContext<(selection:Selection|null)=>void>(()=>{});
@@ -20,7 +21,7 @@ export function useSelectionBar(selection:Selection|null){
   const latest=useRef(selection);
   latest.current=selection;
   const signature=selection&&selection.count>0
-    ?`${selection.count}|${selection.busy?1:0}|${selection.actions.map(action=>`${action.label}:${action.disabled?0:1}`).join(',')}`
+    ?`${selection.count}|${selection.busy?1:0}|${selection.actions.map(action=>`${action.label}:${action.keys}:${action.disabled?0:1}`).join(',')}`
     :'';
   useLayoutEffect(()=>{
     const current=latest.current;
@@ -35,17 +36,26 @@ export function useSelectionBar(selection:Selection|null){
 }
 
 export function SelectionBar({selection}:{selection:Selection}){
+  // Esc clears the selection and each action has its own key, all left
+  // alone while something is open over the page or a field has the keys.
   useEffect(()=>{
-    const close=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!(event.target instanceof HTMLInputElement))selection.clear()};
-    window.addEventListener('keydown',close);
-    return()=>window.removeEventListener('keydown',close);
+    const key=(event:KeyboardEvent)=>{
+      if(event.defaultPrevented||event.repeat||typing(event.target)||covered())return;
+      if(event.key==='Escape'){selection.clear();return}
+      const action=selection.actions.find(one=>matches(event,one.keys));
+      if(!action)return;
+      event.preventDefault();
+      if(!selection.busy&&!action.disabled)action.onClick();
+    };
+    window.addEventListener('keydown',key);
+    return()=>window.removeEventListener('keydown',key);
   },[selection]);
   return <header className="gbar selecting" role="toolbar" aria-label="Selection">
-    <button type="button" className="iconbtn" aria-label="Clear the selection" title="Clear the selection" onClick={selection.clear}><Icon name="close"/></button>
+    <button type="button" className="iconbtn" aria-label="Clear the selection" {...tipProps('Clear the selection','Escape')} onClick={selection.clear}><Icon name="close"/></button>
     <span className="selcount" role="status">{selection.count.toLocaleString()} selected</span>
     <div className="gbaracts">
       {selection.actions.map(action=><button key={action.label} type="button" className={`iconbtn${action.danger?' danger':''}`}
-        aria-label={action.label} title={action.label} disabled={selection.busy||action.disabled} onClick={action.onClick}><Icon name={action.icon}/></button>)}
+        aria-label={action.label} {...tipProps(action.label,action.keys)} disabled={selection.busy||action.disabled} onClick={action.onClick}><Icon name={action.icon}/></button>)}
     </div>
   </header>;
 }

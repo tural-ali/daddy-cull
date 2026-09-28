@@ -7,6 +7,8 @@ import {dayOfPath} from './goto';
 import {Busy} from '../Busy';
 import {Pick,RowTile,Rows,useSelectionBar,usePicks} from './selection';
 import {usePhotoURL} from './photoURL';
+import {usePageActions} from './pageActions';
+import {Kbd,keyProps,useDialogKeys} from './keys';
 
 /** One card in the Bin, whichever tool put the file there. */
 export type TrashItem={key:string;group:string;source:'marked'|'bin'|'legacy'|'screenshot';name:string;original:string;kind:string;size:number;sidecars:number;removedAt:string;preview?:string;disk?:string};
@@ -79,6 +81,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   const [failures,setFailures]=useState<Result['failures']>([]);
   const [pending,setPending]=useState<Pending|null>(null);
   const dialog=useRef<HTMLDialogElement>(null);
+  useDialogKeys(dialog);
 
   async function refresh(){
     try{
@@ -182,10 +185,14 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   }
 
   useSelectionBar({count:chosen.length,busy:!!busy,clear:picks.clear,actions:[
-    {label:allSelected?'Deselect all':`Select all ${list.length.toLocaleString()}`,icon:'select_all',onClick:()=>allSelected?picks.clear():picks.all()},
-    {label:'Restore',icon:'restore_from_trash',onClick:()=>restore(chosen.map(item=>item.key),'restore')},
-    {label:mode==='bin'?(grace>0?'Delete':'Delete for good'):'Delete now',icon:'delete_forever',danger:true,onClick:remove},
+    {label:allSelected?'Deselect all':`Select all ${list.length.toLocaleString()}`,icon:'select_all',keys:'Mod+A',onClick:()=>allSelected?picks.clear():picks.all()},
+    {label:'Restore',icon:'restore_from_trash',keys:'R',onClick:()=>restore(chosen.map(item=>item.key),'restore')},
+    {label:mode==='bin'?(grace>0?'Delete':'Delete for good'):'Delete now',icon:'delete_forever',keys:'Delete',danger:true,onClick:remove},
   ]});
+
+  // Emptying the Bin is the page's own action, so it sits in the top bar
+  // with every other page's.
+  usePageActions(mode==='bin'&&list.length>0?{actions:[{label:'Empty Bin',icon:'delete',keys:'Shift+Delete',disabled:!!busy&&doing!=='empty',busy:doing==='empty',onClick:empty}]}:null);
 
   const summary=items===null?<Busy label={mode==='bin'?'Reading the Bin…':'Reading deleted files…'}/>:<><b>{list.length.toLocaleString()}</b> file{list.length===1?'':'s'} · <b>{bytes(totalBytes)}</b>{chosen.length>0&&<span className="dim"> · {bytes(chosenBytes)} selected</span>}</>;
   const hint=mode==='bin'
@@ -196,15 +203,12 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   if(mode==='deleting'&&items!==null&&list.length===0&&!error)return message?<p className="flash" role="status">{message}</p>:null;
   return <>
     <section className={mode==='bin'?'binhead':'binhead deletinghead'}>
-      <div className="headrow">
-        {mode==='bin'?<h1>Bin</h1>:<h2>Deleted, waiting to go</h2>}
-        {mode==='bin'&&list.length>0&&<button type="button" className="textbtn" disabled={!!busy} onClick={empty}>{doing==='empty'?<Busy label={busy} state="working"/>:<><Icon name="delete"/>Empty Bin</>}</button>}
-      </div>
+      {mode==='bin'?<h1>Bin</h1>:<h2>Deleted, waiting to go</h2>}
       <p className="ysum">{summary}</p>
       {hint&&<p className="hint">{hint}</p>}
       {report?.graceError&&<p className="note warn" role="alert">Automatic deletion is paused: {report.graceError} Save a number of days in <a href="/settings#bin">Settings</a> to resume it.</p>}
     </section>
-    {busy&&doing!=='empty'&&doing!=='lightbox'&&<p className="flash" role="status"><Busy label={busy} state="working"/></p>}
+    {busy&&doing!=='lightbox'&&doing!=='empty'&&<p className="flash" role="status"><Busy label={busy} state="working"/></p>}
     {message&&<p className="flash" role="status">{message}</p>}
     {failures.length>0&&<div className="note warn" role="alert"><b>{files(failures.length)} could not be handled and {failures.length===1?'is':'are'} still {mode==='bin'?'in the Bin':'waiting'}:</b><ul className="plain failgroups">{failureGroups(failures).map(group=><li key={group.error}>
       <span>{group.error.charAt(0).toUpperCase()+group.error.slice(1)}.</span>
@@ -234,17 +238,19 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
       const item=list.find(other=>other.key===current.key);
       if(!item)return null;
       const batch=list.filter(other=>other.group===item.group).length;
-      if(item.source==='bin'||batch===1)return <button type="button" className="rvbtn" disabled={!!busy} onClick={()=>restoreFile(item)}>{face('lightbox','Restore this file')}</button>;
-      return <button type="button" className="rvbtn" disabled={!!busy} onClick={()=>restore([current.key],'lightbox')}>{face('lightbox',`Restore with its batch (${batch} files)`)}</button>;
+      if(item.source==='bin'||batch===1)return <button type="button" className="rvbtn" disabled={!!busy} {...keyProps('R')} onClick={()=>restoreFile(item)}>{face('lightbox','Restore this file')}<Kbd keys="R"/></button>;
+      return <button type="button" className="rvbtn" disabled={!!busy} {...keyProps('R')} onClick={()=>restore([current.key],'lightbox')}>{face('lightbox',`Restore with its batch (${batch} files)`)}<Kbd keys="R"/></button>;
     }}/>}
+    {/* The close event arrives a moment after Esc, so a question asked again
+        at once is still open when it lands and is left alone. */}
     {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- a click on the backdrop is the mouse's Esc */}
-    <dialog ref={dialog} className="confirm" aria-labelledby={`confirm-title-${mode}`} onClose={()=>setPending(null)} onClick={event=>{if(event.target===event.currentTarget)setPending(null)}}>
+    <dialog ref={dialog} className="confirm" aria-labelledby={`confirm-title-${mode}`} onClose={event=>{if(!event.currentTarget.open)setPending(null)}} onClick={event=>{if(event.target===event.currentTarget)setPending(null)}}>
       {pending&&<form method="dialog" onSubmit={event=>{event.preventDefault();const run=pending.run;setPending(null);void run()}}>
         <h2 id={`confirm-title-${mode}`}>{pending.title}</h2>
         <p>{pending.body}</p>
         <div className="confirmacts">
-          <button type="button" className="btn" autoFocus onClick={()=>setPending(null)}>Cancel</button>
-          <button type="submit" className="btn danger">{pending.confirm}</button>
+          <button type="button" className="btn" autoFocus {...keyProps('Escape')} onClick={()=>setPending(null)}>Cancel<Kbd keys="Escape"/></button>
+          <button type="submit" className="btn danger" {...keyProps('Enter')}>{pending.confirm}<Kbd keys="Enter"/></button>
         </div>
       </form>}
     </dialog>

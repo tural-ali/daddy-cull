@@ -2,6 +2,7 @@ import {useCallback,useEffect,useRef,useState,type RefObject} from 'react';
 import {Icon} from '../Icon';
 import {usePopover} from './CalendarPopover';
 import {CATALOGUE_CHANGED} from './catalogueWatch';
+import {tipProps,useShortcut} from './keys';
 
 // What reached the catalogue with nobody on a page to see it: files from
 // iCloud landing on their dates at night, and photos deleted on a phone being
@@ -43,8 +44,9 @@ export function NotificationBell({unread,onRead}:{unread:number;onRead:()=>void}
   const button=useRef<HTMLButtonElement>(null);
   const close=useCallback(()=>setOpen(false),[]);
   const label=unread>0?`Notifications, ${unread.toLocaleString()} new`:'Notifications';
+  useShortcut('N',()=>setOpen(current=>!current));
   return <div className="bellwrap">
-    <button ref={button} type="button" className={`iconbtn bell${open?' on':''}`} aria-label={label} title="Notifications" aria-expanded={open} aria-haspopup="dialog" onClick={()=>setOpen(current=>!current)}>
+    <button ref={button} type="button" className={`iconbtn bell${open?' on':''}`} aria-label={label} {...tipProps('Notifications','N')} aria-expanded={open} aria-haspopup="dialog" onClick={()=>setOpen(current=>!current)}>
       <Icon name="notifications" filled={open}/>
       {unread>0&&<span className="bellcount" aria-hidden="true">{unread>9?'9+':unread}</span>}
     </button>

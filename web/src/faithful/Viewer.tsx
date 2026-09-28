@@ -4,6 +4,7 @@ import {Icon,type IconName} from '../Icon';
 import {binChanged,type Asset,type Status} from '../api';
 import {tracked} from '../saving';
 import {undoKeys,type HistoryEntry} from './history';
+import {Kbd,tipProps} from './keys';
 
 function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
 function preview(asset:Asset){return `/api/media/${asset.id}/preview?size=large`}
@@ -79,9 +80,9 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   const capture=current?.capturedAt?new Date(current.capturedAt*1000):null;
   const name=current?.path.split('/').pop()??'';
   const folder=current?.path.split('/').slice(0,-1).join('/')??'';
-  const date=capture?.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'})??'Date unknown';
-  const weekday=capture?.toLocaleDateString(undefined,{weekday:'short'})??'';
-  const time=capture?.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})??'';
+  const date=capture?.toLocaleDateString('en-GB',{year:'numeric',month:'long',day:'numeric'})??'Date unknown';
+  const weekday=capture?.toLocaleDateString('en-GB',{weekday:'short'})??'';
+  const time=capture?.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})??'';
   const compareFiles=useMemo(()=>related??[],[related]);
   const media=useRef<HTMLImageElement&HTMLVideoElement>(null);
   const stage=useRef<HTMLDivElement>(null);
@@ -255,45 +256,45 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     <div className="rvbody">
     {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- drops the focus ring a mouse click leaves on a button; keys never need it */}
     <div className="rvtop" onMouseUp={event=>(event.target as HTMLElement).closest('button')?.blur()}>
-      <button type="button" className="rvact rvback" aria-label="Back to the grid" title="Back (Esc)" onClick={leave}><Icon name="arrow_back"/></button>
+      <button type="button" className="rvact rvback" aria-label="Back to the grid" {...tipProps('Back','Escape')} onClick={leave}><Icon name="arrow_back"/></button>
       <div className="rvacts">
-        {raw?<div className="rvpair" role="group" aria-label="Show which file of the pair (R)">
+        {raw?<div className="rvpair" role="group" aria-label="Show which file of the pair" {...tipProps('Photo or RAW','R')}>
           <button type="button" aria-pressed={side==='photo'} title={name} onClick={()=>setSide('photo')}>{format(current)}</button>
           <button type="button" aria-pressed={side==='raw'} title={raw.path.split('/').pop()} onClick={()=>setSide('raw')}>RAW</button>
         </div>:format(current)&&<span className="rvformat" title={name.split('.').pop()?.toUpperCase()}>{format(current)}</span>}
-        {similar>0&&<button type="button" className="rvact cmp" aria-label="Compare similar photos" title="Compare (C)" onClick={()=>void openCompare()}><Icon name="compare"/></button>}
-        <button type="button" className="rvact zoom" aria-label="Zoom" aria-pressed={zoom} title="Zoom (Z)" onClick={()=>setZoom(value=>!value)}><Icon name="zoom_in" filled={zoom}/></button>
-        <button type="button" className="rvact infobtn" aria-label="Info" aria-pressed={info} title="Info (I)" onClick={()=>setInfo(value=>!value)}><Icon name="info" filled={info}/></button>
-        <button type="button" className={`rvact fav${current.favourite?' on':''}`} aria-label={current.favourite?'Favourited':'Favourite'} aria-pressed={current.favourite} title={current.favourite?'Favourited. Press F again to undo':'Favourite (F)'} onClick={favourite}><Icon name="favorite" filled={current.favourite}/></button>
-        <button type="button" className={`rvact keep${current.status==='keep'?' on':''}`} aria-label={current.status==='keep'?'Kept':'Keep'} aria-pressed={current.status==='keep'} title={current.status==='keep'?'Kept. Press K again to undo':'Keep (K)'} onClick={keep}><Icon name="check_circle" filled={current.status==='keep'}/></button>
-        <button type="button" className={`rvact cull${current.status==='cull'?' on':''}`} aria-label={current.status==='cull'?'Undo remove':'Remove'} aria-pressed={current.status==='cull'} title={current.status==='cull'?'Marked for the Bin. Press X again to undo':'Remove (X)'} onClick={remove}><Icon name={current.status==='cull'?'restore_from_trash':'delete'}/></button>
-        <button type="button" className="rvact more" aria-label="More" aria-haspopup="menu" aria-expanded={menu} title="More" onClick={event=>{event.stopPropagation();setMenu(value=>!value)}}><Icon name="more_vert"/></button>
+        {similar>0&&<button type="button" className="rvact cmp" aria-label="Compare similar photos" {...tipProps('Compare','C')} onClick={()=>void openCompare()}><Icon name="compare"/></button>}
+        <button type="button" className="rvact zoom" aria-label="Zoom" aria-pressed={zoom} {...tipProps('Zoom','Z')} onClick={()=>setZoom(value=>!value)}><Icon name="zoom_in" filled={zoom}/></button>
+        <button type="button" className="rvact infobtn" aria-label="Info" aria-pressed={info} {...tipProps('Info','I')} onClick={()=>setInfo(value=>!value)}><Icon name="info" filled={info}/></button>
+        <button type="button" className={`rvact fav${current.favourite?' on':''}`} aria-label={current.favourite?'Favourited':'Favourite'} aria-pressed={current.favourite} {...tipProps(current.favourite?'Favourited, again to undo':'Favourite','F')} onClick={favourite}><Icon name="favorite" filled={current.favourite}/></button>
+        <button type="button" className={`rvact keep${current.status==='keep'?' on':''}`} aria-label={current.status==='keep'?'Kept':'Keep'} aria-pressed={current.status==='keep'} {...tipProps(current.status==='keep'?'Kept, again to undo':'Keep','K')} onClick={keep}><Icon name="check_circle" filled={current.status==='keep'}/></button>
+        <button type="button" className={`rvact cull${current.status==='cull'?' on':''}`} aria-label={current.status==='cull'?'Undo remove':'Remove'} aria-pressed={current.status==='cull'} {...tipProps(current.status==='cull'?'Marked for the Bin, again to undo':'Remove','X')} onClick={remove}><Icon name={current.status==='cull'?'restore_from_trash':'delete'}/></button>
+        <button type="button" className="rvact more" aria-label="More" aria-haspopup="menu" aria-expanded={menu} {...tipProps('More')} onClick={event=>{event.stopPropagation();setMenu(value=>!value)}}><Icon name="more_vert"/></button>
         {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events -- keeps a click inside the menu from closing the viewer; Esc closes the menu */}
         {menu&&<div className="rvmenu" role="menu" tabIndex={-1} onClick={event=>event.stopPropagation()}>
           {dayOf&&<a role="menuitem" href={dayOf(current)} target="_blank" rel="noopener" onClick={()=>setMenu(false)}><Icon name="open_in_new"/>Open this day in a new tab</a>}
           <button type="button" role="menuitem" onClick={()=>{setMenu(false);copyPath()}}><Icon name="content_copy"/>Copy file path</button>
           {raw&&onUnpair&&<button type="button" role="menuitem" onClick={()=>{setMenu(false);setSide('photo');onUnpair(current,raw)}}><Icon name="link_off"/>Unpair the RAW and {format(current)}</button>}
-          <button type="button" role="menuitem" onClick={()=>{setMenu(false);setHelp(true)}}><Icon name="keyboard"/>Keyboard shortcuts<kbd>?</kbd></button>
+          <button type="button" role="menuitem" onClick={()=>{setMenu(false);setHelp(true)}}><Icon name="keyboard"/>Keyboard shortcuts<Kbd keys="?"/></button>
         </div>}
       </div>
     </div>
     {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- clicking the photo hides the controls; H does the same */}
     <div ref={stage} className={`rvstage${zoom?' zoom':''}${current.kind==='video'?' hasvideo':''}`} onClick={event=>{if((event.target as HTMLElement).tagName==='IMG')setBare(value=>!value)}}>
-      <button type="button" className="rvnav prev" aria-label="Previous" onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
+      <button type="button" className="rvnav prev" aria-label="Previous" {...tipProps('Previous','ArrowLeft')} onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
       {broken?.id===onStage.id?<div className="rvgone" role="status"><b>{broken.gone?'This file is no longer in the archive':'This file could not be shown'}</b><span>{broken.gone?'It was moved or removed on the server since the last scan. It leaves review at the next nightly scan.':'Try again in a moment.'}</span></div>
         :current.kind==='video'?<SessionVideo ref={media} key={current.id} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onLoadedData={()=>setShown(current.id)} onError={()=>failed(current.id)}/>:<img ref={media} key={onStage.id} src={preview(onStage)} alt={onStage.path.split('/').pop()} onLoad={()=>setShown(current.id)} onError={()=>failed(onStage.id)}/>}
-      <button type="button" className="rvnav next" aria-label="Next" onClick={event=>{event.stopPropagation();step(1)}}>›</button>
+      <button type="button" className="rvnav next" aria-label="Next" {...tipProps('Next','ArrowRight')} onClick={event=>{event.stopPropagation();step(1)}}>›</button>
     </div>
     <aside className="rvinfo" aria-label="Info">
-      <div className="ihead"><button type="button" className="rvact" aria-label="Close info" title="Close (I)" onClick={()=>setInfo(false)}><Icon name="close"/></button><h3>Info</h3></div>
+      <div className="ihead"><button type="button" className="rvact" aria-label="Close info" {...tipProps('Close','I')} onClick={()=>setInfo(false)}><Icon name="close"/></button><h3>Info</h3></div>
       <h4>Details</h4>
       <div className="irow"><Icon name="calendar_month"/><div><b>{date}</b><span>{weekday}{weekday&&time?', ':''}{time}</span></div></div>
       <div className="irow"><Icon name={mediaIcon}/><div><b>{name}</b><span>{(current.size/1048576).toFixed(1)} MB · {format(current)||current.kind.toUpperCase()}</span></div></div>
       {raw&&<div className="irow"><Icon name="raw_on"/><div><b>{raw.path.split('/').pop()}</b><span>{(raw.size/1048576).toFixed(1)} MB · RAW, kept or removed with this photo</span></div></div>}
       <div className="irow"><Icon name={decision.icon}/><div><b>{decision.text}</b><span>{current.favourite?'Favourite · ':''}<span className="rvpos">{at+1} / {assets.length}</span> in this review</span></div></div>
-      <div className="irow"><Icon name="folder"/><div><b>{folder.split('/').pop()||folder}</b><span className="mono">{current.path}</span></div><button type="button" className="rvact copy" aria-label="Copy file path" title={copied?'Copied':'Copy file path'} onClick={copyPath}><Icon name={copied?'check':'content_copy'}/></button></div>
+      <div className="irow"><Icon name="folder"/><div><b>{folder.split('/').pop()||folder}</b><span className="mono">{current.path}</span></div><button type="button" className="rvact copy" aria-label="Copy file path" {...tipProps(copied?'Copied':'Copy file path')} onClick={copyPath}><Icon name={copied?'check':'content_copy'}/></button></div>
     </aside>
-    {related&&<div className="rvcmp"><div className="ctop"><b>Similar photos</b><span className="cpos">{focus+1} / {related.length}</span><span className="hint">1–9 focus a frame · X marks it · C back</span><button type="button" className="rvx cmpx" aria-label="Close compare" onClick={()=>setRelated(null)}>×</button></div><div className="cgrid">{compareFiles.map((asset,index)=>
+    {related&&<div className="rvcmp"><div className="ctop"><b>Similar photos</b><span className="cpos">{focus+1} / {related.length}</span><span className="hint">1–9 focus a frame · X marks it · C back</span><button type="button" className="rvx cmpx" aria-label="Close compare" {...tipProps('Close','C')} onClick={()=>setRelated(null)}>×</button></div><div className="cgrid">{compareFiles.map((asset,index)=>
       // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- 1 to 9 focus a frame from the keyboard
       <figure className={index===focus?'on':''} key={asset.id} onClick={()=>setFocus(index)}><img src={preview(asset)} alt={asset.path.split('/').pop()}/><span className="pick">{index+1}</span><figcaption>{asset.path.split('/').pop()} · {asset.status}</figcaption></figure>)}</div><div className="cfacts"><div className="verdict tied"><b>Possible copies or companion files</b><ul><li>Inspect before choosing</li><li>No file moves from this screen</li></ul></div></div><div className="cbot"><button type="button" className="rvbtn" onClick={()=>void saveGroup('keep-all')}>Keep all</button><button type="button" className="rvbtn cull" onClick={()=>void saveGroup('keep-focus')}>Keep the focused one, remove the rest</button><button type="button" className="rvbtn cull cmpall" onClick={()=>void saveGroup('cull-all')}>Remove all</button></div></div>}
     {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- a click dismisses the sheet; ? and Esc do the same */}

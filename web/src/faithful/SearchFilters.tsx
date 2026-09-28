@@ -1,6 +1,7 @@
 import {createContext,useContext,useEffect,useLayoutEffect,useRef,type RefObject} from 'react';
 import {Icon,type IconName} from '../Icon';
 import {usePopover} from './CalendarPopover';
+import {tipProps,useShortcut} from './keys';
 
 // A page that can narrow what it shows puts its filters in the search bar,
 // beside its date, the way Google Photos turns a search into chips: each
@@ -77,7 +78,8 @@ export function FilterPills({filters}:{filters:PageFilters}){
 export function FilterButton({filters,button,open,onToggle}:{filters:PageFilters;button:RefObject<HTMLButtonElement|null>;open:boolean;onToggle:()=>void}){
   const on=filters.options.filter(option=>option.on).length;
   const label=on?`Filters, ${on} on`:'Filters';
-  return <button ref={button} type="button" className={`filterbtn${on?' on':''}`} aria-haspopup="dialog" aria-expanded={open} aria-label={label} title="Show only" onClick={onToggle}>
+  useShortcut('Shift+F',onToggle);
+  return <button ref={button} type="button" className={`filterbtn${on?' on':''}`} aria-haspopup="dialog" aria-expanded={open} aria-label={label} {...tipProps('Show only','Shift+F')} onClick={onToggle}>
     <Icon name="filter_list"/>{on>0&&<span className="n" aria-hidden="true">{on}</span>}
   </button>;
 }

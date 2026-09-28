@@ -207,7 +207,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 /* The page's own actions, before the streak and Settings. */
 .pageacts { display: flex; align-items: center; gap: 8px; margin-right: 8px; }
 .pagenote { font-size: 14px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.pageacts .btn.primary { height: 36px; padding: 0 18px; border-radius: 18px; white-space: nowrap; }
+.pageacts .btn.primary { padding: 0 18px; }
 .pageacts .textbtn { white-space: nowrap; }
 .pageacts .short, .pageacts .icon { display: none; }
 @media (width <= 1000px) {
@@ -693,23 +693,60 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 }
 .busy.big > canvas { margin: 0; }
 
+/* One button everywhere, the shape the top bar's actions have: a pill 36
+   pixels tall with medium-weight words, 30 for a small one beside a line of
+   text. Colour says what kind it is, not shape. */
 .btn {
-  display: inline-flex; align-items: center; gap: .4rem;
-  padding: .42rem .8rem;
-  font: inherit; font-size: 13px;
+  display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+  box-sizing: border-box; height: 36px; padding: 0 16px;
+  font: inherit; font-size: 14px; font-weight: 500; line-height: 1; white-space: nowrap;
   color: var(--text); background: var(--bg-3);
-  border: 1px solid var(--line-2); border-radius: var(--radius-sm);
+  border: 1px solid var(--line-2); border-radius: 18px;
   cursor: pointer; transition: background var(--ease), border-color var(--ease);
 }
 .btn:hover { background: var(--bg-4); text-decoration: none; }
 .btn:disabled { opacity: .4; cursor: default; }
-.btn.small { padding: .28rem .6rem; font-size: 12.5px; }
+.btn.small { height: 30px; padding: 0 12px; font-size: 13px; border-radius: 15px; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn.primary:hover { background: color-mix(in oklab, var(--accent) 85%, #000); }
 .btn.danger { color: #fff; background: var(--bad); border-color: var(--bad); }
 .btn.danger:hover { background: color-mix(in oklab, var(--bad) 85%, #000); }
 .btn.danger.ghosty { color: var(--bad); background: transparent; border-color: color-mix(in oklab, var(--bad) 50%, var(--line)); }
 .btn.danger.ghosty:hover { background: color-mix(in oklab, var(--bad) 12%, transparent); }
+
+/* A key, drawn the same way wherever it is shown: a small raised chip in the
+   colour of the words around it, so it works on a pale tooltip, a mint button
+   and a coral one alike. A button that answers to a key ends with it. */
+.kbds { display: inline-flex; gap: 3px; flex: none; }
+.kbds kbd {
+  display: inline-grid; place-items: center; box-sizing: border-box;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  font: inherit; font-size: 11px; font-weight: 500; line-height: 1;
+  background: color-mix(in oklab, currentcolor 12%, transparent);
+  border: 1px solid color-mix(in oklab, currentcolor 24%, transparent);
+  border-bottom-width: 2px; border-radius: 4px;
+}
+:is(.btn, .rvbtn) .kbds { margin-right: -4px; opacity: .8; }
+/* A touch screen has no keys to press. */
+@media (hover: none) { :is(.btn, .rvbtn) .kbds, .searchkey { display: none; } }
+
+/* The one tooltip: what a control does, then its key, as Google Photos
+   labels its icons. It is drawn over everything and never takes the pointer. */
+.tip {
+  position: fixed; z-index: 1000; pointer-events: none;
+  display: flex; align-items: center; gap: 8px; max-width: 280px;
+  padding: 6px 8px;
+  font-size: 12px; font-weight: 500; line-height: 16px;
+  color: var(--bg); background: var(--text); border-radius: 4px;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 20%);
+  animation: tip-in 120ms ease-out;
+}
+@keyframes tip-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tip { animation: none; } }
+
+/* / goes to the search; the key sits at the end of the empty field. */
+.searchkey { flex: none; color: var(--faint); pointer-events: none; }
+.search:has(input:focus) .searchkey { display: none; }
 
 .tag {
   display: inline-block; padding: .08rem .42rem; margin-left: .5rem;
@@ -723,15 +760,9 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 .tag.fresh .freshdot { width: 6px; height: 6px; box-shadow: none; }
 
 /* ================================================================= TODAY == */
-/* The gallery has to begin as high on the page as it can, so everything above
-   it is one line of type per idea: where you are, what is here, how far in. */
-
-
-.dline {
-  display: flex; flex-wrap: wrap; align-items: center; gap: .45rem;
-  margin: 0 0 .8rem; color: var(--muted); font-size: 13.5px;
-}
-.dline .count { color: var(--text); font-weight: 550; }
+/* A date's page opens as every page does, its name and one line of what is
+   there, so the title sits in the same place wherever you are. */
+.dline { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
 .dline .sep { color: var(--line-2); }
 
 /* One bar. Not six statistic cards - those were the reason the photographs
@@ -767,7 +798,7 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 /* Set like a month in Google Photos: a light, large heading with the date
    line under it, and no rule between them and the photographs. */
 .yhead { display: flex; flex-direction: column; gap: 10px; padding: 8px 0 20px; }
-.yhead h2 { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 28px; font-weight: 400; line-height: 36px; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.yhead h2 { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 24px; font-weight: 400; line-height: 32px; letter-spacing: 0; font-variant-numeric: tabular-nums; }
 /* The heading's gap spaces its tags; they keep their own small line. */
 .yhead h2 .tag { margin-left: 0; padding: .14rem .5rem; line-height: 16px; vertical-align: 0; }
 .yhead .ymeta { display: flex; flex-wrap: wrap; gap: 0 16px; margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--text); }
@@ -1251,7 +1282,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 }
 .rvmenu [role="menuitem"]:hover { background: rgb(255 255 255 / 8%); }
 .rvmenu [role="menuitem"] .icon { color: #c4c7c5; }
-.rvmenu kbd { margin-left: auto; padding-left: 24px; font: inherit; font-size: 12px; color: #9a9d9b; }
+.rvmenu .kbds { margin-left: auto; padding-left: 24px; color: #9a9d9b; }
 
 /* Flex, not grid, and deliberately so. A grid with no explicit rows sizes its
    row to its content, so the image's `max-height: 100%` had no definite height
@@ -1347,12 +1378,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 /* `display` on the class beats the browser's own [hidden] rule, so Compare was
    showing on single files despite being marked hidden. */
 .rvbtn[hidden] { display: none; }
-.rvbtn kbd {
-  font: inherit; font-size: 10.5px; padding: 0 .25rem;
-  color: #8b8f99; background: #24262c; border-radius: 3px;
-}
 .rvbtn.cull:hover { background: var(--bad); border-color: var(--bad); color: #fff; }
-.rvbtn.cull:hover kbd { color: #fff; background: rgb(0 0 0 / 25%); }
 /* The only control in the comparison that leaves nothing behind, so it carries
    its warning at rest rather than only on hover - the row it sits in is three
    buttons wide and the other two are both ways of keeping something. */

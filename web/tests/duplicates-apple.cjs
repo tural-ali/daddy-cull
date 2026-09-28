@@ -50,7 +50,7 @@ const svg=(w,h,fill)=>`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" heig
   assert.equal(await second.locator('.dupetile.keeper').count(),1);
   assert.equal(await second.locator('.dupetile.keeper .dupelabel').innerText(),'IMG_1000 (1).HEIC');
   await second.getByRole('button',{name:'Merge 2 copies'}).click();
-  await page.locator('.flash').waitFor();
+  await page.getByText(/1 copy marked for the Bin/).waitFor();
   assert.deepEqual(posted.map(change=>[change.assetId,change.status]).sort(),[[91,'cull'],[92,'keep']]);
   assert.equal(await page.locator('.dupegroup').count(),2,'the merged set leaves the page');
   // A copy already in .culled is never the default keeper.

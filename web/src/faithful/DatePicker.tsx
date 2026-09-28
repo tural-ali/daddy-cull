@@ -2,6 +2,7 @@ import {createContext,useContext,useEffect,useLayoutEffect,useRef,useState,type 
 import {Icon} from '../Icon';
 import {calendarLabel,type CalendarCell,type YearData} from './Year';
 import {leadDays,MonthNav,usePopover,weekdays} from './CalendarPopover';
+import {tipProps,useShortcut} from './keys';
 
 // The date a page is about sits in the search bar as a pill, the way Google
 // Photos shows what a search is narrowed to. The pill opens a calendar of the
@@ -47,7 +48,8 @@ function plural(count:number,word:string){return `${count.toLocaleString()} ${wo
 export function DatePill({date,pill,open,onToggle}:{date:PageDate;pill:RefObject<HTMLButtonElement|null>;open:boolean;onToggle:()=>void}){
   const today=date.md===monthDay(new Date());
   const label=`${date.label}${today?', today':''}${date.done?', reviewed':''}. Choose another date`;
-  return <button ref={pill} type="button" className={`datepill${date.done?' done':''}`} aria-haspopup="dialog" aria-expanded={open} aria-label={label} title={label} onClick={onToggle}>
+  useShortcut('D',onToggle);
+  return <button ref={pill} type="button" className={`datepill${date.done?' done':''}`} aria-haspopup="dialog" aria-expanded={open} aria-label={label} {...tipProps('Choose another date','D')} onClick={onToggle}>
     <Icon name={date.done?'check_circle':'today'} filled={date.done}/>
     <span className="long">{date.label}</span><span className="short">{date.short}</span>
     <span className="drop"><Icon name="arrow_drop_down"/></span>

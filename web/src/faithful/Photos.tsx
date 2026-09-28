@@ -287,7 +287,7 @@ export function Photos(){
   // will do before it is pressed.
   usePageActions(planned&&view&&view.delete.length+view.favourite.length>0?{
     note:`${plural(deletes,'deletion')} · ${plural(favourites,'favourite')}`,
-    actions:[{label:'Apply in Photos',short:'Apply',icon:'cloud_sync',primary:true,disabled:!!posting||deletes+favourites===0,title:'Favourites are set first. Photos then asks on the Mac before it deletes anything.',onClick:()=>void apply()}],
+    actions:[{label:'Apply in Photos',short:'Apply',icon:'cloud_sync',keys:'Shift+A',primary:true,disabled:!!posting||deletes+favourites===0,title:'Favourites are set first. Photos then asks on the Mac before it deletes anything.',onClick:()=>void apply()}],
   }:null);
   const selectedDeletes=view?view.selected.filter(id=>id.startsWith('delete:')).length:0;
   const agent=status?.agent;

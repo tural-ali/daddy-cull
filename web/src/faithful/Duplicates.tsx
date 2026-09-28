@@ -4,6 +4,7 @@ import type {DuplicateGroup} from './Today';
 import {binChanged} from '../api';
 import {Busy} from '../Busy';
 import {Icon} from '../Icon';
+import {usePageActions} from './pageActions';
 
 export type {DuplicateGroup} from './Today';
 export type DuplicateMember=DuplicateGroup['members'][number];
@@ -69,7 +70,7 @@ function why(keeper:DuplicateMember,members:DuplicateMember[],size:number,rule:R
 
 function dayLabel(day:string){
   const [year,month,date]=day.split('-').map(Number);
-  return new Date(Date.UTC(year,month-1,date)).toLocaleDateString(undefined,{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
+  return new Date(Date.UTC(year,month-1,date)).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
 }
 
 // The group's heading is its dates, as Apple Photos heads a duplicate set.
@@ -177,6 +178,10 @@ export function Duplicates({report}:{report:DuplicateReport}){
     }catch(reason){setError((reason as Error).message)}finally{setBusy(false)}
   }
 
+  // Merging everything is the page's own action, in the top bar with every
+  // other page's.
+  usePageActions(groups.length>0?{actions:[{label:`Merge all ${active.length.toLocaleString()}`,short:'Merge all',icon:'filter_none',keys:'Shift+M',primary:true,disabled:busy||active.length===0,onClick:()=>void resolve(active)}]}:null);
+
   return <section className="dupehead dupepage">
     <h1>Duplicates</h1>
     <p className="ysum"><b>{groups.length.toLocaleString()}</b> {groups.length===1?'group':'groups'} · <b>{bytes(freeing)}</b> can be freed
@@ -191,9 +196,9 @@ export function Duplicates({report}:{report:DuplicateReport}){
       </label>
       <span className="dupespace">
         <span><b>{doomed.toLocaleString()}</b> {doomed===1?'copy':'copies'} in <b>{active.length.toLocaleString()}</b> {active.length===1?'group':'groups'}, <b>{bytes(freeing)}</b></span>
-        <button type="button" className="btn primary" disabled={busy||active.length===0} onClick={()=>void resolve(active)}>{busy?<Busy label="Saving…" state="working"/>:`Merge all ${active.length.toLocaleString()}`}</button>
       </span>
     </div>}
+    {busy&&<p className="flash" role="status"><Busy label="Saving…" state="working"/></p>}
     {message&&<p className="flash" role="status">{message}</p>}
     {error&&<p className="note warn" role="alert">{error}</p>}
 

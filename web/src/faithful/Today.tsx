@@ -43,7 +43,7 @@ export function runningTime(seconds:number){
   const hours=Math.floor(total/3600),minutes=Math.floor(total%3600/60),rest=String(total%60).padStart(2,'0');
   return hours?`${hours}:${String(minutes).padStart(2,'0')}:${rest}`:`${minutes}:${rest}`;
 }
-function captureTime(timestamp:number){return timestamp?new Date(timestamp*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):null}
+function captureTime(timestamp:number){return timestamp?new Date(timestamp*1000).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):null}
 
 function snapshot(asset:Asset):Snapshot{return {id:asset.id,status:asset.status,favourite:asset.favourite}}
 function fileName(asset:Asset){return asset.path.split('/').pop()??''}
@@ -405,14 +405,16 @@ export function Today({initial}:{initial:TodayData}){
     toggle:id=>toggleFilter(id as Filter),clear:()=>saveFilters(new Set()),
     sort:years.length>1?{options:orders,value:order,set:saveOrder}:undefined,
   }:null);
-  usePageActions(assets.length>0&&doneYears<years.length?{actions:[{label:`Mark ${initial.label} reviewed`,short:'Mark reviewed',icon:'task_alt',disabled:saving||queue.pending>0,onClick:()=>void markDate()}]}:null);
+  usePageActions(assets.length>0&&doneYears<years.length?{actions:[{label:`Mark ${initial.label} reviewed`,short:'Mark reviewed',icon:'task_alt',keys:'Shift+R',disabled:saving||queue.pending>0,onClick:()=>void markDate()}]}:null);
   return <>
-    <h1 className="vh">{pageLabel}</h1>
-    <div className="dline">
-      <span className="count">{(initial.memories-hidden.size).toLocaleString()} {initial.memories-hidden.size===1?'memory':'memories'}</span>
-      <span className="sep">·</span><span>{years.length} {years.length===1?'year':'years'}</span>
-      <span className="sep">·</span><span className="dim">{bytes(initial.bytes)}</span>
-    </div>
+    <section className="dupehead dayhead">
+      <h1>{pageLabel}</h1>
+      <p className="ysum dline">
+        <span className="count"><b>{(initial.memories-hidden.size).toLocaleString()}</b> {initial.memories-hidden.size===1?'memory':'memories'}</span>
+        <span className="sep">·</span><span><b>{years.length}</b> {years.length===1?'year':'years'}</span>
+        <span className="sep">·</span><span>{bytes(initial.bytes)}</span>
+      </p>
+    </section>
     {assets.length>0&&shown.length===0&&<p className="note">Nothing on this date matches the filters. <button type="button" className="textbtn" onClick={()=>saveFilters(new Set())}>Clear filters</button></p>}
     {queue.error&&<p className="note warn" role="alert">{queue.error} <button className="btn small" onClick={queue.retry}>Retry the same save</button></p>}
     {years.length===0&&<p className="note">Nothing in the archive is filed under {initial.label}, so there is nothing to review.</p>}

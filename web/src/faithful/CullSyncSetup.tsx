@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {Busy} from '../Busy';
+import {Kbd,keyProps,useDialogKeys} from './keys';
 
 type SetupState='waiting'|'used'|'connected'|'expired';
 type Setup={id:string;command?:string;state:SetupState;expires:string;now:string};
@@ -28,6 +29,7 @@ async function copy(text:string,from:HTMLElement|null):Promise<boolean>{
  * and then closes itself. */
 export function CullSyncSetup({intro,agent,auto,onClose}:{intro:string;agent?:SetupAgent;auto:boolean;onClose:(connected:boolean)=>void}){
   const dialog=useRef<HTMLDialogElement>(null);
+  useDialogKeys(dialog);
   const code=useRef<HTMLElement>(null);
   const [setup,setSetup]=useState<Setup|null>(null);
   const [command,setCommand]=useState('');
@@ -96,7 +98,7 @@ export function CullSyncSetup({intro,agent,auto,onClose}:{intro:string;agent?:Se
         <b>Copy this command.</b> It works once, for the next 15 minutes.
         <div className="pcommand">
           <code ref={code}>{command||'…'}</code>
-          <button type="button" className="btn small" disabled={!command||state==='expired'} onClick={()=>void onCopy()}>{copied==='yes'?'Copied':'Copy'}</button>
+          <button type="button" className="btn small" disabled={!command||state==='expired'} {...keyProps('C')} onClick={()=>void onCopy()}>{copied==='yes'?'Copied':'Copy'}<Kbd keys="C"/></button>
         </div>
         {copied==='no'&&<span className="dim">The browser would not copy it. The command is selected: press Command-C.</span>}
       </li>
@@ -105,8 +107,8 @@ export function CullSyncSetup({intro,agent,auto,onClose}:{intro:string;agent?:Se
     </ol>
     <div className="psetupstate">{progress}</div>
     <div className="confirmacts">
-      {(state==='expired'||error)&&<button type="button" className="btn primary" onClick={()=>void fresh()}>Get a new command</button>}
-      <button type="button" className="btn" onClick={()=>close(false)}>Close</button>
+      {(state==='expired'||error)&&<button type="button" className="btn primary" {...keyProps('Enter')} onClick={()=>void fresh()}>Get a new command<Kbd keys="Enter"/></button>}
+      <button type="button" className="btn" {...keyProps('Escape')} onClick={()=>close(false)}>Close<Kbd keys="Escape"/></button>
     </div>
   </dialog>;
 }
