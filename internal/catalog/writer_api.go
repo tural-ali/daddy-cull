@@ -58,12 +58,12 @@ type PlanPurge struct {
 	Confirmation string `json:"confirmation"`
 }
 
-// UpgradeChoice plans swapping an archive photo for a better copy.
+// UpgradeChoice plans adding a better copy of an archive photo beside it.
 type UpgradeChoice struct {
-	// ArchiveAssetID is the photo in the archive, which goes into the Bin.
+	// ArchiveAssetID is the photo in the archive, which stays where it is.
 	ArchiveAssetID int64 `json:"archiveAssetId"`
-	// SourceAssetID is the higher-resolution copy from Takeout that takes
-	// its place.
+	// SourceAssetID is the higher-resolution copy from Takeout, which is
+	// copied into the archive beside it.
 	SourceAssetID int64 `json:"sourceAssetId"`
 }
 
@@ -136,6 +136,7 @@ func (s *Store) WriterRoutes(m *api.Mux, upstream, secret string) {
 	m.Handle(api.Route{
 		Method: "POST", Path: "/api/legacy-bin/preview", Addon: AddonClassic, Tag: "Daddy Cull classic", Needs: api.Bin,
 		Summary: "Plan restoring or deleting files from the earlier app's Bin",
+		Doc:     "Takes 1 to 20 ids from GET /api/legacy-bin and plans every file of their batches, sidecars included, checking and fingerprinting each where it is now, even if it has since moved to another disk. Nothing moves until the plan is carried out, to restore or to purge.",
 		Body:    BinSelection{}, Returns: LegacyBinPlan{}, Errors: moveErrors,
 	}, legacy)
 	m.Handle(api.Route{
@@ -155,6 +156,7 @@ func (s *Store) WriterRoutes(m *api.Mux, upstream, secret string) {
 	m.Handle(api.Route{
 		Method: "POST", Path: "/api/screenshot-actions/execute", Addon: AddonScreenshots, Tag: "Screenshots", Needs: api.Bin,
 		Summary: "Carry out a screenshot plan",
+		Doc:     "Keeping copies the files into the archive, checks each copy and then takes them out of the holding area; removing moves them into the Bin. The screenshot must still be waiting for review. A plan cut short is finished by asking again. Answers the plan, kept or bin.",
 		Body:    PlanRef{}, Returns: ScreenshotPlan{}, Errors: moveErrors,
 	}, shots)
 	m.Handle(api.Route{
@@ -166,19 +168,21 @@ func (s *Store) WriterRoutes(m *api.Mux, upstream, secret string) {
 	m.Handle(api.Route{
 		Method: "POST", Path: "/api/screenshot-actions/purge", Addon: AddonScreenshots, Tag: "Screenshots", Needs: api.Delete,
 		Summary: "Delete a removed screenshot for good",
+		Doc:     "Deletes the files of a removal plan in the Bin, sidecars included, each checked against the plan first. The confirmation counts the plan's files. Answers the plan, purged or purged_recovered.",
 		Body:    PlanPurge{}, Returns: ScreenshotPlan{}, Errors: moveErrors,
 	}, shots)
 
 	upgrades := UpgradeGateway(upstream, secret)
 	m.Handle(api.Route{
 		Method: "POST", Path: "/api/upgrade-actions/preview", Addon: AddonUpgrades, Tag: "Takeout upgrades", Needs: api.Bin,
-		Summary: "Plan swapping in a better copy",
+		Summary: "Plan adding a better copy",
+		Doc:     "Checks that the pair is a known upgrade not already added, that both files are still there, and fingerprints the Takeout copy. Answers where the copy would go, beside the archive photo as NAME (hi-res).ext. Nothing is copied until the plan is carried out.",
 		Body:    UpgradeChoice{}, Returns: UpgradePlan{}, Errors: moveErrors,
 	}, upgrades)
 	m.Handle(api.Route{
 		Method: "POST", Path: "/api/upgrade-actions/execute", Addon: AddonUpgrades, Tag: "Takeout upgrades", Needs: api.Bin,
 		Summary: "Carry out an upgrade plan",
-		Doc:     "Copies the better file into the archive in the old one's place and moves the old one into the Bin, where it can be restored.",
+		Doc:     "Copies the Takeout file into the archive beside the old one, checks the copy and records it as added. Neither the archive photo nor the Takeout file is moved or deleted. A plan cut short is finished by asking again.",
 		Body:    PlanRef{}, Returns: UpgradePlan{}, Errors: moveErrors,
 	}, upgrades)
 

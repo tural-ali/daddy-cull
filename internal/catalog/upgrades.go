@@ -14,30 +14,59 @@ import (
 	"time"
 )
 
+// UpgradeCopy is a higher-resolution copy in Google Takeout of a photo the
+// archive holds smaller.
 type UpgradeCopy struct {
-	Asset     Asset   `json:"asset"`
-	Pixels    string  `json:"pixels"`
-	Ratio     float64 `json:"ratio"`
-	Date      string  `json:"date"`
-	Album     string  `json:"album"`
-	Available bool    `json:"available"`
+	// Asset is the copy in the Takeout staging area, whose source is takeout.
+	Asset Asset `json:"asset"`
+	// Pixels is the copy's size as WIDTHxHEIGHT, such as 4032x3024.
+	Pixels string `json:"pixels"`
+	// Ratio is how many times more pixels the copy has than the archive's
+	// photo; always more than 1.
+	Ratio float64 `json:"ratio"`
+	// Date is when the copy was taken, as the upgrade report gives it, such as
+	// 2020:01:02 03:04:05.
+	Date string `json:"date"`
+	// Album is the name of the Takeout folder the copy is in.
+	Album string `json:"album"`
+	// Available is whether the copy's file was in the staging area when the
+	// report was imported.
+	Available bool `json:"available"`
 }
 
+// UpgradeGroup is an archive photo with its better copies from Takeout.
 type UpgradeGroup struct {
-	Archive       Asset         `json:"archive"`
-	Day           string        `json:"day"`
-	Pixels        string        `json:"pixels"`
-	Accepted      string        `json:"accepted,omitempty"`
-	AcceptedAsset *Asset        `json:"acceptedAsset,omitempty"`
-	Copies        []UpgradeCopy `json:"copies"`
+	// Archive is the photo in the archive.
+	Archive Asset `json:"archive"`
+	// Day is the day the archive photo is filed under, as YYYY-MM-DD.
+	Day string `json:"day"`
+	// Pixels is the archive photo's size as WIDTHxHEIGHT.
+	Pixels string `json:"pixels"`
+	// Accepted is the path in the archive of the better copy added beside the
+	// photo, such as /archive/2020/2020-01/2020-01-02/A (hi-res).JPG, and is
+	// left out until one is.
+	Accepted string `json:"accepted,omitempty"`
+	// AcceptedAsset is the accepted copy's file in the catalogue, once the
+	// catalogue has indexed it, and is left out otherwise.
+	AcceptedAsset *Asset `json:"acceptedAsset,omitempty"`
+	// Copies are the better copies, most pixels gained first.
+	Copies []UpgradeCopy `json:"copies"`
 }
 
+// UpgradePage lists every archive photo with a better copy in Takeout, and
+// what has been added so far.
 type UpgradePage struct {
-	Groups   []UpgradeGroup `json:"groups"`
-	Total    int            `json:"total"`
-	Pending  int            `json:"pending"`
-	Accepted int            `json:"accepted"`
-	Bytes    int64          `json:"bytes"`
+	// Groups are the archive photos, the one with the most to gain first.
+	Groups []UpgradeGroup `json:"groups"`
+	// Total counts the groups.
+	Total int `json:"total"`
+	// Pending counts the groups with no copy accepted yet.
+	Pending int `json:"pending"`
+	// Accepted counts every better copy ever accepted, including for photos
+	// no longer listed.
+	Accepted int `json:"accepted"`
+	// Bytes is the size of those accepted copies together, in bytes.
+	Bytes int64 `json:"bytes"`
 }
 
 func mappedPath(value, hostPrefix, logicalPrefix string) (string, bool) {

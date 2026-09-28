@@ -32,44 +32,68 @@ type Stats struct {
 	Total int64 `json:"total"`
 	// Synthetic is true for a catalogue made up for testing, with no real files.
 	Synthetic bool `json:"synthetic"`
-	// SnapshotAt is when the catalogue was last indexed.
+	// SnapshotAt is when the catalogue was last indexed, as YYYY-MM-DD
+	// HH:MM:SS in UTC, or empty before the first index.
 	SnapshotAt string `json:"snapshotAt"`
 	// Candidates counts files with another version of the same picture.
 	Candidates int `json:"candidates"`
-	// CalendarDays and ReviewedDays count days of particular years; CalendarDates
-	// and ReviewedDates count calendar dates, as the Year page does.
+	// CalendarDays counts days of particular years with files, such as 3 June
+	// 2019 and 3 June 2021 as two.
 	CalendarDays int `json:"calendarDays"`
+	// ReviewedDays counts the days of particular years marked reviewed.
 	ReviewedDays int `json:"reviewedDays"`
 	// Decisions counts files with a choice or a heart.
-	Decisions  int `json:"decisions"`
+	Decisions int `json:"decisions"`
+	// Favourites counts files with a heart.
 	Favourites int `json:"favourites"`
-	// Evidence counts files with a quick fingerprint, FullHashes those whose
-	// every byte has been hashed.
-	Evidence   int `json:"evidence"`
+	// Evidence counts files with a quick fingerprint.
+	Evidence int `json:"evidence"`
+	// FullHashes counts files whose every byte has been hashed.
 	FullHashes int `json:"fullHashes"`
 	// Marked counts files removed while reviewing that are not in the Bin yet.
 	Marked int `json:"marked"`
 	// Bin counts what the Bin page shows, from every source.
 	Bin int `json:"bin"`
-	// LegacyBin, ShadowGroups, Screenshots, Social, UpgradesAccepted and
-	// UpgradeCandidates are the addons' counts, whether they are on or not.
-	LegacyBin         int `json:"legacyBin"`
-	ShadowGroups      int `json:"shadowGroups"`
-	Screenshots       int `json:"screenshots"`
-	Social            int `json:"social"`
-	UpgradesAccepted  int `json:"upgradesAccepted"`
+	// LegacyBin counts files in the earlier app's Bin that are neither
+	// restored nor deleted, whether the Daddy Cull classic addon is on or not.
+	LegacyBin int `json:"legacyBin"`
+	// ShadowGroups counts paths held by more than one disk, whether the
+	// Shadowed copies addon is on or not.
+	ShadowGroups int `json:"shadowGroups"`
+	// Screenshots counts screenshots waiting in the holding area, whether the
+	// Screenshots addon is on or not.
+	Screenshots int `json:"screenshots"`
+	// Social counts videos probably saved from social apps that still wait
+	// for a choice, whether the Saved from social addon is on or not.
+	Social int `json:"social"`
+	// UpgradesAccepted counts better copies from Takeout already added to the
+	// archive.
+	UpgradesAccepted int `json:"upgradesAccepted"`
+	// UpgradeCandidates counts archive photos with a better copy from Takeout
+	// waiting.
 	UpgradeCandidates int `json:"upgradeCandidates"`
-	// ImmichSynced, ImmichPending, ImmichFailed and ImmichRefused count hearts
-	// by how far they are on their way to Immich.
-	ImmichSynced  int `json:"immichSynced"`
+	// ImmichSynced counts hearts Immich shows as favourites.
+	ImmichSynced int `json:"immichSynced"`
+	// ImmichPending counts hearts, or hearts taken away, still on their way to
+	// Immich, including those being retried.
 	ImmichPending int `json:"immichPending"`
-	ImmichFailed  int `json:"immichFailed"`
+	// ImmichFailed counts hearts Immich could not take, such as for a file it
+	// has no asset for; they are tried again once a day.
+	ImmichFailed int `json:"immichFailed"`
+	// ImmichRefused counts hearts Immich will not let Cull change, as the
+	// photo belongs to another Immich user; they are not tried again.
 	ImmichRefused int `json:"immichRefused"`
+	// CalendarDates counts calendar dates with files in any year, as the Year
+	// page does.
 	CalendarDates int `json:"calendarDates"`
+	// ReviewedDates counts calendar dates reviewed in every year filed under
+	// them.
 	ReviewedDates int `json:"reviewedDates"`
-	// Streak is how many days in a row something was reviewed, and
-	// ReviewedToday whether today is one of them.
-	Streak        int  `json:"streak"`
+	// Streak is how many days in a row something was reviewed, in the
+	// viewer's time zone.
+	Streak int `json:"streak"`
+	// ReviewedToday is whether something was reviewed today, which the streak
+	// counts from; without it the streak counts back from yesterday.
 	ReviewedToday bool `json:"reviewedToday"`
 	// VideoMuted is whether videos start muted.
 	VideoMuted bool `json:"videoMuted"`

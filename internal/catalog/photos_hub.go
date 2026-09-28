@@ -494,27 +494,46 @@ func (h *PhotosHub) Cancel(jobID string) (PhotosJobView, error) {
 
 // PhotosTask is what the helper is asked to do.
 type PhotosTask struct {
-	JobID      string            `json:"jobId"`
-	Task       string            `json:"task"`
-	Entries    []PhotosTaskEntry `json:"entries,omitempty"`
+	// JobID is the job's id, which every report about it names in its path.
+	JobID string `json:"jobId"`
+	// Task is check, to find Entries in Photos and change nothing, or apply,
+	// to carry out Favourites and Deletes.
+	Task string `json:"task"`
+	// Entries is what a check must find in Photos; omitted for an apply.
+	Entries []PhotosTaskEntry `json:"entries,omitempty"`
+	// Favourites is what an apply must mark as a favourite, possibly none;
+	// omitted for a check.
 	Favourites []PhotosTaskApply `json:"favourites,omitempty"`
-	Deletes    []PhotosTaskApply `json:"deletes,omitempty"`
+	// Deletes is what an apply must delete, in one request macOS asks about,
+	// possibly none; omitted for a check.
+	Deletes []PhotosTaskApply `json:"deletes,omitempty"`
 }
 
 // PhotosTaskEntry is one thing to find in Photos.
 type PhotosTaskEntry struct {
-	ID     string `json:"id"`
+	// ID names the entry in every report about it.
+	ID string `json:"id"`
+	// Action is delete or favourite.
 	Action string `json:"action"`
-	Name   string `json:"name"`
-	Stem   string `json:"stem"`
-	Ext    string `json:"ext"`
-	Day    string `json:"day"`
+	// Name is the filename Photos knows the file by.
+	Name string `json:"name"`
+	// Stem is Name without its extension, with the archive's duplicate
+	// suffixes such as " (2)" already removed, for matching on.
+	Stem string `json:"stem"`
+	// Ext is the extension in lower case, without the dot; empty when there
+	// is none.
+	Ext string `json:"ext"`
+	// Day is the day the photograph was taken, as YYYY-MM-DD.
+	Day string `json:"day"`
 }
 
 // PhotosTaskApply is one change, naming the exact Photos assets the check
 // found, by PhotoKit local identifier.
 type PhotosTaskApply struct {
-	ID     string   `json:"id"`
+	// ID is the entry's id, from the check.
+	ID string `json:"id"`
+	// Photos lists the PhotoKit local identifiers of every asset the check
+	// matched to the entry; all of them are changed.
 	Photos []string `json:"photos"`
 }
 
@@ -600,21 +619,36 @@ func (h *PhotosHub) claimLocked() *PhotosTask {
 
 // PhotosHeartbeat is what the helper says about itself every few seconds.
 type PhotosHeartbeat struct {
+	// Version is Cull Sync's CFBundleShortVersionString, such as 1.1, or dev
+	// for a build without one. Only the first 40 bytes are kept.
 	Version string `json:"version"`
-	Access  string `json:"access"`
-	Job     string `json:"job,omitempty"`
-	Stage   string `json:"stage,omitempty"`
+	// Access is what macOS allows Cull Sync to do with Photos: authorized,
+	// limited, denied, restricted, notDetermined or unknown. Only the first 40
+	// bytes are kept.
+	Access string `json:"access"`
+	// Job is the id of the job the helper is working on; empty when it is idle.
+	Job string `json:"job,omitempty"`
+	// Stage is the step of that job in hand. A check goes through reading,
+	// shared, matching and thumbnails; an apply through starting, favourites,
+	// confirm and verifying. Only the first 40 bytes are kept.
+	Stage string `json:"stage,omitempty"`
+	// Message is free text about the step, shown on the page. Only the first
+	// 200 bytes are kept; Cull Sync itself sends none.
 	Message string `json:"message,omitempty"`
-	Done    int    `json:"done,omitempty"`
-	Total   int    `json:"total,omitempty"`
+	// Done is how many of Total the step has got through.
+	Done int `json:"done,omitempty"`
+	// Total is how many items the step has to get through; 0 when not known.
+	Total int `json:"total,omitempty"`
 }
 
 // PhotosMatchReport carries the matches for some of a check's entries. The
 // helper sends them in several small reports, so that no single request has
 // to carry every thumbnail at once.
 type PhotosMatchReport struct {
+	// Matches are entries Photos holds, each with the assets that answer to it.
 	Matches []PhotosReportedMatch `json:"matches"`
-	Missing []string              `json:"missing"`
+	// Missing lists the ids of entries Photos does not hold.
+	Missing []string `json:"missing"`
 	// Reasons says, for some of Missing, what Photos holds instead, so the page
 	// can tell a reviewer why a file they know is in Photos was not offered.
 	Reasons map[string]string `json:"reasons,omitempty"`
@@ -631,18 +665,30 @@ const (
 
 // PhotosReportedMatch is one entry and the Photos assets that answer to it.
 type PhotosReportedMatch struct {
-	ID     string                `json:"id"`
-	How    string                `json:"how"`
+	// ID is the entry's id, from the task.
+	ID string `json:"id"`
+	// How is exact when name, type and day all agree, or near when the asset
+	// is the only one of that name and type in the library and was taken a
+	// day either side.
+	How string `json:"how"`
+	// Photos lists the assets that answer to the entry, 1 to 20 of them.
 	Photos []PhotosReportedAsset `json:"photos"`
 }
 
 // PhotosReportedAsset is one Photos asset, with its thumbnail as a JPEG.
 type PhotosReportedAsset struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Created   string `json:"created"`
-	Favourite bool   `json:"favourite"`
-	Thumb     []byte `json:"thumb"`
+	// ID is the asset's PhotoKit local identifier, up to 200 bytes; required.
+	ID string `json:"id"`
+	// Name is the asset's original filename in Photos, up to 255 bytes.
+	Name string `json:"name"`
+	// Created is when Photos says the asset was taken, in ISO 8601, up to 40
+	// bytes; empty when Photos has no date for it.
+	Created string `json:"created"`
+	// Favourite is whether the asset is already a favourite in Photos.
+	Favourite bool `json:"favourite"`
+	// Thumb is a small JPEG of the asset, base64 encoded. One larger than
+	// 128 KB, or that is not a JPEG, is dropped and the page shows none.
+	Thumb []byte `json:"thumb"`
 }
 
 // Matches records part of a check's answer. A report sent twice replaces the
@@ -765,26 +811,48 @@ func (h *PhotosHub) Failed(jobID, reason string) error {
 // has it: a deletion cancelled at the macOS dialog can still come back as a
 // success, so the call's own answer is not taken as proof.
 type PhotosAppliedReport struct {
+	// Favourites is the outcome of each favourite the task asked for. Each
+	// entry may appear once, and only entries the task named are accepted.
 	Favourites []PhotosAppliedItem `json:"favourites"`
-	Deletes    []PhotosAppliedItem `json:"deletes"`
-	Note       string              `json:"note"`
+	// Deletes is the outcome of each deletion the task asked for, on the same
+	// terms as Favourites.
+	Deletes []PhotosAppliedItem `json:"deletes"`
+	// Note is anything the helper has to say about the apply as a whole, such
+	// as the deletion being declined on the Mac; empty when there is nothing.
+	// Only the first 300 bytes are kept.
+	Note string `json:"note"`
 }
 
 // PhotosAppliedItem is the outcome for one entry.
 type PhotosAppliedItem struct {
-	ID    string `json:"id"`
-	Done  bool   `json:"done"`
+	// ID is the entry's id, from the task.
+	ID string `json:"id"`
+	// Done is true when Photos was seen to change: for a deletion, Photos no
+	// longer returns any of the entry's assets; for a favourite, every one of
+	// them reads back as a favourite. Only done entries are recorded as synced.
+	Done bool `json:"done"`
+	// Error says why an entry is not done, such as "Still in Photos."; empty
+	// when it is. Only the first 200 bytes are kept.
 	Error string `json:"error"`
 }
 
 // PhotosResult sums up a finished job.
 type PhotosResult struct {
-	Nothing         bool   `json:"nothing,omitempty"`
-	Deleted         int    `json:"deleted"`
-	NotDeleted      int    `json:"notDeleted"`
-	Favourited      int    `json:"favourited"`
-	FavouriteFailed int    `json:"favouriteFailed"`
-	Note            string `json:"note,omitempty"`
+	// Nothing is true when the check had nothing to find, so the Mac was never
+	// asked; the counts are then all 0.
+	Nothing bool `json:"nothing,omitempty"`
+	// Deleted counts the chosen deletions Photos was seen to carry out.
+	Deleted int `json:"deleted"`
+	// NotDeleted counts the chosen deletions Photos did not carry out, or not
+	// for every copy.
+	NotDeleted int `json:"notDeleted"`
+	// Favourited counts the chosen favourites Photos was seen to set.
+	Favourited int `json:"favourited"`
+	// FavouriteFailed counts the chosen favourites Photos did not keep.
+	FavouriteFailed int `json:"favouriteFailed"`
+	// Note is the helper's note about the apply as a whole, up to 300 bytes;
+	// omitted when it gave none.
+	Note string `json:"note,omitempty"`
 }
 
 // Applied records what the helper did. Only entries this job asked for are
@@ -893,14 +961,24 @@ const PhotosAgentVersion = "1.1"
 
 // PhotosAgentView is how the page describes the helper.
 type PhotosAgentView struct {
-	Online   bool   `json:"online"`
+	// Online is true when the helper has called in within the last 45
+	// seconds, by polling for work, a heartbeat or a report.
+	Online bool `json:"online"`
+	// LastSeen is when the helper last called in, in RFC 3339 UTC; omitted
+	// when it has not since this server started.
 	LastSeen string `json:"lastSeen,omitempty"`
-	Version  string `json:"version,omitempty"`
-	Access   string `json:"access,omitempty"`
-	// Outdated is true when the helper is older than PhotosAgentVersion,
-	// which Latest then names.
-	Outdated bool   `json:"outdated,omitempty"`
-	Latest   string `json:"latest,omitempty"`
+	// Version is the Cull Sync version the helper last reported, such as 1.1.
+	Version string `json:"version,omitempty"`
+	// Access is the Photos access macOS gives the helper, as it last reported
+	// it: authorized, limited, denied, restricted, notDetermined or unknown.
+	// Only authorized lets a check run.
+	Access string `json:"access,omitempty"`
+	// Outdated is true when the helper is older than the Cull Sync this
+	// server was built with, so the page offers to update it.
+	Outdated bool `json:"outdated,omitempty"`
+	// Latest is the Cull Sync version this server was built with; only sent
+	// when Outdated is true.
+	Latest string `json:"latest,omitempty"`
 }
 
 // photosOlder reports whether dotted version a is older than b. A version
@@ -941,26 +1019,48 @@ func photosOlder(a, b string) bool {
 // PhotosJobSummary is the part of a job the page polls for; the full view is
 // only fetched again when Rev changes.
 type PhotosJobSummary struct {
-	ID      string `json:"id"`
-	State   string `json:"state"`
-	Rev     int    `json:"rev"`
-	Stage   string `json:"stage,omitempty"`
+	// ID is the sync's id, 24 hex characters.
+	ID string `json:"id"`
+	// State is where the sync stands: queued_check, checking, planned,
+	// queued_apply, applying, done, failed or cancelled.
+	State string `json:"state"`
+	// Rev goes up whenever anything in the sync changes, including matches
+	// arriving; fetch the full view again when it does.
+	Rev int `json:"rev"`
+	// Stage is the step the Mac reports it is on while checking or applying:
+	// reading, shared, matching or thumbnails for a check, and starting,
+	// favourites, confirm or verifying for an apply. Omitted in other states.
+	Stage string `json:"stage,omitempty"`
+	// Message is the Mac's own words about the step, up to 200 bytes; omitted
+	// when it sent none, and outside checking and applying.
 	Message string `json:"message,omitempty"`
-	Done    int    `json:"done"`
-	Total   int    `json:"total"`
-	Error   string `json:"error,omitempty"`
+	// Done is how many of Total the step has got through; 0 outside checking
+	// and applying.
+	Done int `json:"done"`
+	// Total is how many items the step has to get through; 0 when not known,
+	// and outside checking and applying.
+	Total int `json:"total"`
+	// Error says, when State is failed, what went wrong and whether Photos
+	// was changed; omitted otherwise.
+	Error string `json:"error,omitempty"`
 }
 
 // PhotosStatus is the light status the page polls.
 type PhotosStatus struct {
+	// Configured is true when there is a key Cull Sync can connect with.
 	Configured bool `json:"configured"`
 	// Settling is true while a helper that is running could simply not have
 	// called in yet since this process started, so the page waits before it
 	// offers to set Cull Sync up.
-	Settling bool              `json:"settling,omitempty"`
-	Now      string            `json:"now"`
-	Agent    PhotosAgentView   `json:"agent"`
-	Job      *PhotosJobSummary `json:"job"`
+	Settling bool `json:"settling,omitempty"`
+	// Now is the server's time, in RFC 3339 UTC, to measure LastSeen against.
+	Now string `json:"now"`
+	// Agent is the helper as last heard; all empty when it has not called in
+	// since this server started.
+	Agent PhotosAgentView `json:"agent"`
+	// Job is the sync in hand, finished or not; null when there has been none
+	// since this server started.
+	Job *PhotosJobSummary `json:"job"`
 }
 
 // Status is cheap enough to poll every second or two.
@@ -990,42 +1090,83 @@ func (h *PhotosHub) Status() PhotosStatus {
 // PhotosJobView is the whole job as the page draws it.
 type PhotosJobView struct {
 	PhotosJobSummary
-	Created   string          `json:"created"`
-	Updated   string          `json:"updated"`
-	ToCheck   int             `json:"toCheck"`
-	Delete    []PhotosRow     `json:"delete"`
-	Favourite []PhotosRow     `json:"favourite"`
-	Missing   []PhotosMissing `json:"missing"`
-	Held      []PhotosHeld    `json:"held"`
-	Undated   int             `json:"undated"`
-	Selected  []string        `json:"selected"`
-	Skipped   int             `json:"skipped"`
-	Result    *PhotosResult   `json:"result,omitempty"`
+	// Created is when the check was asked for, in RFC 3339 UTC.
+	Created string `json:"created"`
+	// Updated is when State last changed, in RFC 3339 UTC.
+	Updated string `json:"updated"`
+	// ToCheck counts the entries the Mac is asked to find in Photos,
+	// deletions and favourites together.
+	ToCheck int `json:"toCheck"`
+	// Delete lists the deletions Photos holds a match for; empty while
+	// the check is queued or running.
+	Delete []PhotosRow `json:"delete"`
+	// Favourite lists the favourites Photos holds a match for; empty while
+	// the check is queued or running.
+	Favourite []PhotosRow `json:"favourite"`
+	// Missing lists the entries Photos does not hold, which are left alone;
+	// empty while the check is queued or running.
+	Missing []PhotosMissing `json:"missing"`
+	// Held lists the removals not offered to Photos at all, because the
+	// archive still holds the photograph under another file.
+	Held []PhotosHeld `json:"held"`
+	// Undated counts removed and favourited files skipped because they have
+	// no day to find them in Photos by.
+	Undated int `json:"undated"`
+	// Selected lists the ids of the rows being carried out, those chosen that
+	// had not changed in Cull since the check; empty until an apply.
+	Selected []string `json:"selected"`
+	// Skipped counts the rows chosen for an apply but left out because they
+	// changed in Cull since the check.
+	Skipped int `json:"skipped"`
+	// Result sums up the sync once the Mac has reported what it changed, or
+	// once a check found nothing to do; omitted until then.
+	Result *PhotosResult `json:"result,omitempty"`
 }
 
 // PhotosRow is an entry with what Photos answered and what happened to it.
 type PhotosRow struct {
 	PhotosEntry
-	How          string            `json:"how"`
-	Photos       []PhotosAssetView `json:"photos"`
-	Outcome      string            `json:"outcome,omitempty"`
-	OutcomeError string            `json:"outcomeError,omitempty"`
+	// How is exact when name, type and day all agree, or near when the match
+	// is the only one of that name and type in Photos and was taken a day
+	// either side.
+	How string `json:"how"`
+	// Photos lists the Photos assets matched to the entry, 1 to 20 of them.
+	// All of them are changed if the row is applied.
+	Photos []PhotosAssetView `json:"photos"`
+	// Outcome is what the apply did: deleted or not-deleted for a deletion,
+	// favourited or failed for a favourite; omitted until the Mac reports it.
+	Outcome string `json:"outcome,omitempty"`
+	// OutcomeError is the Mac's reason for an outcome that did not succeed,
+	// such as "Still in Photos."; omitted when there is none.
+	OutcomeError string `json:"outcomeError,omitempty"`
 }
 
 // PhotosAssetView is one matched Photos asset.
 type PhotosAssetView struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Created   string `json:"created"`
-	Favourite bool   `json:"favourite"`
-	Thumb     string `json:"thumb,omitempty"`
+	// ID is the asset's PhotoKit local identifier.
+	ID string `json:"id"`
+	// Name is the asset's original filename in Photos.
+	Name string `json:"name"`
+	// Created is when Photos says the asset was taken, in ISO 8601 as the Mac
+	// sent it; empty when Photos has no date for it.
+	Created string `json:"created"`
+	// Favourite is whether the asset was already a favourite in Photos at the
+	// check.
+	Favourite bool `json:"favourite"`
+	// Thumb is the path of the asset's JPEG thumbnail, under
+	// /api/photos/thumb/; omitted when the Mac sent none that could be kept,
+	// and an hour after the sync ends.
+	Thumb string `json:"thumb,omitempty"`
 }
 
 // PhotosMissing is an entry Photos does not hold.
 type PhotosMissing struct {
+	// Action is delete or favourite.
 	Action string `json:"action"`
-	Name   string `json:"name"`
-	Day    string `json:"day"`
+	// Name is the filename Photos was searched for.
+	Name string `json:"name"`
+	// Day is the day it was searched on, as YYYY-MM-DD.
+	Day string `json:"day"`
 	// Why is what Photos holds instead, when the helper saw something: see
 	// photosWhySharedAlbum and photosWhyOtherDay.
 	Why string `json:"why,omitempty"`

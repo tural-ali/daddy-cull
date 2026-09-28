@@ -62,14 +62,19 @@ type photosSetup struct {
 
 // PhotosSetupView is what the page is told about a setup code.
 type PhotosSetupView struct {
+	// ID names the setup, to follow it at /api/photos/setup/{id}. It is not a
+	// secret.
 	ID string `json:"id"`
 	// Command is only filled in when the code is first made.
 	Command string `json:"command,omitempty"`
 	// State is waiting (not used yet), expired, used (the installer was
 	// fetched) or connected (Cull Sync has since been heard with a key).
-	State   string `json:"state"`
+	State string `json:"state"`
+	// Expires is when the code stops working, 15 minutes after it was made,
+	// in RFC 3339 UTC.
 	Expires string `json:"expires"`
-	Now     string `json:"now"`
+	// Now is the server's time, in RFC 3339 UTC, to count down to Expires.
+	Now string `json:"now"`
 }
 
 // photosBaseOK holds a server address to a scheme and a plain host.

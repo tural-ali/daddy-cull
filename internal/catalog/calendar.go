@@ -12,78 +12,141 @@ import (
 var archiveDayPattern = regexp.MustCompile(`(?:^|/)(\d{4}-\d{2}-\d{2})(?:/|$)`)
 var datedFilenamePattern = regexp.MustCompile(`(?:^|/)(\d{4}-\d{2}-\d{2})_[^/]+$`)
 
+// CalendarCell is one calendar date on the Year page, across every year.
 type CalendarCell struct {
-	MD      string `json:"md"`
-	DOM     int    `json:"dom"`
-	Years   int    `json:"years"`
-	Files   int    `json:"files"`
-	Done    int    `json:"done"`
-	Waiting int    `json:"waiting"`
-	State   string `json:"state"`
-	Today   bool   `json:"today"`
+	// MD is the date as MM-DD.
+	MD string `json:"md"`
+	// DOM is the day of the month, 1 to 31.
+	DOM int `json:"dom"`
+	// Years counts the years with files on this date.
+	Years int `json:"years"`
+	// Files counts the files on this date in every year, leaving out those
+	// in the Bin or deleted.
+	Files int `json:"files"`
+	// Done counts the years whose day on this date is marked reviewed.
+	Done int `json:"done"`
+	// Waiting counts the files on this date in years not marked reviewed.
+	Waiting int `json:"waiting"`
+	// State is none when the date has no files, todo when no year is
+	// reviewed, part when some are, and done when every year is.
+	State string `json:"state"`
+	// Today is true for today's date, in the server's time zone.
+	Today bool `json:"today"`
 	// Fresh counts files that arrived after the date was reviewed and still
 	// wait: the red dot.
 	Fresh int `json:"fresh,omitempty"`
 }
 
+// CalendarMonth is a month of the Year page.
 type CalendarMonth struct {
-	Name  string          `json:"name"`
+	// Name is the month's name in English, such as January.
+	Name string `json:"name"`
+	// Cells holds 31 entries, the 1st first. A day the month does not have,
+	// such as 30 February, is null; 29 February is always there.
 	Cells []*CalendarCell `json:"cells"`
 }
 
+// CalendarProgress is how far the review has come, in calendar dates.
 type CalendarProgress struct {
-	Dates     int `json:"dates"`
-	Done      int `json:"done"`
-	Part      int `json:"part"`
+	// Dates counts the calendar dates with files in any year.
+	Dates int `json:"dates"`
+	// Done counts the dates reviewed in every year filed under them.
+	Done int `json:"done"`
+	// Part counts the dates reviewed in some of their years but not all.
+	Part int `json:"part"`
+	// FilesDone counts the files on the dates that are done.
 	FilesDone int `json:"filesDone"`
-	Files     int `json:"files"`
+	// Files counts the files on every date.
+	Files int `json:"files"`
 }
 
+// CalendarData is the Year page: every calendar date, overall progress and
+// how the review has gone lately.
 type CalendarData struct {
-	Months    []CalendarMonth  `json:"months"`
-	Progress  CalendarProgress `json:"prog"`
-	Today     string           `json:"today"`
-	Streak    int              `json:"streak"`
-	Week      CalendarWeek     `json:"week"`
-	Refreshed string           `json:"refreshed,omitempty"`
+	// Months are the twelve months, January first.
+	Months []CalendarMonth `json:"months"`
+	// Progress is how far the review has come.
+	Progress CalendarProgress `json:"prog"`
+	// Today is today's date as MM-DD, in the server's time zone.
+	Today string `json:"today"`
+	// Streak is how many days in a row something was reviewed, in the
+	// reader's time zone.
+	Streak int `json:"streak"`
+	// Week is how much was reviewed in the last seven days.
+	Week CalendarWeek `json:"week"`
+	// Refreshed is when the catalogue was last indexed, as YYYY-MM-DD
+	// HH:MM:SS in UTC, and is left out before the first index.
+	Refreshed string `json:"refreshed,omitempty"`
 }
 
+// CalendarWeek is how much was reviewed in the last seven days, today
+// included, in the reader's time zone.
 type CalendarWeek struct {
-	Days    int `json:"days"`
+	// Days counts the days of the seven with at least one review.
+	Days int `json:"days"`
+	// Seconds is the time spent reviewing, in seconds: the gaps between one
+	// choice and the next, leaving out any longer than five minutes.
 	Seconds int `json:"seconds"`
 }
 
+// TodayYear is one year's files on a calendar date.
 type TodayYear struct {
-	Day    string  `json:"day"`
-	Year   int     `json:"year"`
-	Files  int     `json:"files"`
-	Bytes  int64   `json:"bytes"`
-	Status string  `json:"status"`
+	// Day is the year's day, as YYYY-MM-DD.
+	Day string `json:"day"`
+	// Year is the year, such as 2019.
+	Year int `json:"year"`
+	// Files counts the day's files, leaving out those in the Bin or deleted.
+	Files int `json:"files"`
+	// Bytes is the size of the day's files together, in bytes.
+	Bytes int64 `json:"bytes"`
+	// Status is done when the day is marked reviewed, and pending otherwise.
+	Status string `json:"status"`
+	// Assets are the day's files, in capture order.
 	Assets []Asset `json:"assets"`
 	// Fresh counts this year's files that arrived after it was reviewed and
 	// still wait; each one is marked New.
 	Fresh int `json:"fresh,omitempty"`
 }
 
+// TodayData is a calendar date with its files from every year, as the Today
+// page shows it.
 type TodayData struct {
-	MD       string      `json:"md"`
-	Label    string      `json:"label"`
-	Previous string      `json:"previous"`
-	Next     string      `json:"next"`
-	Years    []TodayYear `json:"years"`
-	Memories int         `json:"memories"`
-	Bytes    int64       `json:"bytes"`
+	// MD is the date as MM-DD.
+	MD string `json:"md"`
+	// Label is the date as it is shown, such as 7 September.
+	Label string `json:"label"`
+	// Previous is the date before, as MM-DD; 12-31 comes before 01-01.
+	Previous string `json:"previous"`
+	// Next is the date after, as MM-DD; 02-29 comes after 02-28.
+	Next string `json:"next"`
+	// Years are the years with files on this date, oldest first.
+	Years []TodayYear `json:"years"`
+	// Memories counts the files on this date in every year.
+	Memories int `json:"memories"`
+	// Bytes is the size of those files together, in bytes.
+	Bytes int64 `json:"bytes"`
 }
 
+// DayProgressChange marks one year's day reviewed or not.
 type DayProgressChange struct {
-	Day       string `json:"day"`
-	Status    string `json:"status"`
+	// Day is the year's day, as YYYY-MM-DD. It must have files.
+	Day string `json:"day"`
+	// Status is done to mark the day reviewed, or pending to take the mark
+	// back.
+	Status string `json:"status"`
+	// RequestID makes a retry safe: the same id, 8 to 100 characters, is only
+	// acted on once. Sending it again with another day or status is refused.
 	RequestID string `json:"requestId"`
 }
 
+// DayProgressResult is a year's day as it was marked.
 type DayProgressResult struct {
-	Day            string `json:"day"`
-	Status         string `json:"status"`
+	// Day is the year's day, as YYYY-MM-DD.
+	Day string `json:"day"`
+	// Status is the day's status now: pending or done.
+	Status string `json:"status"`
+	// PreviousStatus is the day's status before, pending or done, so the
+	// change can be undone.
 	PreviousStatus string `json:"previousStatus"`
 }
 

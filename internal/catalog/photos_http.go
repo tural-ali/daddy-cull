@@ -33,19 +33,23 @@ type PhotosOverview struct {
 	Favourite int `json:"favourite"`
 	// Held counts files kept back from the sync, each with its reason.
 	Held int `json:"held"`
-	// Undated counts removed files without a date to find them by.
+	// Undated counts removed and favourited files without a date to find
+	// them by.
 	Undated int `json:"undated"`
 	// Restored lists files put back in Cull after Photos was told to delete
 	// them, which need putting back in Photos by hand.
 	Restored []PhotosRestored `json:"restored"`
-	Synced   PhotosSynced     `json:"synced"`
+	// Synced is what earlier syncs carried across.
+	Synced PhotosSynced `json:"synced"`
 }
 
 // PhotosSynced is what earlier syncs carried across.
 type PhotosSynced struct {
-	Deleted    int `json:"deleted"`
+	// Deleted counts the catalogue items Photos was seen to delete.
+	Deleted int `json:"deleted"`
+	// Favourited counts the catalogue items Photos was seen to favourite.
 	Favourited int `json:"favourited"`
-	// Last is when a sync last finished, empty when none has.
+	// Last is when a sync last finished, in RFC 3339 UTC, empty when none has.
 	Last string `json:"last"`
 }
 
@@ -53,36 +57,48 @@ type PhotosSynced struct {
 type PhotosApply struct {
 	// Job is the check's id.
 	Job string `json:"job"`
-	// Delete and Favourite are the keys of the matches to act on, from the
-	// check's findings. Anything left out is left alone.
-	Delete    []string `json:"delete"`
+	// Delete lists the ids of the check's delete rows to carry out. Anything
+	// left out is left alone.
+	Delete []string `json:"delete"`
+	// Favourite lists the ids of the check's favourite rows to carry out.
+	// Anything left out is left alone.
 	Favourite []string `json:"favourite"`
 }
 
 // PhotosJobRef names a sync.
 type PhotosJobRef struct {
+	// Job is the sync's id.
 	Job string `json:"job"`
 }
 
 // PhotosForget names removed files that are gone from Photos already, by
 // hand perhaps, so Cull stops asking.
 type PhotosForget struct {
+	// Keys lists catalogue keys from the overview's restored list, 1 to
+	// 10,000 of them. A key not on that list is ignored.
 	Keys []string `json:"keys"`
 }
 
 // PhotosForgotten counts the files forgotten.
 type PhotosForgotten struct {
+	// Forgotten counts the records dropped, which can be fewer than the keys
+	// sent.
 	Forgotten int `json:"forgotten"`
 }
 
 // PhotosCancel answers a heartbeat: whether the Mac should stop what it is
 // doing.
 type PhotosCancel struct {
+	// Cancel is true when the job the heartbeat named was cancelled, replaced
+	// or is no longer checking or applying; always false when it named none.
 	Cancel bool `json:"cancel"`
 }
 
 // PhotosFailure says why the Mac could not finish a job.
 type PhotosFailure struct {
+	// Error is the reason, in words the page shows after "The Mac could not
+	// finish:". Only the first 300 bytes are kept, and an empty one reads as
+	// no reason given.
 	Error string `json:"error"`
 }
 
@@ -179,7 +195,7 @@ func (h *PhotosHub) Routes(m *api.Mux) {
 	})
 	thumb := route("GET", "/api/photos/thumb/{job}/{n}", api.Read, "Get a match's thumbnail",
 		"The thumbnail the Mac sent of a photo it matched in Photos, so a person can see it is the right one.", nil, nil, api.Error{Status: 404, When: "The sync or the match is no longer held."})
-	thumb.Params = []api.Param{job, api.PathInt("n", "The match's place in the sync's findings, from 0.", "0")}
+	thumb.Params = []api.Param{job, api.PathInt("n", "The match's place in the sync's findings, from 1.", "1")}
 	thumb.Produces = "image/jpeg"
 	m.HandleFunc(thumb, func(w http.ResponseWriter, r *http.Request) {
 		n, err := strconv.Atoi(r.PathValue("n"))
@@ -365,15 +381,15 @@ func (h *PhotosHub) Routes(m *api.Mux) {
 		})
 	}
 	wrongKey := api.Error{Status: 403, When: "The " + PhotosAgentHeader + " header is not the key this server handed out."}
-	agent := func(method, path, summary string, body, returns any, params ...api.Param) api.Route {
+	agent := func(method, path, summary, doc string, body, returns any, params ...api.Param) api.Route {
 		needs := api.Read
 		if method == "POST" {
 			needs = api.Review
 		}
-		return api.Route{Method: method, Path: path, Addon: AddonApplePhotos, Tag: "Cull Sync", Needs: needs, Internal: true, Summary: summary, Body: body, Returns: returns, Params: params, Errors: []api.Error{wrongKey}}
+		return api.Route{Method: method, Path: path, Addon: AddonApplePhotos, Tag: "Cull Sync", Needs: needs, Internal: true, Summary: summary, Doc: doc, Body: body, Returns: returns, Params: params, Errors: []api.Error{wrongKey}}
 	}
-	work := agent("GET", "/api/photos/agent/work", "Wait for work", nil, PhotosTask{})
-	work.Doc = "Held open until there is a job for the Mac, or answered 204 when there is none for a while."
+	work := agent("GET", "/api/photos/agent/work", "Wait for work",
+		"Held open until there is a job for the Mac, or answered 204 when there is none for a while.", nil, PhotosTask{})
 	m.Handle(work, agentOnly(func(w http.ResponseWriter, r *http.Request) {
 		task, err := h.Claim(r.Context())
 		if err != nil {
@@ -387,14 +403,18 @@ func (h *PhotosHub) Routes(m *api.Mux) {
 		}
 		writeJSON(w, 200, task)
 	}))
-	m.Handle(agent("POST", "/api/photos/agent/heartbeat", "Say the Mac is online", PhotosHeartbeat{}, PhotosCancel{}), agentOnly(func(w http.ResponseWriter, r *http.Request) {
+	m.Handle(agent("POST", "/api/photos/agent/heartbeat", "Say the Mac is online",
+		"Sent every 15 seconds, and as a job moves on, with the helper's version, its Photos access and how far the job in hand has got. The answer says whether to abandon that job, because it was cancelled or replaced.",
+		PhotosHeartbeat{}, PhotosCancel{}), agentOnly(func(w http.ResponseWriter, r *http.Request) {
 		var beat PhotosHeartbeat
 		if !decode(w, r, 8192, &beat) {
 			return
 		}
 		writeJSON(w, 200, PhotosCancel{Cancel: h.Seen(beat)})
 	}))
-	m.Handle(agent("POST", "/api/photos/agent/jobs/{job}/matches", "Report matches found in Photos", PhotosMatchReport{}, Done{}, job), agentOnly(func(w http.ResponseWriter, r *http.Request) {
+	m.Handle(agent("POST", "/api/photos/agent/jobs/{job}/matches", "Report matches found in Photos",
+		"Part of a check's answer: the Photos assets that answer to some entries, with thumbnails, and the entries not found, with why where the Mac knows. A report for an entry already reported replaces it, so a retry is safe. Answers 409 once the job is no longer checking, and 400 for an entry the job does not hold.",
+		PhotosMatchReport{}, Done{}, job), agentOnly(func(w http.ResponseWriter, r *http.Request) {
 		var report PhotosMatchReport
 		if !decode(w, r, photosReportLimit, &report) {
 			return
@@ -405,7 +425,9 @@ func (h *PhotosHub) Routes(m *api.Mux) {
 		}
 		writeJSON(w, 200, Done{OK: true})
 	}))
-	m.Handle(agent("POST", "/api/photos/agent/jobs/{job}/checked", "Report a check finished", Empty{}, Done{}, job), agentOnly(func(w http.ResponseWriter, r *http.Request) {
+	m.Handle(agent("POST", "/api/photos/agent/jobs/{job}/checked", "Report a check finished",
+		"Ends a check, so the page shows what was found; an entry never reported is taken as not in Photos. The body is {}. Sending it again once the check is planned is harmless; answers 409 when the job has moved on otherwise.",
+		Empty{}, Done{}, job), agentOnly(func(w http.ResponseWriter, r *http.Request) {
 		var body Empty
 		if !decode(w, r, 1024, &body) {
 			return
@@ -416,7 +438,9 @@ func (h *PhotosHub) Routes(m *api.Mux) {
 		}
 		writeJSON(w, 200, Done{OK: true})
 	}))
-	m.Handle(agent("POST", "/api/photos/agent/jobs/{job}/failed", "Report a job failed", PhotosFailure{}, Done{}, job), agentOnly(func(w http.ResponseWriter, r *http.Request) {
+	m.Handle(agent("POST", "/api/photos/agent/jobs/{job}/failed", "Report a job failed",
+		"Says the Mac could not finish a check or an apply, with the reason the page shows. The job fails; after a failed apply, a later report of what changed is still recorded. Answers 409 when the job is not checking or applying.",
+		PhotosFailure{}, Done{}, job), agentOnly(func(w http.ResponseWriter, r *http.Request) {
 		var body PhotosFailure
 		if !decode(w, r, 8192, &body) {
 			return
@@ -427,7 +451,9 @@ func (h *PhotosHub) Routes(m *api.Mux) {
 		}
 		writeJSON(w, 200, Done{OK: true})
 	}))
-	m.Handle(agent("POST", "/api/photos/agent/jobs/{job}/applied", "Report what changed in Photos", PhotosAppliedReport{}, Done{}, job), agentOnly(func(w http.ResponseWriter, r *http.Request) {
+	m.Handle(agent("POST", "/api/photos/agent/jobs/{job}/applied", "Report what changed in Photos",
+		"Ends an apply with what Photos was seen to do to each chosen entry. What was done is recorded so it is never offered again, and the job is done. Only entries the apply asked for are accepted; a report already recorded is answered ok again, so a retry is safe.",
+		PhotosAppliedReport{}, Done{}, job), agentOnly(func(w http.ResponseWriter, r *http.Request) {
 		var report PhotosAppliedReport
 		if !decode(w, r, 4<<20, &report) {
 			return

@@ -2,14 +2,22 @@ package catalog
 
 import "context"
 
+// HistoryEvent is one choice saved, as the Log shows it.
 type HistoryEvent struct {
-	RequestID         string `json:"requestId"`
-	Asset             Asset  `json:"asset"`
-	Status            string `json:"status"`
-	Favourite         bool   `json:"favourite"`
-	PreviousStatus    string `json:"previousStatus"`
-	PreviousFavourite bool   `json:"previousFavourite"`
-	CreatedAt         string `json:"createdAt"`
+	// RequestID is the id the choice was sent with.
+	RequestID string `json:"requestId"`
+	// Asset is the file as it is now, with its current status.
+	Asset Asset `json:"asset"`
+	// Status is the status this choice saved: unreviewed, keep, later or cull.
+	Status string `json:"status"`
+	// Favourite is whether the file had a heart after this choice.
+	Favourite bool `json:"favourite"`
+	// PreviousStatus is the status the choice replaced.
+	PreviousStatus string `json:"previousStatus"`
+	// PreviousFavourite is whether the file had a heart before the choice.
+	PreviousFavourite bool `json:"previousFavourite"`
+	// CreatedAt is when the choice was saved, as YYYY-MM-DDTHH:MM:SSZ in UTC.
+	CreatedAt string `json:"createdAt"`
 	// Where the file is now when it is no longer in its day folder: "bin";
 	// "deleting" once it is deleted from the Bin and waits out its days
 	// there; "deleted" once it is gone.

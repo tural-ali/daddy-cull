@@ -8,6 +8,9 @@ import (
 // mark was made.
 type MarkedAsset struct {
 	Asset
+	// MarkedAt is when the file was last marked for the Bin, in RFC 3339 UTC.
+	// It is empty for a mark imported from the earlier app, which recorded
+	// no time.
 	MarkedAt string `json:"markedAt"`
 }
 

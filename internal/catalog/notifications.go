@@ -18,29 +18,49 @@ import (
 // date carries a red dot until the date is opened, or until every file that
 // arrived after the day was last reviewed has been decided.
 
+// NotificationDay is one year's day that files arrived on.
 type NotificationDay struct {
-	Day   string `json:"day"`
-	MD    string `json:"md"`
-	Files int    `json:"files"`
+	// Day is the year's day, as YYYY-MM-DD.
+	Day string `json:"day"`
+	// MD is its calendar date, as MM-DD, for opening the date's page.
+	MD string `json:"md"`
+	// Files counts the files that arrived on the day.
+	Files int `json:"files"`
 	// Reopened says the day had been reviewed and was opened again by the
-	// arrival; Fresh that files from it are still waiting now.
+	// arrival.
 	Reopened bool `json:"reopened"`
-	Fresh    int  `json:"fresh"`
+	// Fresh counts the files that arrived on the day after it was last
+	// reviewed and still wait now, unseen and undecided.
+	Fresh int `json:"fresh"`
 }
 
+// Notification is a change that reached the catalogue with nobody on a page
+// to see it.
 type Notification struct {
-	ID        int64             `json:"id"`
-	Kind      string            `json:"kind"`
-	CreatedAt string            `json:"createdAt"`
-	Files     int               `json:"files"`
-	Bytes     int64             `json:"bytes"`
-	Read      bool              `json:"read"`
-	Days      []NotificationDay `json:"days"`
+	// ID is the notification's id; ids grow, so a newer one has a larger id.
+	ID int64 `json:"id"`
+	// Kind is arrivals for files that arrived in the archive, or
+	// phone-deletions for photos deleted on a phone and so marked for the Bin.
+	Kind string `json:"kind"`
+	// CreatedAt is when it happened, as YYYY-MM-DD HH:MM:SS.mmm in UTC.
+	CreatedAt string `json:"createdAt"`
+	// Files counts the files it is about.
+	Files int `json:"files"`
+	// Bytes is the size of those files together, in bytes.
+	Bytes int64 `json:"bytes"`
+	// Read is whether it has been marked read.
+	Read bool `json:"read"`
+	// Days are the days the files arrived on, oldest first. Only arrivals
+	// have days; the list is empty for other kinds.
+	Days []NotificationDay `json:"days"`
 }
 
+// Notifications are the newest notifications and the bell's count.
 type Notifications struct {
-	Unread int            `json:"unread"`
-	Items  []Notification `json:"items"`
+	// Unread counts every unread notification, not only those listed.
+	Unread int `json:"unread"`
+	// Items are the notifications, newest first.
+	Items []Notification `json:"items"`
 }
 
 // freshArrivalFrom joins an arrival to its day, the day's review and the

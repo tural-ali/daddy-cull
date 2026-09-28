@@ -18,28 +18,69 @@ import (
 	"time"
 )
 
+// BinAsset is one photograph of a Bin plan, as the catalogue had it when the
+// plan was made.
 type BinAsset struct {
-	ID       int64  `json:"id"`
-	Path     string `json:"path"`
-	Revision int64  `json:"revision"`
-	Size     int64  `json:"size"`
+	// ID is the file's id in the catalogue.
+	ID int64 `json:"id"`
+	// Path is where the file is in the catalogue, such as
+	// /archive/2019/2019-08/2019-08-14/IMG_1234.HEIC.
+	Path string `json:"path"`
+	// Revision is the file's decision revision when the plan was made. The
+	// move is refused if the decision has changed since.
+	Revision int64 `json:"revision"`
+	// Size is the file's size in bytes, as the catalogue records it.
+	Size int64 `json:"size"`
 }
+
+// BinFile is one file a Bin plan moves: a photograph or one of its sidecars.
 type BinFile struct {
+	// Original is where the file came from and where restoring puts it back,
+	// relative to the archive root, without /archive/ in front.
 	Original string `json:"original"`
-	Size     int64  `json:"size"`
-	Mtime    int64  `json:"mtime"`
-	Hash     string `json:"hash"`
-	Phase    string `json:"phase"`
-	Sidecar  bool   `json:"sidecar"`
+	// Size is the file's size in bytes when the plan was made.
+	Size int64 `json:"size"`
+	// Mtime is when the file was last modified, as it was when the plan was
+	// made, in Unix nanoseconds.
+	Mtime int64 `json:"mtime"`
+	// Hash is the SHA-256 of the file's contents, in hexadecimal. The file
+	// is checked against it before every move and before it is deleted.
+	Hash string `json:"hash"`
+	// Phase is where the file stands: planned, moving (on its way into the
+	// Bin), bin, restoring, restored, returned (given back on its own,
+	// leaving the rest of the plan in the Bin), purging, purged, or
+	// absent_after_intent (gone after its deletion started, without the
+	// deletion being seen to finish).
+	Phase string `json:"phase"`
+	// Sidecar is true for a sidecar, which belongs to the nearest photograph
+	// listed before it.
+	Sidecar bool `json:"sidecar"`
 }
+
+// BinPlan is a plan for moving files from the archive into the Bin, and what
+// has become of them since: restored, or deleted for good.
 type BinPlan struct {
-	ID       string     `json:"id"`
-	State    string     `json:"state"`
-	Created  string     `json:"created"`
-	Assets   []BinAsset `json:"assets"`
-	Files    []BinFile  `json:"files"`
-	Warnings []string   `json:"warnings"`
-	Error    string     `json:"error,omitempty"`
+	// ID is the plan's id, 32 hexadecimal characters.
+	ID string `json:"id"`
+	// State is where the plan stands: planned (nothing moved yet),
+	// quarantining, bin, restoring, restored, purging, purged, or
+	// purged_recovered (deleted, with at least one file found already gone
+	// after its deletion started).
+	State string `json:"state"`
+	// Created is when the plan was made, in RFC 3339 UTC.
+	Created string `json:"created"`
+	// Assets are the photographs the plan moves.
+	Assets []BinAsset `json:"assets"`
+	// Files are every file the plan moves, each photograph followed by its
+	// sidecars.
+	Files []BinFile `json:"files"`
+	// Warnings are notes to show the reviewer, such as a sidecar shared with
+	// another file and so left in the archive, or a file found gone during a
+	// resumed deletion. It is an empty list when there are none.
+	Warnings []string `json:"warnings"`
+	// Error says why the last step failed. It is cleared when a step
+	// finishes, and left out when there is none.
+	Error string `json:"error,omitempty"`
 }
 type BinEngine struct {
 	s          *Store
@@ -971,6 +1012,17 @@ func (b *BinEngine) List() ([]*BinPlan, error) {
 		}
 		if e = json.Unmarshal([]byte(raw), &p); e != nil {
 			return nil, e
+		}
+		// A plan stored with a list left null is still sent with an empty
+		// one, as the reference says.
+		if p.Assets == nil {
+			p.Assets = []BinAsset{}
+		}
+		if p.Files == nil {
+			p.Files = []BinFile{}
+		}
+		if p.Warnings == nil {
+			p.Warnings = []string{}
 		}
 		plans = append(plans, &p)
 	}

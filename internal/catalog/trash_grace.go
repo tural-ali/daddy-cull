@@ -137,22 +137,46 @@ func truncate(value string, limit int) string {
 // DeletingItem is a file deleted from the Bin and still on disk.
 type DeletingItem struct {
 	TrashItem
+	// DeletedAt is when the card was deleted from the Bin, in RFC 3339 UTC.
+	// Deleting it again later keeps the first time.
 	DeletedAt string `json:"deletedAt"`
-	DueAt     string `json:"dueAt"`
-	Attempts  int    `json:"attempts"`
+	// DueAt is when the grace period ends, in RFC 3339 UTC: DeletedAt plus
+	// the grace period as it is set now. The reaper deletes the files on its
+	// first run after this.
+	DueAt string `json:"dueAt"`
+	// Attempts counts the reaper's runs that tried to delete the files and
+	// failed; 0 until one does.
+	Attempts int `json:"attempts"`
+	// LastError is why the reaper's last attempt failed. It is left out when
+	// no attempt has failed.
 	LastError string `json:"lastError,omitempty"`
 }
 
 // DeletingReport is what the Log and Settings pages show about deletions still
 // waiting and about the reaper's last run.
 type DeletingReport struct {
-	GraceDays     int            `json:"graceDays"`
-	GraceError    string         `json:"graceError,omitempty"`
-	Items         []DeletingItem `json:"items"`
-	LastRun       string         `json:"lastRun"`
-	LastDeleted   int            `json:"lastDeleted"`
-	LastError     string         `json:"lastError"`
-	CheckInterval int            `json:"checkIntervalMinutes"`
+	// GraceDays is how many days a card deleted from the Bin stays on disk
+	// before the reaper deletes it, from 0 to 365; 0 means deletion is
+	// immediate. It is 0 when GraceError is set.
+	GraceDays int `json:"graceDays"`
+	// GraceError says why the saved grace period cannot be read. Automatic
+	// deletion stops until it is fixed. It is left out when the setting is
+	// fine.
+	GraceError string `json:"graceError,omitempty"`
+	// Items are the cards deleted from the Bin whose files are still on disk,
+	// soonest due first. It is an empty list when nothing is waiting.
+	Items []DeletingItem `json:"items"`
+	// LastRun is when the reaper last ran, in RFC 3339 UTC, or empty if it
+	// has never run.
+	LastRun string `json:"lastRun"`
+	// LastDeleted counts the cards the reaper's last run deleted.
+	LastDeleted int `json:"lastDeleted"`
+	// LastError is what went wrong on the reaper's last run, or empty if
+	// nothing did.
+	LastError string `json:"lastError"`
+	// CheckInterval is how often the reaper runs, in minutes, so a file is
+	// deleted at most this long after it is due.
+	CheckInterval int `json:"checkIntervalMinutes"`
 }
 
 // ReapInterval is how often the writer looks for deletions whose grace period

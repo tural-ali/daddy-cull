@@ -5,34 +5,73 @@ import (
 	"database/sql"
 )
 
+// ShadowMember is one copy in a ShadowGroup: a file on one disk.
 type ShadowMember struct {
 	Asset
-	Disk         string `json:"disk"`
+	// Disk is the disk the copy is on, such as disk1 or cache.
+	Disk string `json:"disk"`
+	// RelativePath is where the copy is on its disk, relative to the disk's
+	// root.
 	RelativePath string `json:"relativePath"`
-	FullHash     string `json:"fullHash,omitempty"`
+	// FullHash is a hash of the whole file's contents, in hexadecimal. It is
+	// left out until the file has been hashed.
+	FullHash string `json:"fullHash,omitempty"`
 }
 
+// ShadowGroup is a set of files the merged share cannot tell apart, found by
+// the earlier app's scan of the disks.
 type ShadowGroup struct {
-	Kind        string         `json:"kind"`
-	Key         string         `json:"key"`
-	Verified    bool           `json:"verified"`
-	Size        int64          `json:"size"`
-	Reclaimable int64          `json:"reclaimable"`
-	Members     []ShadowMember `json:"members"`
+	// Kind is shadowed for one path held on more than one disk, of which the
+	// share shows only one, or case-only for paths that differ only in the
+	// case of their letters.
+	Kind string `json:"kind"`
+	// Key is the path the group shares: for shadowed, the path on every
+	// disk; for case-only, one of its spellings.
+	Key string `json:"key"`
+	// Verified is true when every member has been hashed and all of them
+	// have the same hash and size.
+	Verified bool `json:"verified"`
+	// Size is the first member's size in bytes.
+	Size int64 `json:"size"`
+	// Reclaimable is how many bytes keeping only one copy would free: Size
+	// for each member after the first. It is 0 unless Verified.
+	Reclaimable int64 `json:"reclaimable"`
+	// Members are the copies, by disk and then path.
+	Members []ShadowMember `json:"members"`
 }
 
+// LegacyBinItem is one file the earlier app moved into its Bin, from its
+// history as imported.
 type LegacyBinItem struct {
-	ID         int64  `json:"id"`
-	Batch      string `json:"batch"`
-	Kind       string `json:"kind"`
-	Original   string `json:"original"`
-	Stored     string `json:"stored"`
-	Day        string `json:"day,omitempty"`
-	Size       int64  `json:"size"`
-	Reason     string `json:"reason,omitempty"`
-	CulledAt   string `json:"culledAt"`
+	// ID is the file's id in the earlier app's Bin; send it to plan
+	// restoring or deleting the file.
+	ID int64 `json:"id"`
+	// Batch names the files the earlier app moved together, a photograph
+	// and its sidecars. A plan always takes the whole batch.
+	Batch string `json:"batch"`
+	// Kind is media for a photograph or video, or sidecar.
+	Kind string `json:"kind"`
+	// Original is where the file was before it was moved, and where restoring
+	// puts it back, such as /disks/disk1/2021/2021-12/2021-12-18/IMG_0016.mp4.
+	Original string `json:"original"`
+	// Stored is where the earlier app put it, in the .culled folder of its
+	// disk, such as /disks/disk1/.culled/2021-12-18/IMG_0016.mp4.
+	Stored string `json:"stored"`
+	// Day is the day the file is filed under, as 2021-12-18, or undated. It
+	// is left out when the earlier app recorded none.
+	Day string `json:"day,omitempty"`
+	// Size is the file's size in bytes.
+	Size int64 `json:"size"`
+	// Reason is why the earlier app moved it, such as culled in review. It
+	// is left out when none was recorded.
+	Reason string `json:"reason,omitempty"`
+	// CulledAt is when the file was moved into the Bin, in ISO 8601 as the
+	// earlier app recorded it, such as 2026-08-30T00:00:00+00:00.
+	CulledAt string `json:"culledAt"`
+	// RestoredAt is when the file was put back, left out until it is.
 	RestoredAt string `json:"restoredAt,omitempty"`
-	PurgedAt   string `json:"purgedAt,omitempty"`
+	// PurgedAt is when the file was deleted for good, left out until it is.
+	PurgedAt string `json:"purgedAt,omitempty"`
 }
 
 func (s *Store) ShadowGroups(ctx context.Context, limit int) ([]ShadowGroup, error) {

@@ -20,23 +20,54 @@ import (
 
 var screenshotDatedName = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})_(.+)$`)
 
+// ScreenshotPlanFile is one file a screenshot plan moves: the screenshot or
+// one of its sidecars.
 type ScreenshotPlanFile struct {
-	Source      string `json:"source"`
+	// Source is the file's name in the screenshots holding area, where it is
+	// before the plan runs and where undoing a removal puts it back.
+	Source string `json:"source"`
+	// Destination is where the file goes. To keep, it is a path relative to
+	// the archive root, filed under the date in the name, such as
+	// 2024/2024-03/2024-03-05/IMG_0001.PNG for 2024-03-05_IMG_0001.PNG. To
+	// remove, it is where the file waits in the Bin, relative to the holding
+	// area: .culled/next/<plan id>/<place in the plan>-<name>.
 	Destination string `json:"destination"`
-	Size        int64  `json:"size"`
-	Hash        string `json:"hash"`
-	Sidecar     bool   `json:"sidecar"`
-	Phase       string `json:"phase"`
+	// Size is the file's size in bytes when the plan was made.
+	Size int64 `json:"size"`
+	// Hash is the SHA-256 of the file's contents when the plan was made, in
+	// hexadecimal. The file is checked against it before every step.
+	Hash string `json:"hash"`
+	// Sidecar is true for a sidecar of the screenshot. The screenshot itself
+	// is always the first file.
+	Sidecar bool `json:"sidecar"`
+	// Phase is where the file stands: waiting, moving, done, restoring,
+	// restored, deleting, purged, or absent_after_intent (gone after its
+	// deletion started, without the deletion being seen to finish).
+	Phase string `json:"phase"`
 }
 
+// ScreenshotPlan is a plan for keeping one screenshot in the archive or
+// removing it into the Bin, and what has become of it since.
 type ScreenshotPlan struct {
-	ID      string               `json:"id"`
-	AssetID int64                `json:"assetId"`
-	Action  string               `json:"action"`
-	State   string               `json:"state"`
-	Created string               `json:"created"`
-	Files   []ScreenshotPlanFile `json:"files"`
-	Error   string               `json:"error,omitempty"`
+	// ID is the plan's id, 32 hexadecimal characters.
+	ID string `json:"id"`
+	// AssetID is the screenshot's id in the catalogue.
+	AssetID int64 `json:"assetId"`
+	// Action is keep, which files it in the archive under the date in its
+	// name, or remove, which moves it into the Bin.
+	Action string `json:"action"`
+	// State is where the plan stands: planned (nothing moved yet), running,
+	// kept, bin, restoring, restored (a removal undone, so it waits for
+	// review again), purging, purged, or purged_recovered (deleted, with at
+	// least one file found already gone after its deletion started).
+	State string `json:"state"`
+	// Created is when the plan was made, in RFC 3339 UTC.
+	Created string `json:"created"`
+	// Files are the screenshot first and then its sidecars.
+	Files []ScreenshotPlanFile `json:"files"`
+	// Error says why the last step failed. It is cleared when a step
+	// finishes, and left out when there is none.
+	Error string `json:"error,omitempty"`
 }
 
 type ScreenshotWriter struct {
