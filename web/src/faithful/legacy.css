@@ -58,13 +58,12 @@
   --logo-amber:#f7c66a;
 
   /* Calendar heat: how much media still waits on a date, in the logo's own
-     tiles. Kept bright in both themes so the three bands read at a glance;
-     only the lettering follows the theme. */
-  --heat-low:     #7ed9b2;
+     tiles. Each band's deepest shade is the logo's colour in this theme. */
+  --heat-low:     var(--logo-mint);
   --heat-low-ink: #0c3b24;
-  --heat-mid:     #f7c66a;
+  --heat-mid:     var(--logo-amber);
   --heat-mid-ink: #4a2c02;
-  --heat-high:    #f397a2;
+  --heat-high:    var(--logo-coral);
   --heat-high-ink:#5a1017;
 
   /* Where you are: a filled pill in the accent's own family. */
@@ -112,6 +111,8 @@
   --logo-mint: #149163;
   --logo-coral:#ec7f8c;
   --logo-amber:#f0b541;
+  /* The day logo's mint is dark; only a near-black green reads on it at 4.5:1. */
+  --heat-low-ink: #00170b;
 }
 
 * { box-sizing: border-box; }
@@ -1062,20 +1063,20 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 .cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cell.blank { visibility: hidden; }
 .cell.none { background: transparent; box-shadow: inset 0 0 0 1px var(--line); font-weight: 500; }
-/* Each band runs from a pale to a deep shade of its colour by --depth, how
-   busy the date is within its band. The deep ends stop where the day number
-   in the band's ink still reads at 4.5:1. */
+/* Each band runs from a pale tint of its logo colour to the logo colour
+   itself by --depth, how busy the date is within its band. The band's ink
+   reads at 4.5:1 or better along the whole run, in both themes. */
 .cell.low, .legend .key.low {
   --pale: color-mix(in oklab, var(--heat-low) 40%, #fff);
-  --deep: color-mix(in oklab, var(--heat-low) 72%, var(--heat-low-ink));
+  --deep: var(--heat-low);
 }
 .cell.mid, .legend .key.mid, .legend .key.fresh {
   --pale: color-mix(in oklab, var(--heat-mid) 40%, #fff);
-  --deep: color-mix(in oklab, var(--heat-mid) 70%, var(--heat-mid-ink));
+  --deep: var(--heat-mid);
 }
 .cell.high, .legend .key.high {
   --pale: color-mix(in oklab, var(--heat-high) 40%, #fff);
-  --deep: color-mix(in oklab, var(--heat-high) 80%, var(--heat-high-ink));
+  --deep: var(--heat-high);
 }
 .cell.low, .cell.mid, .cell.high {
   background: color-mix(in oklab, var(--deep) calc(var(--depth, .5) * 100%), var(--pale));
