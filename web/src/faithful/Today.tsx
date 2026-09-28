@@ -16,6 +16,7 @@ import {historyKey,undoKeys,useHistory,type HistoryEntry,type Snapshot} from './
 import {pairLabel,rawsBehind,setPaired} from './pairs';
 import {usePageFilters,type SortOption} from './SearchFilters';
 import {Snacks} from './Snacks';
+import {flyToBin} from './binFlight';
 import {Justified,shapeOf,shapeProps,type Box} from './justified';
 import {Pick,usePicks,useSelectionBar} from './selection';
 import {tracked} from '../saving';
@@ -47,6 +48,9 @@ export function runningTime(seconds:number){
 }
 
 function snapshot(asset:Asset):Snapshot{return {id:asset.id,status:asset.status,favourite:asset.favourite}}
+/** A photo's tile on the date's grid, if it is drawn. */
+function tileOf(id:number){return document.querySelector(`main figure.mo[data-asset="${id}"]`)}
+
 function fileName(asset:Asset){return asset.path.split('/').pop()??''}
 /** What a single decision did, for the undo message. */
 function describe(asset:Asset,status:Status,favourite:boolean){
@@ -207,6 +211,7 @@ export function Today({initial}:{initial:TodayData}){
       if(!response.ok)throw new Error(response.status===409?'One of these files changed. Reload before resolving this group.':'The duplicate choices could not be confirmed.');
       const results:{revision:number}[]=await response.json();
       binChanged();
+      flyToBin(group.members.filter(asset=>asset.id!==keeperID).map(asset=>document.querySelector(`.xgroup figure[data-asset="${asset.id}"]`)));
       group.members.forEach((asset,index)=>patchAsset(asset.id,{status:asset.id===keeperID?'keep':'cull',favourite:asset.id===keeperID&&asset.favourite,revision:results[index].revision}));
       history.record({kind:'decisions',label:`resolved ${group.members.length} copies`,before:group.members.map(snapshot),after:changes.map(change=>({id:change.assetId,status:change.status as Status,favourite:change.favourite}))});
 	  setDuplicateGroups(current=>current.filter(item=>item.hash!==group.hash||item.size!==group.size));
@@ -239,6 +244,7 @@ export function Today({initial}:{initial:TodayData}){
         return false;
       }
     }
+    if(remember&&status==='cull'&&asset.status!=='cull')flyToBin([tileOf(asset.id)]);
     if(remember){
       history.record({kind:'decisions',label:`${describe(asset,status,favourite)}${raw?' and its RAW':''}`,before:files.map(snapshot),after:files.map(file=>({id:file.id,status,favourite}))});
     }
@@ -257,6 +263,7 @@ export function Today({initial}:{initial:TodayData}){
     }).filter(target=>target.file.status!==target.status||target.file.favourite!==target.favourite);
     if(targets.length===0)return true;
     setSaving(true);
+    if(remember)flyToBin(targets.filter(target=>target.status==='cull'&&target.file.status!=='cull').map(target=>tileOf(target.file.id)));
     targets.forEach(target=>patchAsset(target.file.id,{status:target.status,favourite:target.favourite}));
     try{
       const saved=await sendDecisions(targets.map(target=>({assetId:target.file.id,status:target.status,favourite:target.favourite,expectedRevision:target.file.revision,requestId:requestID()})));
@@ -526,7 +533,7 @@ export function Today({initial}:{initial:TodayData}){
       <h2>Same file, different folders <small>{duplicateGroups.length} {duplicateGroups.length===1?'group':'groups'} · byte-identical, verified by full hash</small></h2>
       {duplicateGroups.map(group=><div className="xgroup" key={`${group.hash}:${group.size}`}>
         <p className="xmeta">{group.members.length} identical copies · {bytes(group.size)} each · <strong>{bytes(group.reclaimable)}</strong> reclaimable</p>
-        <div className="gal tight">{group.members.map(member=><figure className={`mo${(keepers[group.hash]??group.members[0].id)===member.id?' keeper':''}`} key={member.id}>
+        <div className="gal tight">{group.members.map(member=><figure className={`mo${(keepers[group.hash]??group.members[0].id)===member.id?' keeper':''}`} key={member.id} data-asset={member.id}>
           <Media asset={member}/>
           <div className="bdg"><button type="button" className="b tocmp" disabled={saving} onClick={()=>setKeepers(current=>({...current,[group.hash]:member.id}))}>{(keepers[group.hash]??group.members[0].id)===member.id?'keep this one':'choose as keeper'}</button></div>
           <figcaption className="cap"><span>{member.day}</span></figcaption>

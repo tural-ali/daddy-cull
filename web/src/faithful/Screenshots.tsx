@@ -10,6 +10,7 @@ import {shapeOf} from './justified';
 import {usePhotoURL} from './photoURL';
 import {reverting,requestID,sendDecisions,type Change} from './decisions';
 import {reloadPage} from './router';
+import {flyToBin} from './binFlight';
 
 type ScreenshotItem=Asset&{day:string;name:string;state:string};
 export type ScreenshotPage={items:ScreenshotItem[];total:number;bytes:number;unreviewed:number;reviewed:number;stills:number;recordings:number};
@@ -154,6 +155,7 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
       for(const item of chosen){
         const plan=await post<ScreenshotPlan>('/api/screenshot-actions/preview',{assetId:item.id,action});
         done.push(await post<ScreenshotPlan>('/api/screenshot-actions/execute',{id:plan.id}));
+        if(action==='remove')flyToBin([document.querySelector(`main figure[data-asset="${item.id}"]`)]);
       }
     }catch(reason){setError(`${(reason as Error).message} ${done.length} of ${chosen.length} done before it stopped.`)}
     const finished=new Set(done.map(plan=>plan.assetId));
@@ -226,7 +228,7 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
       : <Rows className="shots">{items.map((item,index)=>{
           const picked=picks.picked.has(item.id);
           const detail=[item.day||'undated',bytes(item.size)].join(' · ');
-          return <RowTile className={picked?'picked':''} key={item.id} ratio={shapeOf(item)} title={`${item.name} · ${detail}`}
+          return <RowTile className={picked?'picked':''} key={item.id} data-asset={item.id} ratio={shapeOf(item)} title={`${item.name} · ${detail}`}
             onClick={event=>{if(event.shiftKey&&picks.picked.size>0)picks.toggle(index,true);else photo.show(item.id)}}>
             <Media asset={item}/>
             <Pick checked={picked} label={`Select ${item.name}, ${detail}`} onToggle={extend=>picks.toggle(index,extend)}/>

@@ -8,6 +8,7 @@ import {usePageFilters} from './SearchFilters';
 import {MoreMarker,useMoreOnScroll} from './more';
 import {reverting,requestID,sendDecisions,type Change} from './decisions';
 import {reloadPage} from './router';
+import {flyToBin} from './binFlight';
 
 type SocialItem=Asset&{
   day:string;name:string;score:number;band:'likely'|'possible'|'watch';
@@ -92,6 +93,7 @@ export function Social({page,band:initialBand}:{page:SocialPage;band:string}){
     const changes:Change[]=chosen.map(item=>({assetId:item.id,status,favourite:status!=='cull'&&item.favourite,expectedRevision:item.revision,requestId:requestID()}));
     try{
       const saved=await sendDecisions(changes);
+      if(status==='cull')flyToBin(chosen.map(item=>document.querySelector(`main figure[data-asset="${item.id}"]`)));
       const gone=new Set(chosen.map(item=>item.id));
       const freed=chosen.reduce((sum,item)=>sum+item.size,0);
       const count=`${chosen.length} ${chosen.length===1?'video':'videos'}`;
@@ -165,7 +167,7 @@ export function Social({page,band:initialBand}:{page:SocialPage;band:string}){
           const social=likelySocial(item);
           const detail=[item.day||'undated',bytes(item.size),item.duration>0?clock(item.duration):''].filter(Boolean).join(' · ');
           const picked=selected.has(item.id);
-          return <RowTile className={`social${picked?' picked':''}`} key={item.id} ratio={item.width>0&&item.height>0?item.width/item.height:undefined} title={detail}
+          return <RowTile className={`social${picked?' picked':''}`} key={item.id} data-asset={item.id} ratio={item.width>0&&item.height>0?item.width/item.height:undefined} title={detail}
             onClick={event=>{if(event.shiftKey&&selected.size>0)picks.toggle(index,true);else photo.show(item.id)}}>
             {item.poster
               ? <img src={`/api/social-poster/${item.id}`} alt={item.name} loading="lazy" decoding="async"/>

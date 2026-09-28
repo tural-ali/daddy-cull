@@ -2500,3 +2500,12 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
 @media (prefers-reduced-motion: reduce) {
   .pageload { animation: pageload-in 0s .18s both; }
 }
+
+/* A file on its way to the Bin: its picture drawn in to a dot, then thrown
+   into the Bin in the sidebar. See binFlight.ts. */
+.binfly {
+  position: fixed; z-index: 250; overflow: hidden; pointer-events: none;
+  background: var(--bad); border-radius: 8px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 22%);
+}
+.binfly > div { position: absolute; inset: 0; background: var(--bg-3) center / cover no-repeat; }
