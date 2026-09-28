@@ -167,7 +167,7 @@ export function Layout({route,visit,binFiles,reviewed,streak,notifications,onNot
   return <div className={`shell${rail?' side-hidden':''}`}>
     {selection?<SelectionBar selection={selection}/>:<header className="gbar">
       <div className="gbarstart">
-        <a className="brand" href="/" {...tipProps('Today')}><Logo/><LogoMark className="brandmark"/></a>
+        <a className="brand" href="/" {...tipProps('Today')}><Logo intro/><LogoMark className="brandmark"/></a>
         {streak&&<div className="streakwrap">
           <StreakPill streak={streak} pill={pill} open={calendarOpen} bump={bump} onToggle={()=>setCalendarOpen(open=>!open)}/>
           {calendarOpen&&<StreakCalendar streak={streak} anchor={pill} onClose={closeCalendar}/>}

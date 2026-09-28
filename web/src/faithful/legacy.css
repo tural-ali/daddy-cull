@@ -175,7 +175,23 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .brand { display: flex; align-items: center; flex: none; margin-left: 20px; padding: 6px 8px 6px 4px; border-radius: 999px; }
 .brand:hover { text-decoration: none; }
 .brand svg { display: block; height: 24px; width: auto; }
+.brand svg:not(.brandmark) { --logo-h: 24px; height: var(--logo-h); width: calc(var(--logo-h) * 2016 / 308); }
 .brand .brandmark { display: none; }
+/* On a page load the logo shows whole for 10 s while light passes over it
+   twice, as a torch rolled across a metal plate. Then the wordmark slides
+   left in behind the tiles as the logo narrows to them, and the bar closes
+   up after it. From then on it is the mark alone. */
+.brand svg.folded { width: calc(var(--logo-h) * 505.5 / 308); }
+.brand svg.folded .word { transform: translateX(-1500px); }
+.brand svg.intro { animation: logo-fold 900ms cubic-bezier(.65, 0, .3, 1) calc(10s + var(--intro-at)) both; }
+.brand svg.intro .word { animation: logo-word 900ms cubic-bezier(.65, 0, .3, 1) calc(10s + var(--intro-at)) both; }
+.brand .shine { transform: translateX(-560px) skewX(-20deg); animation: logo-shine 5s linear calc(400ms + var(--intro-at)) 2 both; }
+@keyframes logo-fold { to { width: calc(var(--logo-h) * 505.5 / 308); } }
+@keyframes logo-word { to { transform: translateX(-1500px); } }
+@keyframes logo-shine {
+  0% { transform: translateX(-560px) skewX(-20deg); animation-timing-function: cubic-bezier(.4, 0, .3, 1); }
+  64%, 100% { transform: translateX(2300px) skewX(-20deg); }
+}
 .brand .ink { fill: var(--logo-ink); }
 .brand .mint, .brand .t2 { fill: var(--logo-mint); }
 .brand .t0 { fill: var(--logo-coral); }
@@ -639,6 +655,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   .gbaracts { margin-left: auto; }
   .streakpill { padding: 0 8px 0 4px; font-size: 15px; }
   .brand svg { height: 20px; }
+  .brand svg:not(.brandmark) { --logo-h: 20px; }
   .search { height: 44px; padding-right: 10px; }
   .search input { font-size: 15px; }
   .datepill .long { display: none; }
