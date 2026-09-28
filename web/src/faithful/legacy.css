@@ -1069,7 +1069,7 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
   --pale: color-mix(in oklab, var(--heat-low) 40%, #fff);
   --deep: color-mix(in oklab, var(--heat-low) 72%, var(--heat-low-ink));
 }
-.cell.mid, .legend .key.mid {
+.cell.mid, .legend .key.mid, .legend .key.fresh {
   --pale: color-mix(in oklab, var(--heat-mid) 40%, #fff);
   --deep: color-mix(in oklab, var(--heat-mid) 70%, var(--heat-mid-ink));
 }
@@ -1095,7 +1095,8 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 .legend .key.low, .legend .key.mid, .legend .key.high { width: 28px; background: linear-gradient(90deg in oklab, var(--pale), var(--deep)); }
 .legend .key.done { background: var(--bg-3); box-shadow: inset 0 0 0 1px var(--line-2); }
 .legend .key.now  { box-shadow: 0 0 0 2px var(--accent); }
-.legend .key.fresh { position: relative; background: var(--bg-3); }
+/* A waiting date, as on the calendar, with the dot on its corner. */
+.legend .key.fresh { position: relative; background: color-mix(in oklab, var(--deep) 50%, var(--pale)); }
 .legend .key.fresh .freshdot { position: absolute; top: -3px; right: -3px; width: 7px; height: 7px; box-shadow: 0 0 0 1.5px var(--bg); }
 .cell { position: relative; }
 .cell > .freshdot { position: absolute; top: -3px; right: -3px; box-shadow: 0 0 0 2px var(--bg); }
