@@ -76,10 +76,7 @@ func (w *UpgradeWriter) Handler(secret string) http.Handler {
 		return nil
 	}
 	mux.HandleFunc("POST /upgrade/preview", func(writer http.ResponseWriter, request *http.Request) {
-		var input struct {
-			ArchiveAssetID int64 `json:"archiveAssetId"`
-			SourceAssetID  int64 `json:"sourceAssetId"`
-		}
+		var input UpgradeChoice
 		if err := decode(writer, request, &input); err != nil {
 			respond(writer, nil, err)
 			return
@@ -88,9 +85,7 @@ func (w *UpgradeWriter) Handler(secret string) http.Handler {
 		respond(writer, plan, err)
 	})
 	mux.HandleFunc("POST /upgrade/execute", func(writer http.ResponseWriter, request *http.Request) {
-		var input struct {
-			ID string `json:"id"`
-		}
+		var input PlanRef
 		if err := decode(writer, request, &input); err != nil {
 			respond(writer, nil, err)
 			return

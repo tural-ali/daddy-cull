@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
+	"daddy-cull/next/internal/addon"
+	"daddy-cull/next/internal/api"
 	"daddy-cull/next/internal/catalog"
 	"daddy-cull/next/mac"
 	"encoding/json"
@@ -61,6 +63,7 @@ func main() {
 	demoNetwork := flag.Bool("demo-network", false, "allow private-network access; media access uses fixed read-only proxy routes")
 	check := flag.Bool("check", false, "check a running local prototype and exit")
 	web := flag.String("web", "web/dist", "compiled React directory")
+	addonsDir := flag.String("addons-dir", "state/addons", "folder of addons of your own, one folder each holding an addon.json; created if missing")
 	// The Immich key is taken from IMMICH_KEY only, never from a flag, so it
 	// does not appear in a process listing or in the container's command line.
 	immichURL := flag.String("immich-url", os.Getenv("IMMICH_URL"), "Immich base URL that archive favourites are mirrored to; empty disables the sync")
@@ -272,27 +275,13 @@ func main() {
 			FFmpeg:      resolveTool(*frameTool),
 			RawTool:     resolveTool(*rawTool),
 		}
-		if mediaRoots.Archive != "" || mediaRoots.Screenshots != "" || mediaRoots.Upgrades != "" || mediaRoots.Disks != "" || mediaRoots.Review != "" {
-			mux.Handle("/api/media/{id}/{mode}", s.LocalMediaHandler(mediaRoots))
-			// The Bin's own files live inside the archive share, so they are
-			// previewable wherever the archive is mounted.
-			mux.Handle("/api/bin-media/{id}/{mode}", s.LegacyBinMediaHandler(mediaRoots))
-			mux.Handle("/api/binned-media/{source}/{plan}/{index}/{mode}", s.BinnedMediaHandler(mediaRoots))
-		} else if *upstream != "" {
-			mux.Handle("/api/media/{id}/{mode}", s.MediaHandler(*upstream))
-		}
-		if *socialPosters != "" {
-			mux.Handle("GET /api/social-poster/{id}", s.SocialPosterHandler(*socialPosters))
-		}
-		mux.Handle("/api/bin", catalog.BinGateway(*binUpstream, secret))
-		mux.Handle("/api/bin/", catalog.BinGateway(*binUpstream, secret))
-		mux.Handle("GET /api/legacy-bin", s.Handler())
-		mux.Handle("/api/legacy-bin/", catalog.LegacyBinGateway(*binUpstream, secret))
-		mux.Handle("/api/screenshot-actions/", catalog.ScreenshotGateway(*binUpstream, secret))
-		mux.Handle("/api/upgrade-actions/", catalog.UpgradeGateway(*binUpstream, secret))
-		mux.Handle("GET /api/trash", s.Handler())
-		mux.Handle("GET /api/trash/deleting", s.Handler())
-		mux.Handle("/api/trash/", catalog.TrashGateway(*binUpstream, secret))
+		// Every API route is described where it is served, so the reference at
+		// /developers and /api/openapi.json is always the API as it runs. A
+		// request passes the same-origin check, then the addons' check: an
+		// addon's key, and whether the addon a route belongs to is on.
+		book := api.NewBook()
+		apiMux := api.NewMux(book)
+		apiMux.Guard(api.SameOrigin)
 		// The Mac helper that carries culling across to Apple Photos talks to
 		// this process, which is also where its jobs live. Its key is normally
 		// handed out by the setup command on the Apple Photos page and only its
@@ -306,14 +295,44 @@ func main() {
 		} else if !photos.Enabled() {
 			log.Print("Apple Photos helper not set up yet: the Apple Photos page offers the setup command")
 		}
+		immich := catalog.ImmichConfig{URL: *immichURL, Key: os.Getenv("IMMICH_KEY"), PathPrefix: *immichPrefix}
+		if err := os.MkdirAll(*addonsDir, 0o755); err != nil {
+			log.Printf("addons folder %s could not be made, so only Cull's own addons are available: %v", *addonsDir, err)
+		}
+		addons, err := addon.NewRegistry(s, book, *addonsDir, s.BuiltInAddons(catalog.AddonNeeds{
+			ScreenshotsMounted: mediaRoots.Screenshots != "",
+			DisksMounted:       mediaRoots.Disks != "",
+			UpgradesMounted:    mediaRoots.Upgrades != "",
+			ImmichConfigured:   immich.URL != "" && immich.Key != "",
+			Photos:             photos,
+		})...)
+		if err != nil {
+			log.Fatal(err)
+		}
+		apiMux.Guard(addons.Guard)
+		s.Routes(apiMux)
+		s.MediaRoutes(apiMux, mediaRoots, *upstream, *socialPosters)
+		s.WriterRoutes(apiMux, *binUpstream, secret)
+		photos.Routes(apiMux)
+		addons.Routes(apiMux)
+		s.EventRoutes(apiMux, addons.Changed)
+		apiMux.HandleFunc(api.Route{
+			Method: "GET", Path: "/api/openapi.json", Tag: "Reference", Needs: api.Read,
+			Summary: "Get this reference",
+			Doc:     "Every route above as an OpenAPI 3.1 document, generated from the routes as they are served, for a client generator or another viewer.",
+			Returns: map[string]any{},
+		}, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "no-cache")
+			json.NewEncoder(w).Encode(book.OpenAPI(api.Info{Title: "Daddy Cull", Version: api.Version,
+				Description: "The API Cull's own pages use, open to addons. Everything a page can do, an addon can do, within the permissions it asks for."}))
+		})
+		book.Tag("Reference", "The API described by itself.")
+		mux.Handle("/api/", apiMux)
+		mux.Handle("/", webApp(*web, []string{"/year", "/duplicates", "/upgrades", "/shadows", "/screenshots", "/social", "/log", "/bin", "/photos", "/settings", "/addons", "/developers", "/addons/{id}/{page}"}))
 		// Photos is checked again by itself while Cull Sync is online, so the
 		// Apple Photos page never shows a stale answer.
-		go photos.KeepChecking(ctx)
-		photosRoutes := photos.Handler()
-		mux.Handle("/api/photos", photosRoutes)
-		mux.Handle("/api/photos/", photosRoutes)
-		mux.Handle("/api/", s.Handler())
-		mux.Handle("/", webApp(*web, []string{"/year", "/duplicates", "/upgrades", "/shadows", "/screenshots", "/social", "/log", "/bin", "/photos", "/settings"}))
+		go addons.While(ctx, catalog.AddonApplePhotos, photos.KeepChecking)
 		// Favourites are saved by this process, so the worker that mirrors them
 		// to Immich runs here too; the private writer has no reason to reach it.
 		// Video tiles show how long each clip runs, read once per file.
@@ -324,7 +343,7 @@ func main() {
 		if mediaRoots.Archive != "" && mediaRoots.RawTool != "" {
 			go s.KeepShapes(ctx, mediaRoots)
 		}
-		startImmichSync(ctx, s, catalog.ImmichConfig{URL: *immichURL, Key: os.Getenv("IMMICH_KEY"), PathPrefix: *immichPrefix})
+		startImmichSync(ctx, s, immich, addons)
 	}
 	server := &http.Server{Addr: *addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 0, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}
 	go func() {
@@ -358,7 +377,7 @@ func resolveTool(name string) string {
 // missing or malformed setting is reported once and leaves the review app
 // running without it: hearts are still saved and queued, and reach Immich once
 // the setting is fixed and the app restarted.
-func startImmichSync(ctx context.Context, s *catalog.Store, cfg catalog.ImmichConfig) {
+func startImmichSync(ctx context.Context, s *catalog.Store, cfg catalog.ImmichConfig, addons *addon.Registry) {
 	sync, err := catalog.NewImmichSync(s, cfg)
 	if err != nil {
 		log.Printf("Immich favourite sync disabled: %v", err)
@@ -369,7 +388,9 @@ func startImmichSync(ctx context.Context, s *catalog.Store, cfg catalog.ImmichCo
 		return
 	}
 	log.Printf("Immich favourite sync enabled for %s", cfg.URL)
-	go sync.Run(ctx)
+	// It runs only while the Immich addon is on; hearts given meanwhile wait
+	// in the queue and are sent once it is back on.
+	go addons.While(ctx, catalog.AddonImmich, sync.Run)
 }
 
 func envOr(name, fallback string) string {

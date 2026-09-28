@@ -73,10 +73,7 @@ func (t *TrashWriter) Handler(secret string) http.Handler {
 		}
 		json.NewEncoder(w).Encode(result)
 	}
-	type input struct {
-		Keys         []string `json:"keys"`
-		Confirmation string   `json:"confirmation"`
-	}
+	type input = TrashSelection
 	decode := func(w http.ResponseWriter, r *http.Request) (input, error) {
 		var value input
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, trashBodyLimit))

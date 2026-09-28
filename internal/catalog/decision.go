@@ -12,14 +12,24 @@ var ErrInvalid = errors.New("invalid request")
 
 // Decisions are metadata only. No filesystem capability exists in this package.
 type Decision struct {
-	RequestID        string `json:"requestId"`
-	AssetID          int64  `json:"assetId"`
-	ExpectedRevision int64  `json:"expectedRevision"`
-	Status           string `json:"status"`
-	Favourite        bool   `json:"favourite"`
+	// RequestID makes a retry safe: the same id, 8 to 100 characters, is
+	// only acted on once.
+	RequestID string `json:"requestId"`
+	AssetID   int64  `json:"assetId"`
+	// ExpectedRevision is the file's revision when it was read. If it has
+	// changed since, nothing is saved.
+	ExpectedRevision int64 `json:"expectedRevision"`
+	// Status is keep, later, cull to remove the file, or unreviewed to take
+	// a choice back.
+	Status string `json:"status"`
+	// Favourite is the heart. Removing a file takes its heart away.
+	Favourite bool `json:"favourite"`
 }
 type Saved struct {
-	Revision          int64  `json:"revision"`
+	// Revision is the file's revision now; send it with the next choice.
+	Revision int64 `json:"revision"`
+	// PreviousStatus and PreviousFavourite are what the choice replaced,
+	// so it can be undone.
 	PreviousStatus    string `json:"previousStatus"`
 	PreviousFavourite bool   `json:"previousFavourite"`
 }

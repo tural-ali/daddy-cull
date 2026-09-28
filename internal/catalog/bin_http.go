@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/subtle"
+	"daddy-cull/next/internal/api"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,7 +15,7 @@ import (
 )
 
 func sameOriginJSON(w http.ResponseWriter, r *http.Request) bool {
-	if r.Header.Get("Content-Type") != "application/json" {
+	if !api.IsJSON(r) {
 		http.Error(w, "JSON required", 415)
 		return false
 	}
@@ -111,9 +112,7 @@ func (b *BinEngine) Handler(secret string) http.Handler {
 	}
 	mux.HandleFunc("GET /bin", func(w http.ResponseWriter, r *http.Request) { p, e := b.List(); respond(w, p, e) })
 	mux.HandleFunc("POST /bin/preview", func(w http.ResponseWriter, r *http.Request) {
-		var v struct {
-			IDs []int64 `json:"ids"`
-		}
+		var v BinSelection
 		if e := decode(w, r, &v); e != nil {
 			respond(w, nil, e)
 			return
@@ -122,11 +121,7 @@ func (b *BinEngine) Handler(secret string) http.Handler {
 		respond(w, p, e)
 	})
 	mux.HandleFunc("POST /bin/execute", func(w http.ResponseWriter, r *http.Request) {
-		var v struct {
-			ID           string `json:"id"`
-			Action       string `json:"action"`
-			Confirmation string `json:"confirmation"`
-		}
+		var v PlanStep
 		if e := decode(w, r, &v); e != nil {
 			respond(w, nil, e)
 			return

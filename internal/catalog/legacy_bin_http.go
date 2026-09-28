@@ -76,9 +76,7 @@ func (b *LegacyBinEngine) Handler(secret string) http.Handler {
 		return nil
 	}
 	mux.HandleFunc("POST /legacy-bin/preview", func(w http.ResponseWriter, r *http.Request) {
-		var input struct {
-			IDs []int64 `json:"ids"`
-		}
+		var input BinSelection
 		if err := decode(w, r, &input); err != nil {
 			respond(w, nil, err)
 			return
@@ -87,11 +85,7 @@ func (b *LegacyBinEngine) Handler(secret string) http.Handler {
 		respond(w, plan, err)
 	})
 	mux.HandleFunc("POST /legacy-bin/execute", func(w http.ResponseWriter, r *http.Request) {
-		var input struct {
-			ID           string `json:"id"`
-			Action       string `json:"action"`
-			Confirmation string `json:"confirmation"`
-		}
+		var input PlanStep
 		if err := decode(w, r, &input); err != nil {
 			respond(w, nil, err)
 			return

@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"daddy-cull/next/internal/api"
 )
 
 // PhotosAgentHeader carries the helper's shared secret. A header rather than a
@@ -21,21 +23,95 @@ const PhotosAgentHeader = "X-Photos-Agent-Key"
 // dozen at a time, so even with thumbnails a report is a megabyte or two.
 const photosReportLimit = 8 << 20
 
-// Handler serves the Photos page's routes and the helper's. The page's POSTs
-// pass the same JSON and same-origin checks as every other write in the app;
-// the helper's routes need the shared key instead, because the helper is not a
-// browser and has no origin to check.
+// PhotosOverview is what the Apple Photos page shows before a check: how
+// much is waiting to be carried across, from Cull's own records alone.
+type PhotosOverview struct {
+	// Delete counts files removed in Cull that Photos still holds, as far as
+	// Cull knows.
+	Delete int `json:"delete"`
+	// Favourite counts hearts not yet given in Photos.
+	Favourite int `json:"favourite"`
+	// Held counts files kept back from the sync, each with its reason.
+	Held int `json:"held"`
+	// Undated counts removed files without a date to find them by.
+	Undated int `json:"undated"`
+	// Restored lists files put back in Cull after Photos was told to delete
+	// them, which need putting back in Photos by hand.
+	Restored []PhotosRestored `json:"restored"`
+	Synced   PhotosSynced     `json:"synced"`
+}
+
+// PhotosSynced is what earlier syncs carried across.
+type PhotosSynced struct {
+	Deleted    int `json:"deleted"`
+	Favourited int `json:"favourited"`
+	// Last is when a sync last finished, empty when none has.
+	Last string `json:"last"`
+}
+
+// PhotosApply says which of a check's findings to carry out.
+type PhotosApply struct {
+	// Job is the check's id.
+	Job string `json:"job"`
+	// Delete and Favourite are the keys of the matches to act on, from the
+	// check's findings. Anything left out is left alone.
+	Delete    []string `json:"delete"`
+	Favourite []string `json:"favourite"`
+}
+
+// PhotosJobRef names a sync.
+type PhotosJobRef struct {
+	Job string `json:"job"`
+}
+
+// PhotosForget names removed files that are gone from Photos already, by
+// hand perhaps, so Cull stops asking.
+type PhotosForget struct {
+	Keys []string `json:"keys"`
+}
+
+// PhotosForgotten counts the files forgotten.
+type PhotosForgotten struct {
+	Forgotten int `json:"forgotten"`
+}
+
+// PhotosCancel answers a heartbeat: whether the Mac should stop what it is
+// doing.
+type PhotosCancel struct {
+	Cancel bool `json:"cancel"`
+}
+
+// PhotosFailure says why the Mac could not finish a job.
+type PhotosFailure struct {
+	Error string `json:"error"`
+}
+
+// Empty is a body with nothing in it, sent as {}.
+type Empty struct{}
+
+// Handler serves the Photos routes on their own, as Routes does on a shared
+// mux.
 func (h *PhotosHub) Handler() http.Handler {
-	mux := http.NewServeMux()
+	m := api.NewMux(api.NewBook())
+	m.Guard(api.SameOrigin)
+	h.Routes(m)
+	return m
+}
+
+// Routes serves the Apple Photos page's routes and Cull Sync's. The page's
+// POSTs pass the same JSON and same-origin checks as every other write in the
+// app; the helper's routes need the shared key instead, because the helper is
+// not a browser and has no origin to check.
+func (h *PhotosHub) Routes(m *api.Mux) {
+	m.Book().Tag("Apple Photos", "Carrying what was removed and favourited in Cull across to Apple Photos, through Cull Sync on a Mac. Photos is only ever changed through its own interface, after the person agrees on the Mac.")
+	m.Book().Tag("Cull Sync", "The routes Cull Sync, the Mac helper, calls with the key it was set up with. They are listed so nothing is hidden; an addon has no reason to call them.")
 	writeJSON := func(w http.ResponseWriter, status int, value any) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(status)
 		json.NewEncoder(w).Encode(value)
 	}
-	fail := func(w http.ResponseWriter, status int, message string) {
-		writeJSON(w, status, map[string]string{"error": message})
-	}
+	fail := api.Fail
 	failFor := func(w http.ResponseWriter, err error) {
 		switch {
 		case errors.Is(err, ErrPhotosDisabled):
@@ -61,26 +137,39 @@ func (h *PhotosHub) Handler() http.Handler {
 		}
 		return true
 	}
+	route := func(method, path, needs, summary, doc string, body, returns any, errs ...api.Error) api.Route {
+		return api.Route{Method: method, Path: path, Addon: AddonApplePhotos, Tag: "Apple Photos", Needs: needs, Summary: summary, Doc: doc, Body: body, Returns: returns, Errors: errs}
+	}
+	job := api.Path("job", "The sync's id, from the check that started it.", "job")
+	notSetUp := api.Error{Status: 503, When: "Cull Sync is not set up yet, or the catalogue could not be read."}
+	stale := api.Error{Status: 409, When: "The sync has moved on since, perhaps in another tab. The body carries it as it stands."}
 
 	// The page.
-	mux.HandleFunc("GET /api/photos", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, h.Status())
-	})
-	mux.HandleFunc("GET /api/photos/overview", func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-		defer cancel()
-		plan, err := h.s.PhotosPlan(ctx)
-		if err != nil {
-			failFor(w, err)
-			return
-		}
-		deleted, favourited, last := h.s.PhotosSyncCounts(ctx)
-		writeJSON(w, 200, map[string]any{
-			"delete": len(plan.Delete), "favourite": len(plan.Favourite), "held": len(plan.Held), "undated": plan.Undated,
-			"restored": plan.Restored, "synced": map[string]any{"deleted": deleted, "favourited": favourited, "last": last},
+	m.HandleFunc(route("GET", "/api/photos", api.Read, "Get Cull Sync's state",
+		"Whether Cull Sync is set up and online, and the sync in hand, if any.", nil, PhotosStatus{}),
+		func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, h.Status()) })
+	m.HandleFunc(route("GET", "/api/photos/overview", api.Read, "Count what is waiting for Photos",
+		"From Cull's own records, without asking the Mac: what would be deleted and favourited, and what is held back.", nil, PhotosOverview{}, notSetUp),
+		func(w http.ResponseWriter, r *http.Request) {
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			defer cancel()
+			plan, err := h.s.PhotosPlan(ctx)
+			if err != nil {
+				failFor(w, err)
+				return
+			}
+			deleted, favourited, last := h.s.PhotosSyncCounts(ctx)
+			restored := plan.Restored
+			if restored == nil {
+				restored = []PhotosRestored{}
+			}
+			writeJSON(w, 200, PhotosOverview{Delete: len(plan.Delete), Favourite: len(plan.Favourite), Held: len(plan.Held), Undated: plan.Undated,
+				Restored: restored, Synced: PhotosSynced{Deleted: deleted, Favourited: favourited, Last: last}})
 		})
-	})
-	mux.HandleFunc("GET /api/photos/jobs/{job}", func(w http.ResponseWriter, r *http.Request) {
+	withJob := route("GET", "/api/photos/jobs/{job}", api.Read, "Get a sync",
+		"A check or an apply and how far it has got, with what the Mac found.", nil, PhotosJobView{}, api.Error{Status: 404, When: "The sync is no longer held."})
+	withJob.Params = []api.Param{job}
+	m.HandleFunc(withJob, func(w http.ResponseWriter, r *http.Request) {
 		view, ok := h.Job(r.PathValue("job"))
 		if !ok {
 			fail(w, 404, "That sync is no longer held. Check again.")
@@ -88,7 +177,11 @@ func (h *PhotosHub) Handler() http.Handler {
 		}
 		writeJSON(w, 200, view)
 	})
-	mux.HandleFunc("GET /api/photos/thumb/{job}/{n}", func(w http.ResponseWriter, r *http.Request) {
+	thumb := route("GET", "/api/photos/thumb/{job}/{n}", api.Read, "Get a match's thumbnail",
+		"The thumbnail the Mac sent of a photo it matched in Photos, so a person can see it is the right one.", nil, nil, api.Error{Status: 404, When: "The sync or the match is no longer held."})
+	thumb.Params = []api.Param{job, api.PathInt("n", "The match's place in the sync's findings, from 0.", "0")}
+	thumb.Produces = "image/jpeg"
+	m.HandleFunc(thumb, func(w http.ResponseWriter, r *http.Request) {
 		n, err := strconv.Atoi(r.PathValue("n"))
 		if err != nil {
 			http.NotFound(w, r)
@@ -104,111 +197,119 @@ func (h *PhotosHub) Handler() http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Write(thumb)
 	})
-	mux.HandleFunc("POST /api/photos/check", func(w http.ResponseWriter, r *http.Request) {
-		if !sameOriginJSON(w, r) {
-			return
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-		defer cancel()
-		view, err := h.StartCheck(ctx)
-		if errors.Is(err, ErrPhotosBusy) {
-			writeJSON(w, 409, map[string]any{"error": "A sync is already running.", "job": view})
-			return
-		}
-		if err != nil {
-			failFor(w, err)
-			return
-		}
-		writeJSON(w, 200, view)
-	})
-	mux.HandleFunc("POST /api/photos/apply", func(w http.ResponseWriter, r *http.Request) {
-		if !sameOriginJSON(w, r) {
-			return
-		}
-		var body struct {
-			Job       string   `json:"job"`
-			Delete    []string `json:"delete"`
-			Favourite []string `json:"favourite"`
-		}
-		if !decode(w, r, 1<<20, &body) {
-			return
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-		defer cancel()
-		view, err := h.Apply(ctx, body.Job, body.Delete, body.Favourite)
-		if errors.Is(err, ErrPhotosStale) && view.ID != "" {
-			writeJSON(w, 409, map[string]any{"error": "Everything chosen has changed in Cull since the check. Check again.", "job": view})
-			return
-		}
-		if err != nil {
-			failFor(w, err)
-			return
-		}
-		writeJSON(w, 200, view)
-	})
-	mux.HandleFunc("POST /api/photos/cancel", func(w http.ResponseWriter, r *http.Request) {
-		if !sameOriginJSON(w, r) {
-			return
-		}
-		var body struct {
-			Job string `json:"job"`
-		}
-		if !decode(w, r, 4096, &body) {
-			return
-		}
-		view, err := h.Cancel(body.Job)
-		if err != nil {
-			if view.ID != "" {
-				writeJSON(w, 409, map[string]any{"error": "The Mac is already changing Photos. Use the dialog on the Mac to stop it.", "job": view})
+	m.HandleFunc(route("POST", "/api/photos/check", api.Review, "Check Photos",
+		"Asks the Mac to find in Photos each file waiting to be carried across. Nothing in Photos changes. The body is empty.", nil, PhotosJobView{},
+		api.Error{Status: 409, When: "A sync is already running. The body carries it."}, notSetUp),
+		func(w http.ResponseWriter, r *http.Request) {
+			if !sameOriginJSON(w, r) {
 				return
 			}
-			failFor(w, err)
-			return
-		}
-		writeJSON(w, 200, view)
-	})
-	mux.HandleFunc("POST /api/photos/forget", func(w http.ResponseWriter, r *http.Request) {
-		if !sameOriginJSON(w, r) {
-			return
-		}
-		var body struct {
-			Keys []string `json:"keys"`
-		}
-		if !decode(w, r, 1<<20, &body) {
-			return
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-		defer cancel()
-		n, err := h.s.ForgetPhotosDeletions(ctx, body.Keys)
-		if err != nil {
-			failFor(w, err)
-			return
-		}
-		writeJSON(w, 200, map[string]int{"forgotten": n})
-	})
+			ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+			defer cancel()
+			view, err := h.StartCheck(ctx)
+			if errors.Is(err, ErrPhotosBusy) {
+				writeJSON(w, 409, map[string]any{"error": "A sync is already running.", "job": view})
+				return
+			}
+			if err != nil {
+				failFor(w, err)
+				return
+			}
+			writeJSON(w, 200, view)
+		})
+	m.HandleFunc(route("POST", "/api/photos/apply", api.Delete, "Carry a check's findings across",
+		"Asks the Mac to put the chosen matches in an album to delete from, and to favourite the others, once the person agrees on the Mac. It needs delete, as it ends in Photos deleting files.", PhotosApply{}, PhotosJobView{}, stale, notSetUp),
+		func(w http.ResponseWriter, r *http.Request) {
+			if !sameOriginJSON(w, r) {
+				return
+			}
+			var body PhotosApply
+			if !decode(w, r, 1<<20, &body) {
+				return
+			}
+			ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+			defer cancel()
+			view, err := h.Apply(ctx, body.Job, body.Delete, body.Favourite)
+			if errors.Is(err, ErrPhotosStale) && view.ID != "" {
+				writeJSON(w, 409, map[string]any{"error": "Everything chosen has changed in Cull since the check. Check again.", "job": view})
+				return
+			}
+			if err != nil {
+				failFor(w, err)
+				return
+			}
+			writeJSON(w, 200, view)
+		})
+	m.HandleFunc(route("POST", "/api/photos/cancel", api.Review, "Cancel a sync",
+		"Stops a sync the Mac has not started changing Photos for.", PhotosJobRef{}, PhotosJobView{},
+		api.Error{Status: 409, When: "The Mac is already changing Photos; it is stopped from the dialog on the Mac."}, notSetUp),
+		func(w http.ResponseWriter, r *http.Request) {
+			if !sameOriginJSON(w, r) {
+				return
+			}
+			var body PhotosJobRef
+			if !decode(w, r, 4096, &body) {
+				return
+			}
+			view, err := h.Cancel(body.Job)
+			if err != nil {
+				if view.ID != "" {
+					writeJSON(w, 409, map[string]any{"error": "The Mac is already changing Photos. Use the dialog on the Mac to stop it.", "job": view})
+					return
+				}
+				failFor(w, err)
+				return
+			}
+			writeJSON(w, 200, view)
+		})
+	m.HandleFunc(route("POST", "/api/photos/forget", api.Review, "Stop asking Photos about files",
+		"For removed files that are gone from Photos already, perhaps by hand, so no check looks for them again.", PhotosForget{}, PhotosForgotten{}, notSetUp),
+		func(w http.ResponseWriter, r *http.Request) {
+			if !sameOriginJSON(w, r) {
+				return
+			}
+			var body PhotosForget
+			if !decode(w, r, 1<<20, &body) {
+				return
+			}
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			defer cancel()
+			n, err := h.s.ForgetPhotosDeletions(ctx, body.Keys)
+			if err != nil {
+				failFor(w, err)
+				return
+			}
+			writeJSON(w, 200, PhotosForgotten{Forgotten: n})
+		})
 
 	// Setting the helper up. The page asks for a one-time code with a POST
 	// that passes the usual same-origin checks, so no other site can get one,
 	// and only the Mac that runs the command ever sees the key.
-	mux.HandleFunc("POST /api/photos/setup", func(w http.ResponseWriter, r *http.Request) {
-		if !sameOriginJSON(w, r) {
-			return
-		}
-		var body struct{}
-		if !decode(w, r, 1024, &body) {
-			return
-		}
-		view, err := h.NewSetup(photosBase(r))
-		switch {
-		case errors.Is(err, ErrPhotosSetupUnavailable):
-			fail(w, 503, "This server was built without Cull Sync, so it cannot install it.")
-		case err != nil:
-			fail(w, 400, "The address this page was opened at cannot be used for the command. Open Daddy Cull by its usual address and try again.")
-		default:
-			writeJSON(w, 200, view)
-		}
-	})
-	mux.HandleFunc("GET /api/photos/setup/{id}", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc(route("POST", "/api/photos/setup", api.Settings, "Get a setup command",
+		"A one-line command to run on the Mac, which installs Cull Sync with a key of its own. The code in it works once, for a few minutes. The body is {}.", Empty{}, PhotosSetupView{},
+		api.Error{Status: 503, When: "This server was built without Cull Sync."}, api.Error{Status: 400, When: "The address the page was opened at cannot be used in the command."}),
+		func(w http.ResponseWriter, r *http.Request) {
+			if !sameOriginJSON(w, r) {
+				return
+			}
+			var body Empty
+			if !decode(w, r, 1024, &body) {
+				return
+			}
+			view, err := h.NewSetup(photosBase(r))
+			switch {
+			case errors.Is(err, ErrPhotosSetupUnavailable):
+				fail(w, 503, "This server was built without Cull Sync, so it cannot install it.")
+			case err != nil:
+				fail(w, 400, "The address this page was opened at cannot be used for the command. Open Daddy Cull by its usual address and try again.")
+			default:
+				writeJSON(w, 200, view)
+			}
+		})
+	setup := route("GET", "/api/photos/setup/{id}", api.Read, "Get a setup command's state",
+		"Whether the command has been run yet, and whether Cull Sync then came online.", nil, PhotosSetupView{}, api.Error{Status: 404, When: "The command is no longer held."})
+	setup.Params = []api.Param{api.Path("id", "The setup's id.", "setup")}
+	m.HandleFunc(setup, func(w http.ResponseWriter, r *http.Request) {
 		view, ok := h.Setup(r.PathValue("id"))
 		if !ok {
 			fail(w, 404, "That setup command is no longer held. Get a new one.")
@@ -219,7 +320,11 @@ func (h *PhotosHub) Handler() http.Handler {
 	// The command's fetch. It answers with a script even when it refuses,
 	// because the answer goes straight into bash: a script that says why reads
 	// better in Terminal than curl's bare status code, and it changes nothing.
-	mux.HandleFunc("GET /api/photos/install/{code}", func(w http.ResponseWriter, r *http.Request) {
+	install := route("GET", "/api/photos/install/{code}", api.Read, "Get the installer",
+		"The script the setup command pipes into bash. It works once: fetching it uses the code up.", nil, nil)
+	install.Params = []api.Param{api.Path("code", "The one-time code from the setup command.", "code")}
+	install.Produces, install.Tag, install.Internal = "text/plain", "Cull Sync", true
+	m.HandleFunc(install, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -244,9 +349,32 @@ func (h *PhotosHub) Handler() http.Handler {
 		}
 	})
 
-	// The helper.
-	agent := http.NewServeMux()
-	agent.HandleFunc("GET /api/photos/agent/work", func(w http.ResponseWriter, r *http.Request) {
+	// The helper. A helper whose key was replaced, or a server that never
+	// handed one out, gets the same answer: set it up again from the page.
+	agentOnly := func(next http.HandlerFunc) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !h.authorised(r.Header.Get(PhotosAgentHeader)) {
+				fail(w, 403, "The key in sync.conf is not the one this server handed out. Set Cull Sync up again from the Apple Photos page.")
+				return
+			}
+			if r.Method == http.MethodPost && !api.IsJSON(r) {
+				fail(w, 415, "JSON required.")
+				return
+			}
+			next(w, r)
+		})
+	}
+	wrongKey := api.Error{Status: 403, When: "The " + PhotosAgentHeader + " header is not the key this server handed out."}
+	agent := func(method, path, summary string, body, returns any, params ...api.Param) api.Route {
+		needs := api.Read
+		if method == "POST" {
+			needs = api.Review
+		}
+		return api.Route{Method: method, Path: path, Addon: AddonApplePhotos, Tag: "Cull Sync", Needs: needs, Internal: true, Summary: summary, Body: body, Returns: returns, Params: params, Errors: []api.Error{wrongKey}}
+	}
+	work := agent("GET", "/api/photos/agent/work", "Wait for work", nil, PhotosTask{})
+	work.Doc = "Held open until there is a job for the Mac, or answered 204 when there is none for a while."
+	m.Handle(work, agentOnly(func(w http.ResponseWriter, r *http.Request) {
 		task, err := h.Claim(r.Context())
 		if err != nil {
 			// The helper hung up, or the server is shutting down.
@@ -258,15 +386,15 @@ func (h *PhotosHub) Handler() http.Handler {
 			return
 		}
 		writeJSON(w, 200, task)
-	})
-	agent.HandleFunc("POST /api/photos/agent/heartbeat", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	m.Handle(agent("POST", "/api/photos/agent/heartbeat", "Say the Mac is online", PhotosHeartbeat{}, PhotosCancel{}), agentOnly(func(w http.ResponseWriter, r *http.Request) {
 		var beat PhotosHeartbeat
 		if !decode(w, r, 8192, &beat) {
 			return
 		}
-		writeJSON(w, 200, map[string]bool{"cancel": h.Seen(beat)})
-	})
-	agent.HandleFunc("POST /api/photos/agent/jobs/{job}/matches", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, PhotosCancel{Cancel: h.Seen(beat)})
+	}))
+	m.Handle(agent("POST", "/api/photos/agent/jobs/{job}/matches", "Report matches found in Photos", PhotosMatchReport{}, Done{}, job), agentOnly(func(w http.ResponseWriter, r *http.Request) {
 		var report PhotosMatchReport
 		if !decode(w, r, photosReportLimit, &report) {
 			return
@@ -275,10 +403,10 @@ func (h *PhotosHub) Handler() http.Handler {
 			failFor(w, err)
 			return
 		}
-		writeJSON(w, 200, map[string]bool{"ok": true})
-	})
-	agent.HandleFunc("POST /api/photos/agent/jobs/{job}/checked", func(w http.ResponseWriter, r *http.Request) {
-		var body struct{}
+		writeJSON(w, 200, Done{OK: true})
+	}))
+	m.Handle(agent("POST", "/api/photos/agent/jobs/{job}/checked", "Report a check finished", Empty{}, Done{}, job), agentOnly(func(w http.ResponseWriter, r *http.Request) {
+		var body Empty
 		if !decode(w, r, 1024, &body) {
 			return
 		}
@@ -286,12 +414,10 @@ func (h *PhotosHub) Handler() http.Handler {
 			failFor(w, err)
 			return
 		}
-		writeJSON(w, 200, map[string]bool{"ok": true})
-	})
-	agent.HandleFunc("POST /api/photos/agent/jobs/{job}/failed", func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Error string `json:"error"`
-		}
+		writeJSON(w, 200, Done{OK: true})
+	}))
+	m.Handle(agent("POST", "/api/photos/agent/jobs/{job}/failed", "Report a job failed", PhotosFailure{}, Done{}, job), agentOnly(func(w http.ResponseWriter, r *http.Request) {
+		var body PhotosFailure
 		if !decode(w, r, 8192, &body) {
 			return
 		}
@@ -299,9 +425,9 @@ func (h *PhotosHub) Handler() http.Handler {
 			failFor(w, err)
 			return
 		}
-		writeJSON(w, 200, map[string]bool{"ok": true})
-	})
-	agent.HandleFunc("POST /api/photos/agent/jobs/{job}/applied", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, Done{OK: true})
+	}))
+	m.Handle(agent("POST", "/api/photos/agent/jobs/{job}/applied", "Report what changed in Photos", PhotosAppliedReport{}, Done{}, job), agentOnly(func(w http.ResponseWriter, r *http.Request) {
 		var report PhotosAppliedReport
 		if !decode(w, r, 4<<20, &report) {
 			return
@@ -315,22 +441,8 @@ func (h *PhotosHub) Handler() http.Handler {
 			failFor(w, err)
 			return
 		}
-		writeJSON(w, 200, map[string]bool{"ok": true})
-	})
-	mux.Handle("/api/photos/agent/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// A helper whose key was replaced, or a server that never handed one
-		// out, gets the same answer: set it up again from the page.
-		if !h.authorised(r.Header.Get(PhotosAgentHeader)) {
-			fail(w, 403, "The key in sync.conf is not the one this server handed out. Set Cull Sync up again from the Apple Photos page.")
-			return
-		}
-		if r.Method == http.MethodPost && r.Header.Get("Content-Type") != "application/json" {
-			fail(w, 415, "JSON required.")
-			return
-		}
-		agent.ServeHTTP(w, r)
+		writeJSON(w, 200, Done{OK: true})
 	}))
-	return mux
 }
 
 // photosBase is the scheme and host this request reached the server by. For

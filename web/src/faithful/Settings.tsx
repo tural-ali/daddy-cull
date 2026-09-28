@@ -4,6 +4,7 @@ import {dayStartsAt,nightStartsAt,readChoice,saveChoice,themeEvent,themeFor,type
 import {bytes,longDate,readDeleting,type DeletingReport} from './Bin';
 import {clearSessionSound,setVideoSoundPreference} from '../SessionVideo';
 import {reloadPage} from './router';
+import {failure} from '../api';
 
 export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;videoMuted?:boolean;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number;immichRefused?:number;calendarDates?:number;reviewedDates?:number;streak?:number;reviewedToday?:boolean;notifications?:number};
 
@@ -51,7 +52,7 @@ function BinSettings(){
     setBusy(true);setMessage('');setError('');
     try{
       const response=await fetch('/api/settings/bin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({graceDays:value})});
-      if(!response.ok)throw new Error((await response.text()).trim()||'The setting could not be saved.');
+      if(!response.ok)throw new Error(await failure(response,'The setting could not be saved.'));
       const saved:DeletingReport=await response.json();
       setReport(saved);setDays(String(saved.graceDays));
       setMessage(saved.graceDays===0?'Saved. Deleting from the Bin is now immediate.':`Saved. Deleted files are now kept for ${saved.graceDays} day${saved.graceDays===1?'':'s'}.`);
@@ -122,7 +123,7 @@ function VideoSettings({initial}:{initial:boolean}){
     setBusy(true);setError('');
     try{
       const response=await fetch('/api/settings/video',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({muted:next})});
-      if(!response.ok)throw new Error((await response.text()).trim()||'The setting could not be saved.');
+      if(!response.ok)throw new Error(await failure(response,'The setting could not be saved.'));
       const saved:{muted:boolean}=await response.json();
       setMuted(saved.muted);setVideoSoundPreference(saved.muted);clearSessionSound();
     }catch(reason){setError((reason as Error).message)}finally{setBusy(false)}

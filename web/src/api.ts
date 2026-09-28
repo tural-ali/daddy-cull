@@ -19,6 +19,11 @@ export type Saved = {revision:number;previousStatus:Status;previousFavourite:boo
  * never lags behind the page. */
 export const BIN_CHANGED='cull:bin-changed';
 export function binChanged(){window.dispatchEvent(new Event(BIN_CHANGED))}
+/** What the server said went wrong: every error from the API is JSON with an
+ * `error` sentence to show, or `fallback` when the answer says nothing. */
+export async function failure(response:Response,fallback:string){
+  try{const body=await response.json() as {error?:string};return body.error||fallback}catch{return fallback}
+}
 export async function get<T>(url:string,signal?:AbortSignal):Promise<T> {
   const r=await fetch(url,{signal});if(!r.ok)throw new Error('Could not load the catalogue. Check that the local service is running.');return r.json();
 }

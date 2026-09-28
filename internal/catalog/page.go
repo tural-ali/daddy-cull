@@ -8,17 +8,31 @@ import (
 )
 
 type Asset struct {
-	RelatedCount     int    `json:"relatedCount"`
-	ID               int64  `json:"id"`
-	Path             string `json:"path"`
-	CapturedAt       int64  `json:"capturedAt"`
-	Kind             string `json:"kind"`
-	Size             int64  `json:"size"`
-	Status           string `json:"status"`
-	Favourite        bool   `json:"favourite"`
-	Revision         int64  `json:"revision"`
-	Source           string `json:"source"`
-	AlternativeCount int    `json:"alternativeCount"`
+	// RelatedCount counts files related to this one, such as the other half
+	// of a Live Photo.
+	RelatedCount int `json:"relatedCount"`
+	// ID is the file's id in the catalogue. It never changes, wherever the
+	// file moves.
+	ID int64 `json:"id"`
+	// Path is where the file is, under its source's root, such as
+	// /archive/2019/2019-08/2019-08-14/IMG_1234.HEIC.
+	Path string `json:"path"`
+	// CapturedAt is when it was taken, in Unix seconds. Exactly midnight UTC
+	// means only the date is known, from the folder it is filed in.
+	CapturedAt int64 `json:"capturedAt"`
+	// Kind is image or video.
+	Kind string `json:"kind"`
+	// Size is the file's size in bytes.
+	Size int64 `json:"size"`
+	// Status is unreviewed, keep, later or cull.
+	Status    string `json:"status"`
+	Favourite bool   `json:"favourite"`
+	// Revision counts the choices saved for the file; send it with the next.
+	Revision int64 `json:"revision"`
+	// Source is where the file comes from, such as archive.
+	Source string `json:"source"`
+	// AlternativeCount counts other versions of the same picture.
+	AlternativeCount int `json:"alternativeCount"`
 	// Pair is the other half of a RAW+JPEG pair, on the pages that show
 	// pairs as one photo.
 	Pair int64 `json:"pair,omitempty"`
@@ -29,7 +43,8 @@ type Asset struct {
 	Duration float64 `json:"duration,omitempty"`
 	// Width and Height are the picture's size as it is shown, turned by its
 	// orientation, once it has been read.
-	Width  int `json:"width,omitempty"`
+	Width int `json:"width,omitempty"`
+	// Height is the picture's height as it is shown, once it has been read.
 	Height int `json:"height,omitempty"`
 	// Turn is how many quarter turns clockwise the reviewer turned the file
 	// in Cull, 0 to 3. Width and Height are before it.
@@ -50,7 +65,8 @@ type Cursor struct {
 }
 type Page struct {
 	Assets []Asset `json:"assets"`
-	Next   string  `json:"next"`
+	// Next is passed as after to read the next page; empty when there is none.
+	Next string `json:"next"`
 }
 
 func (s *Store) Page(ctx context.Context, token, kind, source string, limit int) (Page, error) {

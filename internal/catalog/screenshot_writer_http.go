@@ -76,10 +76,7 @@ func (s *ScreenshotWriter) Handler(secret string) http.Handler {
 		return nil
 	}
 	mux.HandleFunc("POST /screenshot/preview", func(w http.ResponseWriter, r *http.Request) {
-		var input struct {
-			AssetID int64  `json:"assetId"`
-			Action  string `json:"action"`
-		}
+		var input ScreenshotChoice
 		if err := decode(w, r, &input); err != nil {
 			respond(w, nil, err)
 			return
@@ -88,9 +85,7 @@ func (s *ScreenshotWriter) Handler(secret string) http.Handler {
 		respond(w, plan, err)
 	})
 	mux.HandleFunc("POST /screenshot/execute", func(w http.ResponseWriter, r *http.Request) {
-		var input struct {
-			ID string `json:"id"`
-		}
+		var input PlanRef
 		if err := decode(w, r, &input); err != nil {
 			respond(w, nil, err)
 			return
@@ -101,9 +96,7 @@ func (s *ScreenshotWriter) Handler(secret string) http.Handler {
 		respond(w, plan, err)
 	})
 	mux.HandleFunc("POST /screenshot/undo", func(w http.ResponseWriter, r *http.Request) {
-		var input struct {
-			ID string `json:"id"`
-		}
+		var input PlanRef
 		if err := decode(w, r, &input); err != nil {
 			respond(w, nil, err)
 			return
@@ -114,10 +107,7 @@ func (s *ScreenshotWriter) Handler(secret string) http.Handler {
 		respond(w, plan, err)
 	})
 	mux.HandleFunc("POST /screenshot/purge", func(w http.ResponseWriter, r *http.Request) {
-		var input struct {
-			ID           string `json:"id"`
-			Confirmation string `json:"confirmation"`
-		}
+		var input PlanPurge
 		if err := decode(w, r, &input); err != nil {
 			respond(w, nil, err)
 			return
