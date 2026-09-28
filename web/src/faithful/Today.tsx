@@ -327,6 +327,19 @@ export function Today({initial}:{initial:TodayData}){
     return()=>window.removeEventListener('keydown',key);
   },[shown,selected,saving,viewer]);
 
+  // Opening a date is seeing what newly arrived on it: the files keep their
+  // badge while the page is open, and the date loses its red dot. A report
+  // that does not get through is tried again the next time the page loads.
+  const seen=useRef(new Set<number>());
+  useEffect(()=>{
+    const ids=initial.years.flatMap(year=>year.assets.filter(asset=>asset.new&&!seen.current.has(asset.id)).map(asset=>asset.id));
+    if(ids.length===0)return;
+    ids.forEach(id=>seen.current.add(id));
+    fetch('/api/arrivals/seen',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})})
+      .then(response=>{if(!response.ok)throw new Error()})
+      .catch(()=>ids.forEach(id=>seen.current.delete(id)));
+  },[initial]);
+
   useEffect(()=>{
     const controller=new AbortController();
     fetch(`/api/duplicates?md=${initial.md}`,{signal:controller.signal}).then(async response=>{
@@ -386,7 +399,7 @@ export function Today({initial}:{initial:TodayData}){
     {years.filter(year=>filters.size===0||year.assets.some(asset=>shownIDs.has(asset.id))).map(year=>{
       const memories=year.assets.filter(asset=>!hidden.has(asset.id)).length;
       return <section className={`yr${year.status==='done'?' settled':''}`} key={year.day}>
-      <div className="yhead"><h2>{year.year}{year.status==='done'&&<span className="tag done">reviewed</span>}{(year.fresh??0)>0&&<span className="tag fresh" title="Newly arrived in the archive, and not decided yet"><span className="freshdot" aria-hidden="true"/>{year.fresh!.toLocaleString()} new</span>}</h2><p className="ymeta"><span>{memories.toLocaleString()} {memories===1?'memory':'memories'}{memories!==year.files&&<span className="dim"> from {year.files.toLocaleString()} files</span>}</span><span className="dim">{bytes(year.bytes)}</span></p></div>
+      <div className="yhead"><h2>{year.year}{year.status==='done'&&<span className="tag done">reviewed</span>}{(year.fresh??0)>0&&<span className="tag fresh" title="Reached the archive since this date was last opened"><span className="freshdot" aria-hidden="true"/>{year.fresh!.toLocaleString()} new</span>}</h2><p className="ymeta"><span>{memories.toLocaleString()} {memories===1?'memory':'memories'}{memories!==year.files&&<span className="dim"> from {year.files.toLocaleString()} files</span>}</span><span className="dim">{bytes(year.bytes)}</span></p></div>
       {year.assets.length===0?<p className="note">Nothing left in this folder.</p>:<div className="gal">{year.assets.filter(asset=>shownIDs.has(asset.id)).map(asset=><figure className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}`} key={asset.id} data-asset={asset.id} onClick={()=>{setSelected(asset.id);photo.show(asset.id)}} tabIndex={0}>
         <Media asset={asset}/>
         <div className="bdg">{asset.new&&asset.status==='unreviewed'&&<span className="b new">new</span>}{behind.has(asset.id)&&<span className="b pair">{pairLabel(asset)}</span>}{(asset.relatedCount??0)>(behind.has(asset.id)?1:0)&&<span className="b dupe">duplicate</span>}</div>

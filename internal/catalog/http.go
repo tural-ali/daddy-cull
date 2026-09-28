@@ -637,6 +637,31 @@ func (s *Store) Handler() http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("POST /api/arrivals/seen", func(w http.ResponseWriter, r *http.Request) {
+		if !sameOriginJSON(w, r) {
+			return
+		}
+		var body struct {
+			IDs []int64 `json:"ids"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&body); err != nil {
+			http.Error(w, "invalid request", 400)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		if err := s.SeeArrivals(ctx, body.IDs); err != nil {
+			status := 503
+			if errors.Is(err, ErrInvalid) {
+				status = 400
+			}
+			http.Error(w, http.StatusText(status), status)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("GET /api/stats", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()

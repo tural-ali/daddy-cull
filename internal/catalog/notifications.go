@@ -15,8 +15,8 @@ import (
 //
 // A file that arrives is recorded in asset_arrivals. A day already reviewed
 // that gains one is opened again, so the calendar shows it waiting, and its
-// date carries a red dot for as long as a file that arrived after the day was
-// last reviewed still waits for a decision.
+// date carries a red dot until the date is opened, or until every file that
+// arrived after the day was last reviewed has been decided.
 
 type NotificationDay struct {
 	Day   string `json:"day"`
@@ -44,15 +44,16 @@ type Notifications struct {
 }
 
 // freshArrivalFrom joins an arrival to its day, the day's review and the
-// file's decision; freshArrival then holds for a file that arrived after its
-// day was last reviewed, is still on disk and has not been decided. A day
-// reviewed, reopened and reviewed again is judged by the later review.
+// file's decision; freshArrival then holds for a file nobody has seen on its
+// date's page yet that arrived after its day was last reviewed, is still on
+// disk and has not been decided. A day reviewed, reopened and reviewed again
+// is judged by the later review.
 const freshArrivalFrom = ` FROM asset_arrivals aa
 	JOIN asset_days ad ON ad.asset_id=aa.asset_id
 	LEFT JOIN day_progress dp ON dp.day=ad.day
 	LEFT JOIN decisions d ON d.asset_id=aa.asset_id`
 
-const freshArrival = ` COALESCE(dp.status,'pending')!='done'
+const freshArrival = ` aa.seen_at IS NULL AND COALESCE(dp.status,'pending')!='done'
 	AND COALESCE(d.status,'unreviewed')='unreviewed' AND COALESCE(d.favourite,0)=0
 	AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=aa.asset_id AND fs.state!='restored')
 	AND julianday(aa.arrived_at)>max(COALESCE(julianday(dp.reviewed_at),0),
@@ -120,7 +121,7 @@ func recordArrivalsTx(ctx context.Context, tx *sql.Tx, arrivals []arrival, now t
 			return err
 		}
 	}
-	stmt, err := tx.PrepareContext(ctx, "INSERT INTO asset_arrivals(asset_id,arrived_at) VALUES(?,?) ON CONFLICT(asset_id) DO UPDATE SET arrived_at=excluded.arrived_at")
+	stmt, err := tx.PrepareContext(ctx, "INSERT INTO asset_arrivals(asset_id,arrived_at) VALUES(?,?) ON CONFLICT(asset_id) DO UPDATE SET arrived_at=excluded.arrived_at,seen_at=NULL")
 	if err != nil {
 		return err
 	}
@@ -178,6 +179,38 @@ func (s *Store) freshOn(ctx context.Context, md string) (map[int64]bool, error) 
 		fresh[id] = true
 	}
 	return fresh, rows.Err()
+}
+
+// maxSeenArrivals bounds one date page's report of the new files it showed.
+const maxSeenArrivals = 10000
+
+// SeeArrivals records that a date's page showed these files as new, so the
+// date loses its red dot and they are not new the next time. A file that
+// arrives again afterwards is new again; see recordArrivalsTx.
+func (s *Store) SeeArrivals(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 || len(ids) > maxSeenArrivals {
+		return ErrInvalid
+	}
+	tx, err := s.write.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	stmt, err := tx.PrepareContext(ctx, "UPDATE asset_arrivals SET seen_at=? WHERE asset_id=? AND seen_at IS NULL")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	stamp := time.Now().UTC().Format(eventStamp)
+	for _, id := range ids {
+		if id < 1 {
+			return ErrInvalid
+		}
+		if _, err = stmt.ExecContext(ctx, stamp, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // UnreadNotifications is the count on the bell.

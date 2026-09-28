@@ -73,7 +73,7 @@ func TestVersion8CatalogueAllowsRefusedImmichHearts(t *testing.T) {
 	defer s.Close()
 	var version, attempts int
 	var state, id string
-	if err = s.read.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 10 {
+	if err = s.read.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 11 {
 		t.Fatalf("version %d %v", version, err)
 	}
 	if err = s.read.QueryRow("SELECT state,attempts,immich_id FROM immich_favourites WHERE asset_id=1").Scan(&state, &attempts, &id); err != nil || state != "failed" || attempts != 38 || id != "im-1" {
@@ -81,5 +81,47 @@ func TestVersion8CatalogueAllowsRefusedImmichHearts(t *testing.T) {
 	}
 	if _, err = s.write.Exec("UPDATE immich_favourites SET state='refused' WHERE asset_id=1"); err != nil {
 		t.Fatalf("refused is still not allowed: %v", err)
+	}
+}
+
+// A version 10 catalogue keeps its arrivals, all still unseen, through the
+// change that records a date being opened.
+func TestVersion10CatalogueKeepsArrivalsUnseen(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "catalog.db")
+	s, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	db, err := sql.Open("sqlite3", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		"ALTER TABLE asset_arrivals DROP COLUMN seen_at",
+		"INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(1,'/archive/a.jpg',1,'image',1,'archive')",
+		"INSERT INTO asset_arrivals(asset_id,arrived_at) VALUES(1,'2026-09-28 10:44:43.969')",
+		"PRAGMA user_version=10",
+	} {
+		if _, err = db.Exec(statement); err != nil {
+			t.Fatal(statement, err)
+		}
+	}
+	db.Close()
+	s, err = Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var version int
+	var seen sql.NullString
+	if err = s.read.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 11 {
+		t.Fatalf("version %d %v", version, err)
+	}
+	if err = s.read.QueryRow("SELECT seen_at FROM asset_arrivals WHERE asset_id=1").Scan(&seen); err != nil || seen.Valid {
+		t.Fatalf("the arrival did not come through unseen: %v %v", seen, err)
+	}
+	if err = s.SeeArrivals(context.Background(), []int64{1}); err != nil {
+		t.Fatal(err)
 	}
 }

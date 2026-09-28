@@ -182,3 +182,88 @@ func TestPhoneDeletionMarksAreNotified(t *testing.T) {
 		t.Fatalf("a deletion handled twice should notify once: %+v", list)
 	}
 }
+
+// Opening a date is seeing its new files: the dot goes, although the files
+// still wait for a decision, and a file that arrives later brings it back.
+func TestOpeningADateClearsItsRedDot(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	root := t.TempDir()
+	write := func(rel string) {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("media"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.ScanArchive(ctx, root); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fresh := func() (int, []int64) {
+		t.Helper()
+		dates, err := s.FreshDates(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		today, err := s.Today(ctx, "09-26")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var shown []int64
+		for _, year := range today.Years {
+			for _, a := range year.Assets {
+				if a.New {
+					shown = append(shown, a.ID)
+				}
+			}
+		}
+		return dates["09-26"], shown
+	}
+
+	write("2026/2026-09/2026-09-26/IMG_0001.HEIC")
+	write("2025/2025-09/2025-09-26/IMG_0002.HEIC")
+	n, shown := fresh()
+	if n != 2 || len(shown) != 2 {
+		t.Fatalf("before opening: dot %d, new on the page %v", n, shown)
+	}
+	if err := s.SeeArrivals(ctx, shown); err != nil {
+		t.Fatal(err)
+	}
+	if n, shown = fresh(); n != 0 || len(shown) != 0 {
+		t.Fatalf("after opening: dot %d, new on the page %v", n, shown)
+	}
+	list, err := s.ListNotifications(ctx, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range list.Items {
+		for _, d := range item.Days {
+			if d.Fresh != 0 {
+				t.Fatalf("the bell still dots %s: %+v", d.Day, d)
+			}
+		}
+	}
+	// Seeing is not deciding: the files still wait.
+	today, err := s.Today(ctx, "09-26")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, year := range today.Years {
+		if year.Status != "pending" {
+			t.Fatalf("%s: %s", year.Day, year.Status)
+		}
+	}
+
+	write("2026/2026-09/2026-09-26/IMG_0003.HEIC")
+	if n, shown = fresh(); n != 1 || len(shown) != 1 {
+		t.Fatalf("a later arrival: dot %d, new on the page %v", n, shown)
+	}
+	if err := s.SeeArrivals(ctx, nil); err != ErrInvalid {
+		t.Fatalf("nothing to see: %v", err)
+	}
+	if err := s.SeeArrivals(ctx, []int64{0}); err != ErrInvalid {
+		t.Fatalf("id 0: %v", err)
+	}
+}

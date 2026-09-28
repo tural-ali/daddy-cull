@@ -42,7 +42,7 @@ func Open(path string) (*Store, error) {
 	if err = w.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return fail(err)
 	}
-	if version > 10 {
+	if version > 11 {
 		return fail(fmt.Errorf("catalogue schema is newer than this application"))
 	}
 	if err = w.QueryRow("SELECT count(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'").Scan(&tables); err != nil {
@@ -59,6 +59,12 @@ func Open(path string) (*Store, error) {
 			return fail(err)
 		}
 	}
+	// Version 11: an arrival is seen once its date has been opened.
+	if app == applicationID && version == 10 {
+		if _, err = w.Exec("BEGIN IMMEDIATE; ALTER TABLE asset_arrivals ADD COLUMN seen_at TEXT; PRAGMA user_version=11; COMMIT;"); err != nil {
+			return fail(err)
+		}
+	}
 	if app == applicationID && version < 9 {
 		if err = allowRefusedImmichState(w); err != nil {
 			return fail(err)
@@ -67,7 +73,7 @@ func Open(path string) (*Store, error) {
 	if _, err = w.Exec(fmt.Sprintf(`
 BEGIN IMMEDIATE;
 PRAGMA application_id=%d;
-PRAGMA user_version=10;
+PRAGMA user_version=11;
 CREATE TABLE IF NOT EXISTS sources (
  id TEXT PRIMARY KEY,
  label TEXT NOT NULL,
@@ -325,7 +331,8 @@ CREATE TABLE IF NOT EXISTS notification_days (
 );
 CREATE TABLE IF NOT EXISTS asset_arrivals (
  asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
- arrived_at TEXT NOT NULL
+ arrived_at TEXT NOT NULL,
+ seen_at TEXT
 );
 CREATE INDEX IF NOT EXISTS day_progress_events_day ON day_progress_events(day,status);
 COMMIT;`, applicationID)); err != nil {
