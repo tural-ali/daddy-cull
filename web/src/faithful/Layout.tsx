@@ -8,7 +8,7 @@ import {StreakCalendar,StreakIntro,StreakPill,introDue} from './Streak';
 import {NotificationBell} from './Notifications';
 import {DateCalendar,DatePill,PageDateProvider,type PageDate} from './DatePicker';
 import {GridZoom} from './gridZoom';
-import {FilterButton,FilterMenu,FilterPills,PageFiltersProvider,matchFilters,type FilterOption,type PageFilters} from './SearchFilters';
+import {FilterButton,FilterMenu,FilterPills,PageFiltersProvider,matchFilters,unusualSort,type PageFilters,type Suggestion} from './SearchFilters';
 
 export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'log'|'bin'|'settings';
 type Item={href:string;route:LegacyRoute;label:string;icon:IconName};
@@ -54,9 +54,10 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
   const pill=useRef<HTMLButtonElement>(null);
   const filterButton=useRef<HTMLButtonElement>(null);
   const close=useCallback(()=>setOpen(null),[]);
-  const suggestions=filters?matchFilters(filters.options,value):[];
-  function pick(option:FilterOption){
-    filters?.toggle(option.id);
+  const suggestions=filters?matchFilters(filters,value):[];
+  function pick(suggestion:Suggestion){
+    if(suggestion.kind==='filter')filters?.toggle(suggestion.option.id);
+    else filters?.sort?.set(suggestion.option.id);
     setValue('');setActive(0);
     input.current?.focus();
   }
@@ -78,13 +79,15 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
       setValue('');setActive(0);
     }else if(event.key==='Backspace'&&!value&&filters){
       // As in a field of chips, Backspace in an empty field takes the last
-      // filter off.
+      // pill off: the order, which sits last, then the filters.
       const last=filters.options.filter(option=>option.on).at(-1);
-      if(last){event.preventDefault();filters.toggle(last.id)}
+      const usual=filters.sort?.options[0];
+      if(unusualSort(filters)&&usual){event.preventDefault();filters.sort?.set(usual.id)}
+      else if(last){event.preventDefault();filters.toggle(last.id)}
     }
   }
   const listing=suggestions.length>0;
-  const on=filters?.options.filter(option=>option.on).length??0;
+  const on=(filters?.options.filter(option=>option.on).length??0)+(filters&&unusualSort(filters)?1:0);
   return <div className="searchwrap">
     <form className={`search${date?' dated':''}${on?' filtered':''}`} role="search" onSubmit={go}>
       <button type="submit" className="searchgo" aria-label={listing?'Apply the filter':'Go to the date'}
@@ -101,9 +104,11 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
       {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role -- the combobox's listbox, see the options below */}
       {listing&&<ul id="search-suggestions" className="searchsuggest" role="listbox" aria-label="Filters">
         {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-to-interactive-role -- a combobox: focus stays in the field, whose arrow keys and Enter drive these options */}
-        {suggestions.map((option,index)=><li key={option.id} id={`search-suggestion-${index}`} role="option" aria-selected={index===Math.min(active,suggestions.length-1)}
-          onPointerDown={event=>event.preventDefault()} onClick={()=>pick(option)} onPointerEnter={()=>setActive(index)}>
-          <Icon name={option.icon} filled={option.on}/><span className="label">{option.on?'Stop showing only':'Show only'} <b>{option.label.toLowerCase()}</b></span><span className="n">{option.count.toLocaleString()}</span>
+        {suggestions.map((suggestion,index)=><li key={`${suggestion.kind}:${suggestion.option.id}`} id={`search-suggestion-${index}`} role="option" aria-selected={index===Math.min(active,suggestions.length-1)}
+          onPointerDown={event=>event.preventDefault()} onClick={()=>pick(suggestion)} onPointerEnter={()=>setActive(index)}>
+          {suggestion.kind==='filter'
+            ?<><Icon name={suggestion.option.icon} filled={suggestion.option.on}/><span className="label">{suggestion.option.on?'Stop showing only':'Show only'} <b>{suggestion.option.label.toLowerCase()}</b></span><span className="n">{suggestion.option.count.toLocaleString()}</span></>
+            :<><Icon name={suggestion.option.icon}/><span className="label">Show <b>{suggestion.option.label.toLowerCase()}</b></span></>}
         </li>)}
       </ul>}
     </form>
@@ -114,45 +119,23 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
 
 /** The app's frame: a top bar with the logo, the review streak and date
  * search, a sidebar of destinations ending in Settings, and the page on a
- * raised panel beside it. Below tablet width the sidebar becomes a drawer
- * behind the menu button. */
+ * raised panel beside it. Below tablet width the sidebar folds on its own
+ * into a rail of icons, so there is no menu button to reach for. */
 const narrowQuery='(max-width: 1000px)';
-const sideKey='cull-side';
-function readSideHidden(){try{return localStorage.getItem(sideKey)==='hidden'}catch{return false}}
 
 export function Layout({route,binFiles,reviewed,streak,notifications,onNotificationsRead,flash,children}:{route:LegacyRoute;binFiles:number;reviewed?:{done:number;total:number};streak?:{days:number;today:boolean};notifications?:number;onNotificationsRead?:()=>void;flash?:string;children:ReactNode}){
-  const [drawer,setDrawer]=useState(false);
   const [selection,setSelection]=useState<Selection|null>(null);
   const [pageActions,setPageActions]=useState<PageActions|null>(null);
   const [pageDate,setPageDate]=useState<PageDate|null>(null);
   const [pageFilters,setPageFilters]=useState<PageFilters|null>(null);
-  // On a wide screen the menu button hides the sidebar, as in Google Photos,
-  // and the choice is remembered; on a narrow one it opens the drawer.
-  const [sideHidden,setSideHidden]=useState(readSideHidden);
-  const [narrow,setNarrow]=useState(()=>matchMedia(narrowQuery).matches);
+  // Folded, the sidebar is a rail of icons whose labels become tooltips.
+  const [rail,setRail]=useState(()=>matchMedia(narrowQuery).matches);
   useEffect(()=>{
     const query=matchMedia(narrowQuery);
-    const change=()=>{setNarrow(query.matches);setDrawer(false)};
+    const change=()=>setRail(query.matches);
     query.addEventListener('change',change);
     return()=>query.removeEventListener('change',change);
   },[]);
-  function toggleMenu(){
-    if(narrow){setDrawer(open=>!open);return}
-    setSideHidden(hidden=>{
-      try{if(hidden)localStorage.removeItem(sideKey);else localStorage.setItem(sideKey,'hidden')}catch{/* remembered for this page only */}
-      return !hidden;
-    });
-  }
-  const menuOpen=narrow?drawer:!sideHidden;
-  // Folded on a wide screen, the sidebar is a rail of icons whose labels
-  // become tooltips.
-  const rail=!narrow&&sideHidden;
-  useEffect(()=>{
-    if(!drawer)return;
-    const close=(event:KeyboardEvent)=>{if(event.key==='Escape')setDrawer(false)};
-    window.addEventListener('keydown',close);
-    return()=>window.removeEventListener('keydown',close);
-  },[drawer]);
   const share=reviewed&&reviewed.total>0?reviewed.done/reviewed.total:0;
   // The streak: its pill beside the logo, the calendar it opens, the opening
   // animation once a day, and a bump when today's first review lights it.
@@ -170,10 +153,9 @@ export function Layout({route,binFiles,reviewed,streak,notifications,onNotificat
     litBefore.current=streak.today;
   },[streak]);
   useEffect(()=>{if(!bump)return;const timer=setTimeout(()=>setBump(false),900);return()=>clearTimeout(timer)},[bump]);
-  return <div className={`shell${drawer?' drawer-open':''}${sideHidden?' side-hidden':''}`}>
+  return <div className={`shell${rail?' side-hidden':''}`}>
     {selection?<SelectionBar selection={selection}/>:<header className="gbar">
       <div className="gbarstart">
-        <button type="button" className="iconbtn menu" aria-label={narrow?(drawer?'Close the menu':'Open the menu'):(sideHidden?'Expand the menu':'Collapse the menu')} title="Main menu" aria-expanded={menuOpen} aria-controls="side" onClick={toggleMenu}><Icon name={narrow&&drawer?'close':'menu'}/></button>
         <a className="brand" href="/" title="Today"><Logo/><LogoMark className="brandmark"/></a>
         {streak&&<div className="streakwrap">
           <StreakPill streak={streak} pill={pill} open={calendarOpen} bump={bump} onToggle={()=>setCalendarOpen(open=>!open)}/>
@@ -211,7 +193,6 @@ export function Layout({route,binFiles,reviewed,streak,notifications,onNotificat
         </a>
       </nav>
     </aside>
-    <button type="button" className="scrim" tabIndex={-1} aria-hidden="true" onClick={()=>setDrawer(false)}/>
     <GridZoom enabled={gridRoutes.has(route)}/>
     {intro&&streak&&<StreakIntro streak={streak} target={pill} onDone={()=>{setIntro(false);setBump(true)}}/>}
     <div className="panel">

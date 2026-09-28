@@ -85,6 +85,10 @@ import DropDown from '@material-symbols/svg-400/outlined/arrow_drop_down.svg?raw
 import DropDownFill from '@material-symbols/svg-400/outlined/arrow_drop_down-fill.svg?raw';
 import Bell from '@material-symbols/svg-400/outlined/notifications.svg?raw';
 import BellFill from '@material-symbols/svg-400/outlined/notifications-fill.svg?raw';
+import Newest from '@material-symbols/svg-400/outlined/arrow_downward.svg?raw';
+import NewestFill from '@material-symbols/svg-400/outlined/arrow_downward-fill.svg?raw';
+import Oldest from '@material-symbols/svg-400/outlined/arrow_upward.svg?raw';
+import OldestFill from '@material-symbols/svg-400/outlined/arrow_upward-fill.svg?raw';
 
 const icons={
   photo:[Photo,PhotoFill],
@@ -129,6 +133,8 @@ const icons={
   link_off:[LinkOff,LinkOffFill],
   filter_list:[FilterList,FilterListFill],
   notifications:[Bell,BellFill],
+  arrow_downward:[Newest,NewestFill],
+  arrow_upward:[Oldest,OldestFill],
 } as const;
 
 export type IconName=keyof typeof icons;

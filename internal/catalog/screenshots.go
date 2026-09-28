@@ -174,5 +174,12 @@ func (s *Store) ScreenshotPage(ctx context.Context, kind, review string, from, l
 		}
 		page.Items = append(page.Items, item)
 	}
-	return page, rows.Err()
+	if err = rows.Err(); err != nil {
+		return page, err
+	}
+	assets := make([]*Asset, len(page.Items))
+	for i := range page.Items {
+		assets[i] = &page.Items[i].Asset
+	}
+	return page, s.markShapes(ctx, assets)
 }

@@ -5,7 +5,9 @@ const randomId=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.to
 
 // Each tab owns its journal, so two tabs cannot overwrite each other's queue.
 // The journal survives refresh and is removed only after server acknowledgement.
-export function useDecisionQueue(onSaved:(job:PendingDecision,result:Saved)=>void){
+// onSaved is told whether a later choice on the same file is still waiting,
+// in which case that one, not this, is what the file shows.
+export function useDecisionQueue(onSaved:(job:PendingDecision,result:Saved,overtaken:boolean)=>void){
  const jobs=useRef<PendingDecision[]>([]);const running=useRef(false);const paused=useRef(false);
  const key=useRef('');const callback=useRef(onSaved);callback.current=onSaved;
  const [pending,setPending]=useState(0);const [error,setError]=useState('');const [ready,setReady]=useState(false);
@@ -17,7 +19,9 @@ export function useDecisionQueue(onSaved:(job:PendingDecision,result:Saved)=>voi
    const result=await decide(job.asset,job.status,job.favourite,job.requestId);
    // A later choice on the same file was queued before this one was
    // confirmed, so it waits for, and builds on, the revision just saved.
-   persist(jobs.current.slice(1).map(next=>next.asset.id===job.asset.id?{...next,asset:{...next.asset,revision:result.revision}}:next));setError('');callback.current(job,result);
+   const rest=jobs.current.slice(1);
+   persist(rest.map(next=>next.asset.id===job.asset.id?{...next,asset:{...next.asset,revision:result.revision}}:next));setError('');
+   callback.current(job,result,rest.some(next=>next.asset.id===job.asset.id));
   }}catch(e){paused.current=true;setError(`A choice has not been confirmed. Your pending choices are retained locally. ${(e as Error).message}`)}
   finally{running.current=false}
  }

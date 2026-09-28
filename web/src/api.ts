@@ -5,7 +5,9 @@ export type Asset = { id:number; path:string; capturedAt:number; kind:string; so
   /** Reached the archive after its day was reviewed, and still waits. */
   new?:boolean;
   /** How long a video runs, in seconds, once the server has read it. */
-  duration?:number };
+  duration?:number;
+  /** The picture's size as it is shown, once the server has read it. */
+  width?:number; height?:number };
 export type Page = {assets:Asset[];next:string};
 export type Saved = {revision:number;previousStatus:Status;previousFavourite:boolean};
 /** The frame listens for this and reads its counts again: the Bin badge, the

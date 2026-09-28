@@ -317,6 +317,10 @@ func main() {
 		if mediaRoots.Archive != "" && mediaRoots.FFmpeg != "" {
 			go s.KeepDurations(ctx, mediaRoots)
 		}
+		// Grids lay photos out at their own shapes, read once per file.
+		if mediaRoots.Archive != "" && mediaRoots.RawTool != "" {
+			go s.KeepShapes(ctx, mediaRoots)
+		}
 		startImmichSync(ctx, s, catalog.ImmichConfig{URL: *immichURL, Key: os.Getenv("IMMICH_KEY"), PathPrefix: *immichPrefix})
 	}
 	server := &http.Server{Addr: *addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 0, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}

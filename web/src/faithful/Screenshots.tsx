@@ -6,6 +6,7 @@ import {useRef,useState} from 'react';
 import {Pick,RowTile,Rows,useSelectionBar,usePicks,type SelectionAction} from './selection';
 import {usePageFilters} from './SearchFilters';
 import {MoreMarker,useMoreOnScroll} from './more';
+import {shapeOf} from './justified';
 import {usePhotoURL} from './photoURL';
 import {reverting,requestID,sendDecisions,type Change} from './decisions';
 
@@ -224,7 +225,7 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
       : <Rows className="shots">{items.map((item,index)=>{
           const picked=picks.picked.has(item.id);
           const detail=[item.day||'undated',bytes(item.size)].join(' · ');
-          return <RowTile className={picked?'picked':''} key={item.id} title={`${item.name} · ${detail}`}
+          return <RowTile className={picked?'picked':''} key={item.id} ratio={shapeOf(item)} title={`${item.name} · ${detail}`}
             onClick={event=>{if(event.shiftKey&&picks.picked.size>0)picks.toggle(index,true);else photo.show(item.id)}}>
             <Media asset={item}/>
             <Pick checked={picked} label={`Select ${item.name}, ${detail}`} onToggle={extend=>picks.toggle(index,extend)}/>

@@ -45,7 +45,19 @@ export function GridZoom({enabled}:{enabled:boolean}){
     document.documentElement.style.setProperty('--zoom',String(levels[level]));
     const kept=held.current;
     held.current=null;
-    if(kept?.tile.isConnected)window.scrollBy(0,kept.tile.getBoundingClientRect().top-kept.top);
+    if(!kept)return;
+    // A justified grid lays itself out again a frame or two after the size
+    // changes, once it has measured the new row height, so the tile is held
+    // in place over the next few frames rather than only this one.
+    let frames=0,frame=0;
+    const hold=()=>{
+      if(!kept.tile.isConnected)return;
+      const drift=kept.tile.getBoundingClientRect().top-kept.top;
+      if(Math.abs(drift)>.5)window.scrollBy(0,drift);
+      if(++frames<8)frame=requestAnimationFrame(hold);
+    };
+    hold();
+    return()=>cancelAnimationFrame(frame);
   },[level]);
   useEffect(()=>{
     if(!enabled)return;

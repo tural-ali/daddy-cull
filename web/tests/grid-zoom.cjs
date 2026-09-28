@@ -6,7 +6,7 @@ const assert=require('node:assert/strict');
 // the screen stays there. Settings has no grid and keeps the browser's zoom.
 const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
 const shot=(id,kept)=>({id,path:`/screenshots/2024-05-${String(id%28+1).padStart(2,'0')}_shot${id}.${id%10===0?'mov':'png'}`,capturedAt:0,kind:id%10===0?'video':'image',source:'screenshots',size:1000,
-  status:kept?'keep':'unreviewed',favourite:false,revision:kept?1:0,alternativeCount:0,relatedCount:0,day:`2024-05-${String(id%28+1).padStart(2,'0')}`,name:`shot${id}.png`,state:'waiting'});
+  status:kept?'keep':'unreviewed',favourite:false,revision:kept?1:0,alternativeCount:0,relatedCount:0,day:`2024-05-${String(id%28+1).padStart(2,'0')}`,name:`shot${id}.png`,state:'waiting',...(id%3===0?{width:1920,height:1080}:{width:1170,height:2532})});
 const shots=[...Array.from({length:250},(_,index)=>shot(index+1,false)),...Array.from({length:5},(_,index)=>shot(1001+index,true))];
 const clips=[];
 const svg='<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect width="160" height="90" fill="#6b7f95"/></svg>';
@@ -40,7 +40,18 @@ const svg='<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect
   });
   const mod=process.platform==='darwin'?'Meta':'Control';
   const tiles=page.locator('main .rt');
-  const width=async()=>(await tiles.nth(5).boundingBox()).width;
+  // How tall the rows are: the grid's first full row.
+  // The grid lays itself out again a frame or two after the zoom changes, so
+  // the height is read once it has held still for a few frames.
+  const width=async()=>page.evaluate(()=>new Promise(resolve=>{
+    let last=-1,still=0;
+    const look=()=>{
+      const height=document.querySelector('main .jrow').getBoundingClientRect().height;
+      still=height===last?still+1:0;last=height;
+      if(still>=3)resolve(height);else requestAnimationFrame(look);
+    };
+    look();
+  }));
   const snack=page.locator('#snacks .snack');
   // Whether the browser was left to handle the key, read after every listener.
   await page.addInitScript(()=>{window.addEventListener('keydown',event=>{if(event.metaKey||event.ctrlKey)window.lastZoomKey=event})});
@@ -54,7 +65,7 @@ const svg='<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect
   assert.ok(await page.evaluate(()=>window.lastZoomKey?.defaultPrevented),'the browser does not zoom the page');
   assert.equal(await page.evaluate(()=>window.devicePixelRatio),1,'the page itself is not zoomed');
   const bigger=await width();
-  assert.ok(bigger>normal*1.1,`tiles grow: ${normal} to ${bigger}`);
+  assert.ok(bigger>normal*1.1,`rows grow: ${normal} to ${bigger}`);
   assert.equal(await snack.innerText(),`Thumbnails at 125% · ${mod==='Meta'?'⌘0':'Ctrl+0'} resets`);
   await page.keyboard.press(`${mod}+Equal`);
   await page.keyboard.press(`${mod}+Equal`);
@@ -71,7 +82,7 @@ const svg='<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect
   for(let i=0;i<8;i++)await page.keyboard.press(`${mod}+Minus`);
   await page.waitForFunction(()=>getComputedStyle(document.documentElement).getPropertyValue('--zoom').trim()==='0.5');
   assert.equal(await snack.innerText(),'Smallest thumbnails · '+(mod==='Meta'?'⌘0':'Ctrl+0')+' resets');
-  assert.ok(await width()<normal*.7,'tiles shrink');
+  assert.ok(await width()<normal*.7,'rows shrink');
   await page.keyboard.press(`${mod}+Digit0`);
 
   // The tile in the middle of the screen stays in the middle.

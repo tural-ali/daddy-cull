@@ -1,4 +1,5 @@
-import {createContext,useContext,useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
+import {Children,cloneElement,createContext,isValidElement,useContext,useEffect,useLayoutEffect,useRef,useState,type ReactElement,type ReactNode} from 'react';
+import {Justified,shapeProps,type Box} from './justified';
 import {Icon,type IconName} from '../Icon';
 
 // Multi-select as in Google Photos. While anything is selected the top bar
@@ -89,29 +90,19 @@ export function usePicks<T,K extends string|number=number>(items:T[],id:(item:T)
 }
 
 /** A row-filling grid, as in Google Photos: every tile keeps its picture's
- * shape, rows share one height and run edge to edge, and the last row is left
- * short rather than stretched. A tile learns its shape from its own picture
- * once it loads, so nothing has to be known in advance. */
+ * shape, each row runs edge to edge at the height that fits it, and the last
+ * row is left short rather than stretched. Each child is a RowTile, whose
+ * `ratio` places it before its picture loads; a tile with none learns its
+ * shape from its own picture. */
 export function Rows({children,className=''}:{children:ReactNode;className?:string}){
-  return <div className={`rows ${className}`}>{children}</div>;
+  const tiles=Children.toArray(children).filter(isValidElement) as ReactElement<RowTileProps>[];
+  const items=tiles.map(tile=>({key:tile.key??'',ratio:tile.props.ratio}));
+  return <Justified className={`rows ${className}`} items={items} render={(index,box)=>cloneElement(tiles[index],{box,shapeKey:items[index].key})}/>;
 }
 
-export function RowTile({ratio:known,className='',children,...rest}:{ratio?:number;className?:string;children:ReactNode}&Omit<React.HTMLAttributes<HTMLElement>,'className'|'children'>){
-  const [ratio,setRatio]=useState(known&&known>0?known:1);
-  const ref=useRef<HTMLElement>(null);
-  useEffect(()=>{
-    const element=ref.current;
-    if(!element)return;
-    const measure=(event:Event)=>{
-      const target=event.target;
-      if(target instanceof HTMLImageElement&&target.naturalWidth>0&&target.naturalHeight>0)setRatio(target.naturalWidth/target.naturalHeight);
-    };
-    // A picture already loaded from the cache fires no event.
-    const ready=element.querySelector('img');
-    if(ready&&ready.complete&&ready.naturalWidth>0)setRatio(ready.naturalWidth/ready.naturalHeight);
-    element.addEventListener('load',measure,true);
-    return()=>element.removeEventListener('load',measure,true);
-  },[]);
-  const shape=Math.min(3,Math.max(.4,ratio));
-  return <figure ref={ref} className={`rt ${className}`} style={{'--r':shape} as React.CSSProperties} {...rest}>{children}</figure>;
+type RowTileProps={ratio?:number;box?:Box;shapeKey?:string;className?:string;children:ReactNode}&Omit<React.HTMLAttributes<HTMLElement>,'className'|'children'>;
+
+export function RowTile({ratio,box,shapeKey='',className='',children,...rest}:RowTileProps){
+  const shape=box?shapeProps({key:shapeKey,ratio},box):{};
+  return <figure className={`rt ${className}`} {...shape} {...rest}>{children}</figure>;
 }

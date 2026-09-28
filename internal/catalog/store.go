@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS raw_pair_splits (
  PRIMARY KEY(raw_id,partner_id)
 );
 CREATE TABLE IF NOT EXISTS video_durations (asset_id INTEGER PRIMARY KEY REFERENCES assets(id), size_bytes INTEGER NOT NULL, seconds REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS media_shapes (asset_id INTEGER PRIMARY KEY REFERENCES assets(id), size_bytes INTEGER NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS asset_days (
  asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
  day TEXT NOT NULL CHECK(length(day)=10)

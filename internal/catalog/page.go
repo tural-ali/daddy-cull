@@ -27,6 +27,10 @@ type Asset struct {
 	New bool `json:"new,omitempty"`
 	// Duration is how long a video runs, in seconds, once it has been read.
 	Duration float64 `json:"duration,omitempty"`
+	// Width and Height are the picture's size as it is shown, turned by its
+	// orientation, once it has been read.
+	Width  int `json:"width,omitempty"`
+	Height int `json:"height,omitempty"`
 }
 type Cursor struct {
 	Version int    `json:"v"`

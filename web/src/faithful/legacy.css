@@ -210,10 +210,12 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .pageacts .btn.primary { height: 36px; padding: 0 18px; border-radius: 18px; white-space: nowrap; }
 .pageacts .textbtn { white-space: nowrap; }
 .pageacts .short, .pageacts .icon { display: none; }
-@media (width <= 1000px) { .pagenote { display: none; } }
-@media (width <= 600px) {
+@media (width <= 1000px) {
+  .pagenote { display: none; }
   .pageacts .long { display: none; }
   .pageacts .short { display: inline; }
+}
+@media (width <= 600px) {
   .pageacts .hasicon .short { display: none; }
   .pageacts .hasicon .icon { display: grid; }
   .pageacts .hasicon { width: 40px; height: 40px; padding: 0; justify-content: center; border-radius: 999px; }
@@ -227,7 +229,6 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 }
 .iconbtn:hover { color: var(--text); background: var(--hover); text-decoration: none; }
 .iconbtn.on { color: var(--pill-ink); background: var(--pill); }
-.iconbtn.menu { display: grid; }
 
 /* The review streak beside the logo, as Duolingo keeps it at the top: a flame
    and the run of days, grey until today has a review and then lit. */
@@ -395,6 +396,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .filterhead .textbtn { height: 30px; padding: 0 10px; font-size: 13px; }
 .filtergroup { display: flex; flex-direction: column; padding: 4px 0; }
 .filtergroup + .filtergroup { border-top: 1px solid var(--line); }
+.filterlabel { margin: 4px 12px 2px; color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: .02em; }
 .filteropt, .searchsuggest li {
   display: flex; align-items: center; gap: 14px; height: 40px; padding: 0 12px;
   color: var(--text); font: inherit; font-size: 14px; text-align: left;
@@ -491,12 +493,12 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   .calpop, .searchwrap > .calpop, .bellwrap > .calpop { position: fixed; top: calc(var(--head-h) + 4px); left: 8px; right: 8px; width: auto; }
 }
 
-/* Sidebar folded from the menu button: as in Google Photos it becomes a rail
+/* Sidebar folded below tablet width: as in Google Photos it becomes a rail
    of icons, each current one a filled circle, the groups set apart by short
    rules instead of titles, and every label kept as the link's name and
    tooltip. Reviewed folds to its icon inside a ring that fills as dates are
    reviewed. */
-@media (width >= 1001px) {
+@media (width <= 1000px) {
   .side-hidden { grid-template-columns: var(--rail-w) minmax(0, 1fr); }
   .side-hidden .side { padding: 8px 0 16px; align-items: center; scrollbar-width: none; }
   .side-hidden .sidesec { align-items: center; gap: 4px; }
@@ -526,6 +528,12 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   .side-hidden .sideprogresshead .icon, .side-hidden .sideprogresshead .icon svg { width: 20px; height: 20px; }
   .side-hidden .sideprogress:hover .sideprogresshead { background: var(--hover); }
   .side-hidden .fbar { left: var(--rail-w); }
+  .shell.side-hidden .snacks { left: calc(var(--rail-w) + 16px); }
+}
+@media (width <= 600px) {
+  .shell { --rail-w: 60px; }
+  .side-hidden .side nav a, .side-hidden .sideprogresshead { width: 44px; height: 44px; }
+  .side-hidden .sidesec + .sidesec::before { width: 36px; }
 }
 
 .side {
@@ -581,22 +589,12 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   background: var(--bg);
   border-radius: 24px 24px 0 0;
 }
-.scrim { display: none; }
-
-/* Below tablet width the sidebar is a drawer over the page. */
+/* Below tablet width the top bar tightens and the panel meets the edge. */
 @media (width <= 1000px) {
-  .shell { grid-template-columns: minmax(0, 1fr); }
-  .gbar { padding: 0 8px; gap: 4px; }
+  /* No room to centre the search: it takes what the logo and the page's
+     actions leave, so neither side is squeezed out of the bar. */
+  .gbar { grid-template-columns: max-content minmax(0, 1fr) max-content; padding: 0 8px; gap: 4px; }
   .brand { width: auto; margin-right: 8px; }
-  .side {
-    position: fixed; top: var(--head-h); left: 0; bottom: 0; z-index: 40;
-    width: min(var(--side-w), 86vw); height: auto;
-    transform: translateX(-100%); visibility: hidden;
-    transition: transform 200ms cubic-bezier(.2, 0, 0, 1), visibility 0s linear 200ms;
-    box-shadow: 0 8px 28px rgb(0 0 0 / 35%);
-  }
-  .drawer-open .side { transform: none; visibility: visible; transition: transform 200ms cubic-bezier(.2, 0, 0, 1); }
-  .drawer-open .scrim { display: block; position: fixed; inset: var(--head-h) 0 0 0; z-index: 35; background: rgb(0 0 0 / 45%); border: 0; }
   .panel { margin-right: 0; border-radius: 20px 20px 0 0; }
 }
 @media (width <= 600px) {
@@ -787,6 +785,23 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 }
 .gal.tight { grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(208px * var(--zoom))), 1fr)); gap: 8px; }
 
+/* Photos in rows at their own shapes (justified.tsx places them). --row is
+   the height a row aims for, scaled by the thumbnail zoom; the ruler lets the
+   script read it in pixels. Tiles meet at small square gaps, as in Google
+   Photos, so a row reads as one strip of pictures. */
+.jgrid {
+  --row: calc(232px * var(--zoom));
+
+  position: relative;
+  display: flex; flex-direction: column;
+  gap: 4px;
+}
+.jgrid .jrow { display: flex; gap: inherit; }
+.jgrid .jruler { position: absolute; top: 0; left: 0; width: 0; height: var(--row); visibility: hidden; pointer-events: none; }
+.jgrid .mo { container: tile / inline-size; flex: none; aspect-ratio: auto; border-radius: 0; }
+.jgrid .mo.seen::after, .jgrid .mo.sel::after { border-radius: 0; }
+@media (width <= 600px) { .jgrid { --row: calc(128px * var(--zoom)); gap: 3px; } }
+
 .mo {
   position: relative; margin: 0;
   aspect-ratio: 1;
@@ -895,6 +910,17 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 .act:hover { background: rgb(32 35 43 / 95%); }
 .act.cull:hover { background: var(--bad); border-color: var(--bad); }
 .act.fav { margin-left: auto; font-size: 14px; padding: .26rem .48rem; }
+.act .icon { display: none; }
+/* A tile too narrow for the word and the heart side by side, a portrait in a
+   phone's row say, shows Remove as its icon; the word stays its name. The
+   tile is the container, set with the rest of the grid's tiles. */
+@container tile (width < 124px) {
+  .acts { padding: 5px; gap: 4px; }
+  .act { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; }
+  .act.cull .icon { display: grid; }
+  .act.cull .icon svg { width: 16px; height: 16px; }
+  .act.cull .actlabel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 .act.fav:hover { color: var(--fav); }
 .act[aria-pressed="true"] { color: var(--fav); }
 
@@ -1547,7 +1573,6 @@ html.rv-open, html.rv-open body { overflow: hidden; }
    the sidebar's foot. */
 @media (width >= 1001px) {
   .shell .snacks { left: calc(var(--side-w) + 24px); max-width: min(680px, calc(100vw - var(--side-w) - 48px)); }
-  .shell.side-hidden .snacks { left: calc(var(--rail-w) + 24px); }
 }
 @media (prefers-reduced-motion: reduce) { .snack, .streakpill.bump, .streakpill.bump .icon, .calpop { animation: none; } }
 .toast {
@@ -2224,7 +2249,7 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
  * the Bin's question because the command is long, and the command wraps rather
  * than scrolls, so all of it can be seen and checked before it is pasted.
  */
-.phelper .btn { margin-left: .3rem; }
+.phelper .btn { flex: none; margin-left: .3rem; white-space: nowrap; }
 dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
 .psetup .psteps { margin: 1rem 0 0; padding-left: 1.3rem; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
 .psetup .psteps li { margin: 0 0 .8rem; padding-left: .2rem; }
@@ -2286,15 +2311,8 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
    proportion to their width so they end on one shared height, edge to edge.
    The filler after the last tile soaks up the space the last row does not
    need, so it keeps the row height instead of stretching. */
-.rows { --row: calc(232px * var(--zoom)); display: flex; flex-wrap: wrap; gap: 4px; }
-.rows::after { content: ""; flex: 1000000 1 0; }
 .rt {
-  position: relative; margin: 0; overflow: hidden;
-  flex: calc(var(--r) * 1000) 1 calc(var(--r) * var(--row));
-  aspect-ratio: var(--r);
-  /* A wide tile alone on its row would grow to the full width; past half as
-     tall again as a row it is cropped instead. */
-  max-height: calc(var(--row) * 1.5);
+  position: relative; margin: 0; overflow: hidden; flex: none;
   background: var(--bg-3); cursor: pointer;
 }
 .rt > img, .rt > video, .rt > .actual-media { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -2311,7 +2329,6 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
 }
 .rt .dur .icon, .rt .dur .icon svg { width: 18px; height: 18px; }
 .rt .bdg { top: auto; bottom: 8px; left: 8px; }
-@media (width <= 600px) { .rows { --row: calc(128px * var(--zoom)); gap: 3px; } }
 
 /* A page title with its one page-wide action at the far right, as Google
    Photos puts Empty trash. */

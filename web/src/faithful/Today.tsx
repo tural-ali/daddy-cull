@@ -1,4 +1,4 @@
-import {useEffect,useEffectEvent,useMemo,useRef,useState} from 'react';
+import {useEffect,useEffectEvent,useMemo,useRef,useState,type ReactNode} from 'react';
 import {binChanged,type Asset,type Status} from '../api';
 import {Media} from '../Media';
 import {useDecisionQueue} from '../useDecisionQueue';
@@ -14,8 +14,9 @@ import {dayName} from './goto';
 import {requestID,sendDecisions} from './decisions';
 import {historyKey,undoKeys,useHistory,type HistoryEntry,type Snapshot} from './history';
 import {pairLabel,rawsBehind,setPaired} from './pairs';
-import {usePageFilters} from './SearchFilters';
+import {usePageFilters,type SortOption} from './SearchFilters';
 import {Snacks} from './Snacks';
+import {Justified,shapeOf,shapeProps,type Box} from './justified';
 
 // fresh counts files that reached the archive after the day was reviewed and
 // still wait; each carries new.
@@ -118,8 +119,29 @@ function tipDue():boolean{
   }catch{return true}
 }
 
+/** One year's photos in rows at their own shapes. */
+function YearGrid({assets,render}:{assets:Asset[];render:(asset:Asset,box:Box)=>ReactNode}){
+  const items=useMemo(()=>assets.map(asset=>({key:asset.id,ratio:shapeOf(asset)})),[assets]);
+  return <Justified className="gal" items={items} render={(index,box)=>render(assets[index],box)}/>;
+}
+
+/** The two orders a date's years can be shown in, the oldest first as the
+ * server lists them. The choice is kept on this device. */
+const orders=[
+  {id:'oldest',label:'Oldest year first',icon:'arrow_upward',words:['oldest','earliest','ascending','sort','order']},
+  {id:'newest',label:'Newest year first',icon:'arrow_downward',words:['newest','latest','recent','descending','sort','order']},
+] satisfies SortOption[];
+const orderKey='cull.year-order';
+function savedOrder(){try{return localStorage.getItem(orderKey)==='newest'?'newest':'oldest'}catch{return 'oldest'}}
+
 export function Today({initial}:{initial:TodayData}){
   const [years,setYears]=useState(initial.years);
+  const [order,setOrder]=useState(savedOrder);
+  function saveOrder(id:string){
+    const next=id==='newest'?'newest':'oldest';
+    setOrder(next);
+    try{if(next==='oldest')localStorage.removeItem(orderKey);else localStorage.setItem(orderKey,next)}catch{/* kept for this visit only */}
+  }
   const [selected,setSelected]=useState<number|null>(null);
   // The keyboard tip comes up as a snackbar in the corner and goes on its
   // own; moving between days does not bring it back, a refresh does.
@@ -143,7 +165,10 @@ export function Today({initial}:{initial:TodayData}){
   const history=useHistory();
   const photo=usePhotoURL(id=>initial.years.some(year=>year.assets.some(asset=>String(asset.id)===id)));
   const viewer=photo.open===null?null:Number(photo.open);
-  const assets=useMemo(()=>years.flatMap(year=>year.assets),[years]);
+  // The years in the order shown. The grid, the arrow keys and the viewer all
+  // walk this, so reading the oldest year first reviews it first too.
+  const shownYears=useMemo(()=>[...years].sort((a,b)=>order==='oldest'?a.day.localeCompare(b.day):b.day.localeCompare(a.day)),[years,order]);
+  const assets=useMemo(()=>shownYears.flatMap(year=>year.assets),[shownYears]);
   // A RAW+JPEG pair is one tile, the JPEG; its RAW rides along with every
   // choice and shows in the viewer on request.
   const behind=useMemo(()=>rawsBehind(assets),[assets]);
@@ -187,8 +212,11 @@ export function Today({initial}:{initial:TodayData}){
       setMessage(`${group.members.length-1} verified ${group.members.length===2?'copy':'copies'} marked for the Bin. No original has moved.`);
     }catch(error){setMessage((error as Error).message)}finally{setSaving(false)}
   }
-  const queue=useDecisionQueue((job,result)=>{
-    patchAsset(job.asset.id,{status:job.status,favourite:job.favourite,revision:result.revision});
+  // A confirmed choice that a later one on the same file has overtaken only
+  // brings its revision: showing it would flip the photo back to an older
+  // choice until the later one is confirmed too.
+  const queue=useDecisionQueue((job,result,overtaken)=>{
+    patchAsset(job.asset.id,overtaken?{revision:result.revision}:{status:job.status,favourite:job.favourite,revision:result.revision});
   });
   /** Saves a choice on a photo, and on the RAW behind it unless `withRAW` is
    * false, which undo uses because its entry names both files already. */
@@ -375,6 +403,7 @@ export function Today({initial}:{initial:TodayData}){
   usePageFilters(assets.length>0?{
     options:filterChips.map(chip=>({...chip,on:filters.has(chip.id),count:tiles.filter(asset=>matches(asset,new Set([chip.id]))).length})),
     toggle:id=>toggleFilter(id as Filter),clear:()=>saveFilters(new Set()),
+    sort:years.length>1?{options:orders,value:order,set:saveOrder}:undefined,
   }:null);
   usePageActions(assets.length>0&&doneYears<years.length?{actions:[{label:`Mark ${initial.label} reviewed`,short:'Mark reviewed',icon:'task_alt',disabled:saving||queue.pending>0,onClick:()=>void markDate()}]}:null);
   return <>
@@ -399,21 +428,21 @@ export function Today({initial}:{initial:TodayData}){
         <p className="xact"><button type="button" className="btn small danger" disabled={saving} onClick={()=>void resolveGroup(group)}>Keep the selected copy, mark the other {group.members.length-1} for the Bin</button><span className="hint">Nothing is deleted. The Bin remains separately reviewable and restorable.</span></p>
       </div>)}
     </section>}
-    {years.filter(year=>filters.size===0||year.assets.some(asset=>shownIDs.has(asset.id))).map(year=>{
+    {shownYears.filter(year=>filters.size===0||year.assets.some(asset=>shownIDs.has(asset.id))).map(year=>{
       const memories=year.assets.filter(asset=>!hidden.has(asset.id)).length;
       return <section className={`yr${year.status==='done'?' settled':''}`} key={year.day}>
       <div className="yhead"><h2>{year.year}{year.status==='done'&&<span className="tag done">reviewed</span>}{(year.fresh??0)>0&&<span className="tag fresh" title="Reached the archive since this date was last opened"><span className="freshdot" aria-hidden="true"/>{year.fresh!.toLocaleString()} new</span>}</h2><p className="ymeta"><span>{memories.toLocaleString()} {memories===1?'memory':'memories'}{memories!==year.files&&<span className="dim"> from {year.files.toLocaleString()} files</span>}</span><span className="dim">{bytes(year.bytes)}</span></p></div>
-      {year.assets.length===0?<p className="note">Nothing left in this folder.</p>:<div className="gal">{year.assets.filter(asset=>shownIDs.has(asset.id)).map(asset=>
+      {year.assets.length===0?<p className="note">Nothing left in this folder.</p>:<YearGrid assets={year.assets.filter(asset=>shownIDs.has(asset.id))} render={(asset,box)=>
         // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex -- a tile holds its own buttons, so it cannot be one; it is the grid's focus stop and opens on Enter
-        <figure tabIndex={0} className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}`} key={asset.id} data-asset={asset.id} onClick={()=>{setSelected(asset.id);photo.show(asset.id)}}
+        <figure tabIndex={0} className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}`} key={asset.id} data-asset={asset.id} {...shapeProps({key:asset.id,ratio:shapeOf(asset)},box)} onClick={()=>{setSelected(asset.id);photo.show(asset.id)}}
         onKeyDown={event=>{if(event.target===event.currentTarget&&(event.key==='Enter'||event.key===' ')){event.preventDefault();setSelected(asset.id);photo.show(asset.id)}}}>
         <Media asset={asset}/>
         <div className="bdg">{asset.new&&asset.status==='unreviewed'&&<span className="b new">new</span>}{behind.has(asset.id)&&<span className="b pair">{pairLabel(asset)}</span>}{(asset.relatedCount??0)>(behind.has(asset.id)?1:0)&&<span className="b dupe">duplicate</span>}</div>
-        <div className="acts"><button type="button" className="act cull" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':'cull')}}>{asset.status==='cull'?'Undo':'Remove'}</button><button type="button" className="act fav" disabled={!queue.ready} aria-pressed={asset.favourite} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite)}}>♡</button></div>
+        <div className="acts"><button type="button" className="act cull" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':'cull')}}><Icon name="delete"/><span className="actlabel">{asset.status==='cull'?'Undo':'Remove'}</span></button><button type="button" className="act fav" disabled={!queue.ready} aria-pressed={asset.favourite} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite)}}>♡</button></div>
         {captureTime(asset.capturedAt)&&<div className="when">{captureTime(asset.capturedAt)}</div>}
         {(asset.duration||asset.kind==='video')&&<span className="dur" aria-label={asset.duration?`Video, ${runningTime(asset.duration)}`:'Video'}>{asset.duration?runningTime(asset.duration):<Icon name="play_circle" filled/>}</span>}
         {asset.status==='cull'&&<div className="undo"><span>Removed</span><button type="button" className="act" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,'unreviewed')}}>Undo</button></div>}
-      </figure>)}</div>}
+      </figure>}/>}
     </section>})}
     {(message||(tip&&assets.length>0))&&<Snacks>
       {message&&<div className="snack" role="status">{saving?<Busy label={message} state="working"/>:message}</div>}
