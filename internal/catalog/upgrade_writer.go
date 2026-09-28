@@ -15,17 +15,38 @@ import (
 	"time"
 )
 
+// UpgradePlan is a plan for adding a higher-resolution copy from Google
+// Takeout to the archive, beside the photo it improves on. Neither the
+// archive photo nor the Takeout copy is moved or deleted.
 type UpgradePlan struct {
-	ID             string `json:"id"`
-	ArchiveAssetID int64  `json:"archiveAssetId"`
-	SourceAssetID  int64  `json:"sourceAssetId"`
-	Source         string `json:"source"`
-	Destination    string `json:"destination"`
-	Size           int64  `json:"size"`
-	Hash           string `json:"hash"`
-	State          string `json:"state"`
-	Created        string `json:"created"`
-	Error          string `json:"error,omitempty"`
+	// ID is the plan's id, 32 hexadecimal characters.
+	ID string `json:"id"`
+	// ArchiveAssetID is the id in the catalogue of the archive photo the
+	// copy improves on.
+	ArchiveAssetID int64 `json:"archiveAssetId"`
+	// SourceAssetID is the id in the catalogue of the Takeout copy.
+	SourceAssetID int64 `json:"sourceAssetId"`
+	// Source is where the Takeout copy is, relative to the upgrades folder,
+	// without /upgrades/ in front.
+	Source string `json:"source"`
+	// Destination is where the copy goes, relative to the archive root: in
+	// the archive photo's folder, named after it with (hi-res) added, such as
+	// 2019/2019-08/2019-08-14/IMG_1234 (hi-res).jpg, and a number after that
+	// if the name is taken.
+	Destination string `json:"destination"`
+	// Size is the Takeout copy's size in bytes.
+	Size int64 `json:"size"`
+	// Hash is the SHA-256 of the Takeout copy's contents, in hexadecimal.
+	// The copy is checked against it before and after copying.
+	Hash string `json:"hash"`
+	// State is where the plan stands: planned (nothing copied yet), copying,
+	// copied, or accepted (the copy is in the archive and recorded).
+	State string `json:"state"`
+	// Created is when the plan was made, in RFC 3339 UTC.
+	Created string `json:"created"`
+	// Error says why the last step failed. It is cleared when the plan
+	// finishes, and left out when there is none.
+	Error string `json:"error,omitempty"`
 }
 
 type UpgradeWriter struct {

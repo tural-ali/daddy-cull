@@ -53,6 +53,8 @@ func (r *Registry) Guard(route api.Route, next http.Handler) http.Handler {
 
 // Choice is the body that turns an addon on or off.
 type Choice struct {
+	// On is true to turn the addon on and false to turn it off. It is
+	// required.
 	On *bool `json:"on"`
 }
 

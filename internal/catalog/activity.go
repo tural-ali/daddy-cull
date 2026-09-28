@@ -119,10 +119,15 @@ func (s *Store) Activity(ctx context.Context, loc *time.Location, now time.Time)
 // StreakCalendar is the run of review days for the streak calendar: the
 // current run, the longest run ever, and every day with a review.
 type StreakCalendar struct {
-	Streak int      `json:"streak"`
-	Today  bool     `json:"reviewedToday"`
-	Best   int      `json:"best"`
-	Days   []string `json:"days"`
+	// Streak is how many days in a row something was reviewed, counting back
+	// from today, or from yesterday while today has no review yet.
+	Streak int `json:"streak"`
+	// Today is whether something was reviewed today.
+	Today bool `json:"reviewedToday"`
+	// Best is the longest run of days in a row ever reviewed.
+	Best int `json:"best"`
+	// Days are every day with a review, as YYYY-MM-DD, oldest first.
+	Days []string `json:"days"`
 }
 
 // Streak lists the days with a review, in the viewer's time zone, for the

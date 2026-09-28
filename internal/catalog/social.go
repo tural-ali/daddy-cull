@@ -28,38 +28,72 @@ const (
 	socialPossible = 6
 )
 
+// SocialItem is a video in the archive that was probably saved from a social
+// app, with what the detection scan found.
 type SocialItem struct {
 	Asset
-	Day       string  `json:"day"`
-	Name      string  `json:"name"`
-	Score     int     `json:"score"`
-	Band      string  `json:"band"`
-	Evidence  string  `json:"evidence"`
-	Width     int     `json:"width"`
-	Height    int     `json:"height"`
-	Duration  float64 `json:"duration"`
-	Letterbox bool    `json:"letterbox"`
-	Poster    bool    `json:"poster"`
+	// Day is the day the video is filed under, as YYYY-MM-DD, or empty when
+	// its path holds none.
+	Day string `json:"day"`
+	// Name is the file's name.
+	Name string `json:"name"`
+	// Score is how strongly the scan's evidence points to a social app; the
+	// higher, the likelier.
+	Score int `json:"score"`
+	// Band is the score's band: likely for 10 or more, possible for 6 to 9,
+	// and watch below 6.
+	Band string `json:"band"`
+	// Evidence lists what the scan found, in words separated by commas, such
+	// as "uuid filename, low bpp".
+	Evidence string `json:"evidence"`
+	// Width is the picture's width in pixels as it is shown once Cull has read
+	// the file, or else as the scan found it stored.
+	Width int `json:"width"`
+	// Height is the picture's height in pixels, read the same way as Width.
+	Height int `json:"height"`
+	// Duration is how long the video runs, in seconds, as the scan found it.
+	Duration float64 `json:"duration"`
+	// Letterbox is true when the scan found a black bar at the top of the
+	// frame, as Stories have.
+	Letterbox bool `json:"letterbox"`
+	// Poster is true when the scan kept a frame of the video, served by GET
+	// /api/social-poster/{id}.
+	Poster bool `json:"poster"`
 }
 
+// SocialPage is one page of videos probably saved from social apps, with
+// counts for each band. Every count leaves out videos already kept or removed,
+// except Kept and Marked.
 type SocialPage struct {
+	// Items are this page's videos, highest score first.
 	Items []SocialItem `json:"items"`
-	// Total counts the candidates still awaiting a decision; Shown counts the band
-	// being displayed, so the pager measures the filtered list rather than the set.
-	Total       int   `json:"total"`
-	Shown       int   `json:"shown"`
-	Bytes       int64 `json:"bytes"`
-	Likely      int   `json:"likely"`
-	Possible    int   `json:"possible"`
-	Watch       int   `json:"watch"`
-	Letterboxed int   `json:"letterboxed"`
-	// The two answers the page gives: likely from a social app (strong
-	// evidence, or a Story letterbox, which ran about nine in ten true), and
-	// not sure (everything else).
+	// Total counts the candidates still awaiting a decision, in every band.
+	Total int `json:"total"`
+	// Shown counts those in the band asked for, so the pager measures the
+	// filtered list rather than the set.
+	Shown int `json:"shown"`
+	// Bytes is the size of every candidate still awaiting a decision, in
+	// bytes.
+	Bytes int64 `json:"bytes"`
+	// Likely counts the candidates scoring 10 or more.
+	Likely int `json:"likely"`
+	// Possible counts the candidates scoring 6 to 9.
+	Possible int `json:"possible"`
+	// Watch counts the candidates scoring below 6.
+	Watch int `json:"watch"`
+	// Letterboxed counts the candidates with a Story letterbox, whatever their
+	// score.
+	Letterboxed int `json:"letterboxed"`
+	// Social counts the candidates the page calls likely from a social app:
+	// strong evidence, scoring 10 or more, or a Story letterbox, which ran
+	// about nine in ten true.
 	Social int `json:"social"`
+	// Unsure counts every other candidate.
 	Unsure int `json:"unsure"`
-	// What the reviewer has already settled, kept visible so the work shows.
-	Kept   int `json:"kept"`
+	// Kept counts the videos the reviewer kept as not from a social app, kept
+	// visible so the work shows.
+	Kept int `json:"kept"`
+	// Marked counts the videos the reviewer removed.
 	Marked int `json:"marked"`
 }
 

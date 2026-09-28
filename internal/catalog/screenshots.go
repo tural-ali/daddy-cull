@@ -20,10 +20,17 @@ type ScreenshotImportResult struct {
 	Bytes int64 `json:"bytes"`
 }
 
+// ScreenshotItem is a screenshot or screen recording waiting in the holding
+// area. Its status is keep once it has been reviewed.
 type ScreenshotItem struct {
 	Asset
-	Day   string `json:"day"`
-	Name  string `json:"name"`
+	// Day is the date the file's name starts with, as YYYY-MM-DD before an
+	// underscore, or empty when it starts with none.
+	Day string `json:"day"`
+	// Name is the file's name in the holding area.
+	Name string `json:"name"`
+	// State is where it stands in the holding area; always waiting in this
+	// list.
 	State string `json:"state"`
 }
 
@@ -32,13 +39,21 @@ type ScreenshotItem struct {
 // count both sides of it within its kind, and Stills and Recordings count
 // each kind within its review side.
 type ScreenshotPage struct {
-	Items      []ScreenshotItem `json:"items"`
-	Total      int              `json:"total"`
-	Bytes      int64            `json:"bytes"`
-	Unreviewed int              `json:"unreviewed"`
-	Reviewed   int              `json:"reviewed"`
-	Stills     int              `json:"stills"`
-	Recordings int              `json:"recordings"`
+	// Items are this page's screenshots, ordered by day and then name; those
+	// with no day come first.
+	Items []ScreenshotItem `json:"items"`
+	// Total counts the screenshots under the filter, on every page.
+	Total int `json:"total"`
+	// Bytes is the size of those screenshots together, in bytes.
+	Bytes int64 `json:"bytes"`
+	// Unreviewed counts the screenshots of the filter's kind not reviewed yet.
+	Unreviewed int `json:"unreviewed"`
+	// Reviewed counts the screenshots of the filter's kind already kept.
+	Reviewed int `json:"reviewed"`
+	// Stills counts the pictures on the filter's review side.
+	Stills int `json:"stills"`
+	// Recordings counts the screen recordings on the filter's review side.
+	Recordings int `json:"recordings"`
 }
 
 // A screenshot is reviewed once it has been kept: a decision only, so nothing

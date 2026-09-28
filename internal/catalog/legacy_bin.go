@@ -17,27 +17,59 @@ import (
 	"time"
 )
 
+// LegacyPlanItem is a file in the earlier app's Bin, as a plan for it names
+// it.
 type LegacyPlanItem struct {
-	ID       int64  `json:"id"`
+	// ID is the file's id in the earlier app's Bin, as GET /api/legacy-bin
+	// lists it.
+	ID int64 `json:"id"`
+	// Original is where the file was before the earlier app moved it, and
+	// where restoring puts it back, such as /disks/disk1/2021/2021-12/2021-12-18/IMG_0016.mp4.
+	// If the file has since moved to another disk, this names that disk.
 	Original string `json:"original"`
-	Stored   string `json:"stored"`
-	Kind     string `json:"kind"`
-	Size     int64  `json:"size"`
+	// Stored is where the file is now, in the .culled folder of its disk,
+	// such as /disks/disk1/.culled/2021-12-18/IMG_0016.mp4.
+	Stored string `json:"stored"`
+	// Kind is media for a photograph or video, or sidecar.
+	Kind string `json:"kind"`
+	// Size is the file's size in bytes.
+	Size int64 `json:"size"`
 }
 
+// LegacyPlanFile is one file a plan for the earlier app's Bin restores or
+// deletes, with the fingerprint it is checked against first.
 type LegacyPlanFile struct {
 	LegacyPlanItem
-	Hash  string `json:"hash"`
-	Mtime int64  `json:"mtime"`
+	// Hash is the SHA-256 of the file's contents when the plan was made, in
+	// hexadecimal.
+	Hash string `json:"hash"`
+	// Mtime is when the file was last modified, as it was when the plan was
+	// made, in Unix nanoseconds.
+	Mtime int64 `json:"mtime"`
+	// Phase is where the file stands: bin, restoring, restored, deleting,
+	// purged, or absent_after_intent (gone after its deletion started,
+	// without the deletion being seen to finish).
 	Phase string `json:"phase"`
 }
 
+// LegacyBinPlan is a plan for restoring or deleting files from the earlier
+// app's Bin. It takes in every file of each batch it names, since the earlier
+// app moved a photograph and its sidecars together.
 type LegacyBinPlan struct {
-	ID      string           `json:"id"`
-	State   string           `json:"state"`
-	Created string           `json:"created"`
-	Files   []LegacyPlanFile `json:"files"`
-	Error   string           `json:"error,omitempty"`
+	// ID is the plan's id, 32 hexadecimal characters.
+	ID string `json:"id"`
+	// State is where the plan stands: planned (nothing done yet, ready to
+	// restore or purge), restoring, restored, purging, purged, or
+	// purged_recovered (deleted, with at least one file found already gone
+	// after its deletion started).
+	State string `json:"state"`
+	// Created is when the plan was made, in RFC 3339 UTC.
+	Created string `json:"created"`
+	// Files are every file the plan restores or deletes.
+	Files []LegacyPlanFile `json:"files"`
+	// Error says why the last step failed. It is cleared when the plan
+	// finishes, and left out when there is none.
+	Error string `json:"error,omitempty"`
 }
 
 type LegacyBinEngine struct {

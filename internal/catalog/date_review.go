@@ -10,24 +10,38 @@ import (
 // count as removed: they were removed from this date, and a tally that forgot
 // them would shrink every time the Bin was emptied.
 type DateTally struct {
-	Total      int   `json:"total"`
-	Removed    int   `json:"removed"`
-	Bytes      int64 `json:"bytes"`
-	Kept       int   `json:"kept"`
-	Favourites int   `json:"favourites"`
+	// Total counts every file ever filed under the date, removed ones
+	// included.
+	Total int `json:"total"`
+	// Removed counts the files removed: marked cull, in the Bin or deleted.
+	Removed int `json:"removed"`
+	// Bytes is the size of the removed files together, in bytes.
+	Bytes int64 `json:"bytes"`
+	// Kept counts the files kept that are still in the archive.
+	Kept int `json:"kept"`
+	// Favourites counts the files with a heart that are still in the archive.
+	Favourites int `json:"favourites"`
 }
 
 // KeptAsset is a file that marking the date reviewed kept, with the revision
 // the keep was saved at, so the page can undo it.
 type KeptAsset struct {
-	ID       int64 `json:"id"`
+	// ID is the file's id in the catalogue.
+	ID int64 `json:"id"`
+	// Revision is the file's revision after the keep; send it with a choice
+	// that undoes it.
 	Revision int64 `json:"revision"`
 }
 
+// DateReviewed is what marking a calendar date reviewed did.
 type DateReviewed struct {
-	Days  []string    `json:"days"`
-	Kept  []KeptAsset `json:"kept"`
-	Tally DateTally   `json:"tally"`
+	// Days are the years' days this request marked reviewed, as YYYY-MM-DD,
+	// oldest first. Days already reviewed are not listed.
+	Days []string `json:"days"`
+	// Kept are the files nobody had decided on, which this request kept.
+	Kept []KeptAsset `json:"kept"`
+	// Tally is what the review of the date came to.
+	Tally DateTally `json:"tally"`
 }
 
 // MarkDateReviewed finishes a calendar date in one transaction: every file on

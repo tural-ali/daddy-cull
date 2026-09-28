@@ -41,7 +41,8 @@ const (
 // Page is a page an addon adds to the sidebar.
 type Page struct {
 	// ID names the page within its addon, in lower case with hyphens.
-	ID    string `json:"id"`
+	ID string `json:"id"`
+	// Label is the page's name in the sidebar.
 	Label string `json:"label"`
 	// Icon is a Material Symbols name from the set Cull ships; an unknown
 	// one is drawn as a puzzle piece.
@@ -60,17 +61,27 @@ type Page struct {
 type Manifest struct {
 	// ID is the addon's name in lower case with hyphens. It is also the
 	// name of its folder.
-	ID      string `json:"id"`
-	Name    string `json:"name"`
+	ID string `json:"id"`
+	// Name is how the addon is called on the Addons page, in the reference
+	// and in error messages.
+	Name string `json:"name"`
+	// Version is the addon's own version, in any form it likes. It is
+	// required, and Cull does not compare it.
 	Version string `json:"version"`
 	// Summary says in one sentence what it is for.
 	Summary string `json:"summary"`
 	// Description says more: what it adds, and what it needs.
 	Description string `json:"description,omitempty"`
-	Author      string `json:"author,omitempty"`
-	Homepage    string `json:"homepage,omitempty"`
-	Icon        string `json:"icon,omitempty"`
-	Pages       []Page `json:"pages,omitempty"`
+	// Author is who wrote the addon, or empty.
+	Author string `json:"author,omitempty"`
+	// Homepage is an address to read more about the addon, or empty.
+	Homepage string `json:"homepage,omitempty"`
+	// Icon is a Material Symbols name for the addon, as for a page's icon, or
+	// empty for the puzzle piece.
+	Icon string `json:"icon,omitempty"`
+	// Pages are the pages the addon adds to the sidebar while it is on, if
+	// any.
+	Pages []Page `json:"pages,omitempty"`
 	// Permissions are what the addon's key may do beyond reading: review,
 	// bin, delete or settings. Cull's own addons are part of Cull and ask
 	// for none.
@@ -118,11 +129,16 @@ type Store interface {
 // View is an addon as the Addons page shows it.
 type View struct {
 	Manifest
+	// BuiltIn is true for Cull's own addons and false for one of your own.
 	BuiltIn bool `json:"builtIn"`
-	On      bool `json:"on"`
+	// On is whether the addon is on now, by choice or by default. An addon of
+	// your own with a problem is never on.
+	On bool `json:"on"`
 	// Chosen says someone turned it on or off, rather than it being on or
 	// off by default.
-	Chosen bool   `json:"chosen"`
+	Chosen bool `json:"chosen"`
+	// Status says whether it has what it needs, and what it holds or waits
+	// for.
 	Status Status `json:"status"`
 	// Routes counts its API routes, which the API reference lists.
 	Routes int `json:"routes"`
@@ -451,9 +467,15 @@ func (r *Registry) Changed() <-chan struct{} {
 // turned on, its context ends when it is turned off, and it starts again when
 // it is turned back on, until ctx ends.
 func (r *Registry) While(ctx context.Context, id string, work func(context.Context)) {
+	// Each wait is on the change channel taken before the addon is read, so
+	// a change made between the two still ends the wait.
 	for ctx.Err() == nil {
-		for !r.On(ctx, id) {
-			if !r.wait(ctx) {
+		for {
+			changed := r.Changed()
+			if r.On(ctx, id) {
+				break
+			}
+			if !r.wait(ctx, changed) {
 				return
 			}
 		}
@@ -463,8 +485,9 @@ func (r *Registry) While(ctx context.Context, id string, work func(context.Conte
 			defer close(done)
 			work(running)
 		}()
-		for r.On(ctx, id) {
-			if !r.wait(ctx) {
+		for {
+			changed := r.Changed()
+			if !r.On(ctx, id) || !r.wait(ctx, changed) {
 				break
 			}
 		}
@@ -473,16 +496,16 @@ func (r *Registry) While(ctx context.Context, id string, work func(context.Conte
 	}
 }
 
-// wait returns when an addon may have been turned on or off, or false once
-// ctx ends. The cache means a change made elsewhere is noticed within a
-// few seconds.
-func (r *Registry) wait(ctx context.Context) bool {
+// wait returns when changed closes, as it does when an addon is turned on or
+// off, or false once ctx ends. The cache means a change made elsewhere is
+// noticed within a few seconds.
+func (r *Registry) wait(ctx context.Context, changed <-chan struct{}) bool {
 	timer := time.NewTimer(cacheFor)
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():
 		return false
-	case <-r.Changed():
+	case <-changed:
 	case <-timer.C:
 	}
 	return true

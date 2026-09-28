@@ -20,17 +20,41 @@ import (
 // group; a writer batch, a legacy batch and a screenshot plan each move together
 // with their sidecars, so selecting any member selects the whole group.
 type TrashItem struct {
-	Key       string `json:"key"`
-	Group     string `json:"group"`
-	Source    string `json:"source"`
-	Name      string `json:"name"`
-	Original  string `json:"original"`
-	Kind      string `json:"kind"`
-	Size      int64  `json:"size"`
-	Sidecars  int    `json:"sidecars"`
+	// Key names the card; send it back to act on it. It is marked:<file id>,
+	// bin:<plan id>:<file id>, legacy:<earlier app's id> or shot:<plan id>.
+	Key string `json:"key"`
+	// Group names the cards that move together: acting on one card acts on
+	// every card with the same Group. It is marked:<file id>, bin:<plan id>,
+	// legacy:<earlier app's batch> or shot:<plan id>.
+	Group string `json:"group"`
+	// Source is which part of Cull put it in the Bin: marked for a file
+	// marked in review and not yet moved, bin for a file the writer moved,
+	// legacy for one the earlier app moved, and screenshot for a screenshot
+	// removed from the holding area.
+	Source string `json:"source"`
+	// Name is the file's name, without its folder.
+	Name string `json:"name"`
+	// Original is where the file was before it entered the Bin, and where
+	// restoring puts it back, such as /archive/2019/2019-08/2019-08-14/IMG_1234.HEIC,
+	// /disks/disk1/... or /screenshots/....
+	Original string `json:"original"`
+	// Kind is image, raw or video, or sidecar for a sidecar from the earlier
+	// app's Bin whose photograph has already left it.
+	Kind string `json:"kind"`
+	// Size is the card's size in bytes, its sidecars included.
+	Size int64 `json:"size"`
+	// Sidecars counts the sidecar files that move with the card.
+	Sidecars int `json:"sidecars"`
+	// RemovedAt is when the file entered the Bin, or for a marked file when
+	// it was marked, in RFC 3339. It is empty when no time was recorded.
 	RemovedAt string `json:"removedAt"`
-	Preview   string `json:"preview,omitempty"`
-	Disk      string `json:"disk,omitempty"`
+	// Preview is the media route that shows the card, such as /api/media/1
+	// or /api/binned-media/bin/<plan id>/0; add /preview or /original. It is
+	// left out for a card with nothing to show.
+	Preview string `json:"preview,omitempty"`
+	// Disk is the disk a file from the earlier app's Bin is on, such as
+	// disk1. It is left out for every other source.
+	Disk string `json:"disk,omitempty"`
 
 	// What the writer needs to act on the item, never sent to the page.
 	assetID   int64

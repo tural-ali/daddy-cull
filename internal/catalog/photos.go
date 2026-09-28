@@ -102,33 +102,63 @@ var photosNeverOffer = []string{"shadowed:"}
 // stands for: two removed copies of one photograph are one Photos asset, so
 // they are one entry and are recorded together.
 type PhotosEntry struct {
-	ID       string   `json:"id"`
-	Action   string   `json:"action"`
-	Keys     []string `json:"keys"`
-	Name     string   `json:"name"`
-	Stem     string   `json:"stem"`
-	Ext      string   `json:"ext"`
-	Day      string   `json:"day"`
-	Original string   `json:"original"`
-	Kind     string   `json:"kind"`
-	State    string   `json:"state,omitempty"`
-	Preview  string   `json:"preview,omitempty"`
+	// ID is the action and the first catalogue key, such as
+	// delete:asset:1234; it names the entry when choosing what to apply.
+	ID string `json:"id"`
+	// Action is delete or favourite.
+	Action string `json:"action"`
+	// Keys lists the catalogue items the entry stands for, as asset:<id> or
+	// legacy:<id>, one or more.
+	Keys []string `json:"keys"`
+	// Name is the filename Photos knows the file by. A screenshot's name has
+	// the date Cull added in front of it taken off again.
+	Name string `json:"name"`
+	// Stem is Name without its extension, with the archive's duplicate
+	// suffixes such as " (2)" removed, as it is matched in Photos.
+	Stem string `json:"stem"`
+	// Ext is the extension in lower case, without the dot; empty when there
+	// is none.
+	Ext string `json:"ext"`
+	// Day is the day the photograph was taken, as YYYY-MM-DD.
+	Day string `json:"day"`
+	// Original is the path of the first file the entry stands for, as Cull
+	// holds it.
+	Original string `json:"original"`
+	// Kind is image, raw or video.
+	Kind string `json:"kind"`
+	// State is, for a deletion, where the file is in Cull: marked (in the Bin
+	// but not yet moved), bin, or purged (emptied for good). Omitted for a
+	// favourite.
+	State string `json:"state,omitempty"`
+	// Preview is the path of a preview of the file in Cull; omitted when
+	// there is none, as for a file emptied from the Bin for good.
+	Preview string `json:"preview,omitempty"`
 }
 
 // PhotosHeld is a removal withheld because the archive still holds the
 // photograph under another file.
 type PhotosHeld struct {
+	// Name is the removed file's name, as Photos would know it.
 	Name string `json:"name"`
-	Day  string `json:"day"`
+	// Day is the day it was taken, as YYYY-MM-DD.
+	Day string `json:"day"`
+	// Kept is the name of a file the archive still holds from the same day
+	// with the same name, ignoring duplicate suffixes and the extension, such
+	// as the JPG of a removed HEIC.
 	Kept string `json:"kept"`
 }
 
 // PhotosRestored is a photograph deleted from Photos and later put back in the
 // archive. PhotoKit cannot undelete, so all Cull can do is say so.
 type PhotosRestored struct {
-	Key      string `json:"key"`
-	Name     string `json:"name"`
-	Day      string `json:"day"`
+	// Key is the catalogue item, as asset:<id> or legacy:<id>; send it to
+	// /api/photos/forget once the photograph is dealt with.
+	Key string `json:"key"`
+	// Name is the filename Photos knew it by.
+	Name string `json:"name"`
+	// Day is the day it was taken, as YYYY-MM-DD.
+	Day string `json:"day"`
+	// SyncedAt is when Photos was seen to delete it, in RFC 3339 UTC.
 	SyncedAt string `json:"syncedAt"`
 }
 

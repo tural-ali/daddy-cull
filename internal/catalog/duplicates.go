@@ -5,16 +5,28 @@ import (
 	"strconv"
 )
 
+// DuplicateMember is one file of a group of copies, with the day it is filed
+// under.
 type DuplicateMember struct {
 	Asset
+	// Day is the day the file is filed under, as YYYY-MM-DD.
 	Day string `json:"day"`
 }
 
+// DuplicateGroup is a set of files whose bytes are identical, as proven by a
+// full hash of each. A group already settled, with one copy kept and every
+// other removed, is not listed.
 type DuplicateGroup struct {
-	Hash        string            `json:"hash"`
-	Size        int64             `json:"size"`
-	Reclaimable int64             `json:"reclaimable"`
-	Members     []DuplicateMember `json:"members"`
+	// Hash is the full hash the files share, as the catalogue holds it.
+	Hash string `json:"hash"`
+	// Size is each file's size, in bytes.
+	Size int64 `json:"size"`
+	// Reclaimable is the space keeping one copy would free, in bytes: Size
+	// times one less than the number of copies.
+	Reclaimable int64 `json:"reclaimable"`
+	// Members are the copies still in the archive, ordered by day and then
+	// path.
+	Members []DuplicateMember `json:"members"`
 }
 
 // ExactDuplicates only returns byte-identical files backed by a cached full hash.
@@ -92,10 +104,15 @@ func (s *Store) ExactDuplicates(ctx context.Context, md string, limit int) ([]Du
 // Sharing a size is not evidence of anything on its own; it only marks the file
 // as worth hashing, which is the point of showing it.
 type DuplicateCandidate struct {
-	Size        int64             `json:"size"`
-	Reclaimable int64             `json:"reclaimable"`
-	Hashed      int               `json:"hashed"`
-	Members     []DuplicateMember `json:"members"`
+	// Size is the size the files share, in bytes.
+	Size int64 `json:"size"`
+	// Reclaimable is the most keeping one copy could free, in bytes, if every
+	// file turned out identical: Size times one less than the number of files.
+	Reclaimable int64 `json:"reclaimable"`
+	// Hashed counts the files in the set that have a full hash.
+	Hashed int `json:"hashed"`
+	// Members are the files of this size, ordered by path.
+	Members []DuplicateMember `json:"members"`
 }
 
 // DuplicateReport answers the question the page exists to answer, and says how
@@ -106,11 +123,20 @@ type DuplicateCandidate struct {
 // result readable: when every candidate is hashed the answer is complete, even
 // if almost nothing else in the archive has ever been hashed.
 type DuplicateReport struct {
-	Groups     []DuplicateGroup     `json:"groups"`
-	Unproven   []DuplicateCandidate `json:"unproven"`
-	Candidates int                  `json:"candidates"`
-	Hashed     int                  `json:"hashed"`
-	Settled    bool                 `json:"settled"`
+	// Groups are the proven groups of identical files, as GET /api/duplicates
+	// lists them.
+	Groups []DuplicateGroup `json:"groups"`
+	// Unproven are the sets of files sharing a size where at least one has
+	// no full hash yet, largest size first. The md filter does not apply.
+	Unproven []DuplicateCandidate `json:"unproven"`
+	// Candidates counts the files still in the archive that share their size
+	// with another: every file that could be a copy.
+	Candidates int `json:"candidates"`
+	// Hashed counts the candidates that have a full hash.
+	Hashed int `json:"hashed"`
+	// Settled is true when every candidate is hashed, so the groups are the
+	// whole answer.
+	Settled bool `json:"settled"`
 }
 
 // liveCandidates is the shared definition of the population that could hold a

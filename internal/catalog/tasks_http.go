@@ -95,6 +95,7 @@ func (t *TaskRunner) Routes(m *api.Mux) {
 	m.HandleFunc(api.Route{
 		Method: "GET", Path: "/api/tasks/{id}", Tag: "Tasks", Needs: api.Read,
 		Summary: "Get a task",
+		Doc:     "One task as GET /api/tasks lists it, with how far it has got and the files it could not handle. Poll it to follow a task an addon queued.",
 		Params:  []api.Param{idParam},
 		Returns: Task{}, Errors: []api.Error{notFound, unreadable},
 	}, func(w http.ResponseWriter, r *http.Request) {

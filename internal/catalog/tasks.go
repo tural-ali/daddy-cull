@@ -85,10 +85,13 @@ type Task struct {
 	Note string `json:"note,omitempty"`
 	// Failures names up to 20 files that could not be handled, and why.
 	Failures []TaskFailure `json:"failures"`
-	// CreatedAt, StartedAt and FinishedAt are in RFC 3339 and UTC; the
-	// last two are empty until the task starts and ends.
-	CreatedAt  string `json:"createdAt"`
-	StartedAt  string `json:"startedAt,omitempty"`
+	// CreatedAt is when the task was queued, in RFC 3339 and UTC.
+	CreatedAt string `json:"createdAt"`
+	// StartedAt is when the runner first got to the task, in RFC 3339 and
+	// UTC; absent while it waits its turn.
+	StartedAt string `json:"startedAt,omitempty"`
+	// FinishedAt is when the task ended, however it ended, in RFC 3339 and
+	// UTC; absent while it is queued or running.
 	FinishedAt string `json:"finishedAt,omitempty"`
 	// Undoable says POST /api/tasks/{id}/undo can take the task back.
 	Undoable bool `json:"undoable"`

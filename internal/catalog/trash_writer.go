@@ -37,8 +37,13 @@ func NewTrashWriter(s *Store, bin *BinEngine, legacy *LegacyBinEngine, shots *Sc
 // TrashResult reports what happened to each group, so a partial failure is
 // shown as exactly that rather than as success or as nothing having happened.
 type TrashResult struct {
-	Done     int            `json:"done"`
-	Bytes    int64          `json:"bytes"`
+	// Done counts the cards the action was carried out for. When a deletion
+	// is only scheduled, it counts the cards now waiting out the grace period.
+	Done int `json:"done"`
+	// Bytes is the total size of those cards in bytes, sidecars included.
+	Bytes int64 `json:"bytes"`
+	// Failures lists each card the action could not be carried out for. It is
+	// an empty list when every card succeeded.
 	Failures []TrashFailure `json:"failures"`
 	// KeptDays is set when a deletion was only scheduled: the files stay on
 	// disk this many days, restorable from the Log, then go for good.
@@ -52,8 +57,12 @@ type actOutcome struct {
 	failed map[string]string
 }
 
+// TrashFailure is one card a Bin action could not be carried out for. The
+// rest of the selection is still acted on.
 type TrashFailure struct {
-	Name  string `json:"name"`
+	// Name is the card's file name.
+	Name string `json:"name"`
+	// Error says why it failed.
 	Error string `json:"error"`
 }
 

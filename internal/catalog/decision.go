@@ -15,7 +15,8 @@ type Decision struct {
 	// RequestID makes a retry safe: the same id, 8 to 100 characters, is
 	// only acted on once.
 	RequestID string `json:"requestId"`
-	AssetID   int64  `json:"assetId"`
+	// AssetID is the file's id in the catalogue.
+	AssetID int64 `json:"assetId"`
 	// ExpectedRevision is the file's revision when it was read. If it has
 	// changed since, nothing is saved.
 	ExpectedRevision int64 `json:"expectedRevision"`
@@ -25,13 +26,15 @@ type Decision struct {
 	// Favourite is the heart. Removing a file takes its heart away.
 	Favourite bool `json:"favourite"`
 }
+
+// Saved is a choice as it was saved.
 type Saved struct {
 	// Revision is the file's revision now; send it with the next choice.
 	Revision int64 `json:"revision"`
-	// PreviousStatus and PreviousFavourite are what the choice replaced,
-	// so it can be undone.
-	PreviousStatus    string `json:"previousStatus"`
-	PreviousFavourite bool   `json:"previousFavourite"`
+	// PreviousStatus is the status the choice replaced, so it can be undone.
+	PreviousStatus string `json:"previousStatus"`
+	// PreviousFavourite is whether the file had a heart before the choice.
+	PreviousFavourite bool `json:"previousFavourite"`
 }
 
 func (s *Store) Decide(ctx context.Context, d Decision) (Saved, error) {

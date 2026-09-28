@@ -117,7 +117,10 @@ type Turned struct {
 
 // PairChoice joins or splits a RAW+JPEG pair.
 type PairChoice struct {
-	RawID     int64 `json:"rawId"`
+	// RawID is the RAW file's id.
+	RawID int64 `json:"rawId"`
+	// PartnerID is the id of the JPEG taken with it. The two ids may be sent
+	// either way round.
 	PartnerID int64 `json:"partnerId"`
 	// Paired is true to show the two as one photo again, false to show them apart.
 	Paired *bool `json:"paired"`
@@ -125,6 +128,7 @@ type PairChoice struct {
 
 // Paired is whether a pair now shows as one photo.
 type Paired struct {
+	// Paired is true when the two show as one photo, false when apart.
 	Paired bool `json:"paired"`
 }
 
@@ -136,6 +140,8 @@ type GraceChoice struct {
 
 // SoundChoice sets whether videos start muted.
 type SoundChoice struct {
+	// Muted is true for videos to start without sound, false for them to
+	// start with it. It is required.
 	Muted *bool `json:"muted"`
 }
 
@@ -147,11 +153,14 @@ type ReviewRequest struct {
 
 // Done says a request was carried out.
 type Done struct {
+	// OK is always true; a request that fails answers with an error instead.
 	OK bool `json:"ok"`
 }
 
 // Generation is a number that changes whenever files arrive in or leave the catalogue.
 type Generation struct {
+	// Generation is the current value. Compare it only with a value read
+	// earlier: a different one means the catalogue changed, not how.
 	Generation int64 `json:"generation"`
 }
 
@@ -163,6 +172,8 @@ type ReadThrough struct {
 
 // Arrivals marks newly arrived files seen.
 type Arrivals struct {
+	// IDs are the files seen, 1 to 10,000 of them. An id that is not a new
+	// arrival, or was already seen, is passed over.
 	IDs []int64 `json:"ids"`
 }
 
@@ -311,7 +322,7 @@ func (s *Store) Routes(m *api.Mux) {
 	m.HandleFunc(api.Route{
 		Method: "GET", Path: "/api/streak", Tag: "Calendar", Needs: api.Read,
 		Summary: "Read the review streak",
-		Doc:     "How many days in a row something was reviewed, the best run, and the days of this year that had a review.",
+		Doc:     "How many days in a row something was reviewed, the best run, and every day that had a review, in the reader's time zone.",
 		Params:  []api.Param{zoneParam},
 		Returns: StreakCalendar{},
 		Errors:  []api.Error{unreadable},
@@ -638,6 +649,7 @@ func (s *Store) Routes(m *api.Mux) {
 	m.HandleFunc(api.Route{
 		Method: "POST", Path: "/api/notifications/read", Tag: "Notifications", Needs: api.Review,
 		Summary: "Mark notifications read",
+		Doc:     "Marks the notification with this id and every older one read, so the bell's count goes down. Notifications already read are left as they are. Nothing is returned.",
 		Body:    ReadThrough{},
 		Errors:  []api.Error{{Status: 400, When: "through is not a notification id"}, notJSON, offSite, unreadable},
 	}, func(w http.ResponseWriter, r *http.Request) {
@@ -712,6 +724,7 @@ func (s *Store) Routes(m *api.Mux) {
 	m.HandleFunc(api.Route{
 		Method: "POST", Path: "/api/settings/video", Tag: "Settings", Needs: api.Settings,
 		Summary: "Set whether videos start muted",
+		Doc:     "Saves whether videos start muted, for every browser: the setting is read back as videoMuted in GET /api/stats. The answer repeats the choice saved.",
 		Body:    SoundChoice{},
 		Returns: SoundChoice{},
 		Errors:  []api.Error{{Status: 400, When: "muted is missing"}, notJSON, offSite, unreadable},

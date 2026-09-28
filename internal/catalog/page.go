@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// Asset is a file in the catalogue, with the choice saved for it.
 type Asset struct {
 	// RelatedCount counts files related to this one, such as the other half
 	// of a Live Photo.
@@ -25,8 +26,9 @@ type Asset struct {
 	// Size is the file's size in bytes.
 	Size int64 `json:"size"`
 	// Status is unreviewed, keep, later or cull.
-	Status    string `json:"status"`
-	Favourite bool   `json:"favourite"`
+	Status string `json:"status"`
+	// Favourite is whether the file has a heart.
+	Favourite bool `json:"favourite"`
 	// Revision counts the choices saved for the file; send it with the next.
 	Revision int64 `json:"revision"`
 	// Source is where the file comes from, such as archive.
@@ -63,7 +65,10 @@ type Cursor struct {
 	Matches bool   `json:"matches,omitempty"`
 	From    int64  `json:"from,omitempty"`
 }
+
+// Page is one page of files, and where the next one starts.
 type Page struct {
+	// Assets are this page's files, in capture order.
 	Assets []Asset `json:"assets"`
 	// Next is passed as after to read the next page; empty when there is none.
 	Next string `json:"next"`
