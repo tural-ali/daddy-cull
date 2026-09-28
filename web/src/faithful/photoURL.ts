@@ -31,6 +31,10 @@ export function usePhotoURL(has:(id:string)=>boolean|undefined,enabled=true){
   // Whether this page added the history entry, so closing can go back to the
   // grid rather than leave a second copy of it behind.
   const pushed=useRef(false);
+  // Closing goes back, which the browser does later. A photo opened before it
+  // lands waits here for the grid's address, or the back would close it.
+  const leaving=useRef(false);
+  const waiting=useRef<string|null>(null);
   const latest=useRef(has);
   latest.current=has;
   const settled=useRef(false);
@@ -38,7 +42,13 @@ export function usePhotoURL(has:(id:string)=>boolean|undefined,enabled=true){
   on.current=enabled;
   useEffect(()=>{
     if(!enabled)return;
-    const pop=()=>{pushed.current=false;const id=photoInAddress();setOpen(id!==null&&latest.current(id)!==false?id:null)};
+    const pop=()=>{
+      pushed.current=false;
+      const opened=leaving.current?waiting.current:null;
+      leaving.current=false;waiting.current=null;
+      if(opened!==null&&photoInAddress()===null){history.pushState(history.state,'',addressFor(opened));pushed.current=true;return}
+      const id=photoInAddress();setOpen(id!==null&&latest.current(id)!==false?id:null);
+    };
     window.addEventListener('popstate',pop);
     return()=>window.removeEventListener('popstate',pop);
   },[enabled]);
@@ -58,6 +68,7 @@ export function usePhotoURL(has:(id:string)=>boolean|undefined,enabled=true){
     const id=String(photo);
     setOpen(id);
     if(!on.current)return;
+    if(leaving.current){waiting.current=id;return}
     if(photoInAddress()===null){history.pushState(history.state,'',addressFor(id));pushed.current=true}
     else history.replaceState(history.state,'',addressFor(id));
   },[]);
@@ -65,12 +76,14 @@ export function usePhotoURL(has:(id:string)=>boolean|undefined,enabled=true){
    * adding a history entry for every photo seen. */
   const moved=useCallback((photo:string|number)=>{
     const id=String(photo);
+    if(leaving.current){if(waiting.current!==null)waiting.current=id;return}
     if(on.current&&photoInAddress()!==null&&photoInAddress()!==id)history.replaceState(history.state,'',addressFor(id));
   },[]);
   const close=useCallback(()=>{
     setOpen(null);
-    if(!on.current||photoInAddress()===null)return;
-    if(pushed.current){pushed.current=false;history.back()}
+    waiting.current=null;
+    if(!on.current||leaving.current||photoInAddress()===null)return;
+    if(pushed.current){pushed.current=false;leaving.current=true;history.back()}
     else history.replaceState(history.state,'',addressFor(null));
   },[]);
   return {open,show,moved,close};

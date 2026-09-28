@@ -28,6 +28,25 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
     await page.keyboard.press('Escape');
     await viewer.waitFor({state:'hidden'});
   }
+  // Closing goes back in history, which lands a moment later. A photo opened
+  // before it lands still opens, and keeps its own address.
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await tiles.nth(0).focus();
+  await page.keyboard.press('Enter');
+  await viewer.waitFor();
+  await page.evaluate(()=>{
+    document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    const tile=document.querySelectorAll('figure.mo')[1];
+    tile.focus();
+    tile.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+  });
+  await page.waitForTimeout(300);
+  assert.equal(await viewer.count(),1,'the second photo stays open');
+  assert.match(page.url(),/\/photo\/2$/,'with its own address');
+  await page.keyboard.press('Escape');
+  await viewer.waitFor({state:'hidden'});
+  assert.doesNotMatch(page.url(),/\/photo\//,'and closing it goes back to the date');
+  await page.emulateMedia({reducedMotion:'no-preference'});
   // A key pressed on a button inside the tile is that button's, not the tile's.
   await tiles.first().locator('button').first().focus();
   await page.keyboard.press('Enter');

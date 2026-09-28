@@ -95,6 +95,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   // The photo the viewer opened on: the flight starts from its tile, however
   // far the review steps on from it.
   const [openedOn]=useState(initialID);
+  const [openedAt]=useState(()=>performance.now());
   useLayoutEffect(()=>{
     const tile=tileImage(openedOn);
     const stageBox=stage.current?.getBoundingClientRect();
@@ -206,6 +207,10 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   useEffect(()=>{
     function onKey(event:KeyboardEvent){
       if(event.ctrlKey||event.metaKey||event.altKey||event.target instanceof HTMLInputElement)return;
+      // The key that opened the viewer is still on its way up to the window;
+      // Space opens a tile and closes the viewer, so it would do both. Both
+      // clocks are coarse, so the same tick counts as before.
+      if(event.timeStamp<=openedAt)return;
       const key=event.key.toLowerCase();
       if(['arrowright','arrowleft','x','k','f','i','z','c','r','g','h','escape',' ','?','1','2','3','4','5','6','7','8','9'].includes(key))event.preventDefault();
       if(menu){if(key==='escape')setMenu(false);return}
