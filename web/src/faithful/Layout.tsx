@@ -7,6 +7,7 @@ import {PageActionButtons,PageActionsProvider,type PageActions} from './pageActi
 import {StreakCalendar,StreakIntro,StreakPill,introDue} from './Streak';
 import {NotificationBell} from './Notifications';
 import {DateCalendar,DatePill,PageDateProvider,type PageDate} from './DatePicker';
+import {GridZoom} from './gridZoom';
 import {FilterButton,FilterMenu,FilterPills,PageFiltersProvider,matchFilters,type FilterOption,type PageFilters} from './SearchFilters';
 
 export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'log'|'bin'|'settings';
@@ -211,6 +212,7 @@ export function Layout({route,binFiles,reviewed,streak,notifications,onNotificat
       </nav>
     </aside>
     <button type="button" className="scrim" tabIndex={-1} aria-hidden="true" onClick={()=>setDrawer(false)}/>
+    <GridZoom enabled={gridRoutes.has(route)}/>
     {intro&&streak&&<StreakIntro streak={streak} target={pill} onDone={()=>{setIntro(false);setBump(true)}}/>}
     <div className="panel">
       {flash&&<p className="flash" role="status">{flash}</p>}

@@ -18,6 +18,8 @@
 */
 
 :root {
+  /* Thumbnail size, which Cmd+ and Cmd- step on pages with a grid. */
+  --zoom: 1;
   /* Night, the default: the logo was drawn for it. Day is chosen by the
      reader's clock (see src/theme.ts), not by the operating system. */
   color-scheme: dark;
@@ -780,10 +782,10 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 
 .gal {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(288px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(288px * var(--zoom))), 1fr));
   gap: var(--gap);
 }
-.gal.tight { grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: 8px; }
+.gal.tight { grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(208px * var(--zoom))), 1fr)); gap: 8px; }
 
 .mo {
   position: relative; margin: 0;
@@ -1578,8 +1580,8 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 
 @media (width <= 720px) {
   main, main.wide { padding: 1rem .8rem 0; }
-  .gal { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
-  .gal.tight { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
+  .gal { grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(180px * var(--zoom))), 1fr)); gap: 8px; }
+  .gal.tight { grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(148px * var(--zoom))), 1fr)); }
   .mo .acts { opacity: 1; }
   /* The actions always show here, so the time and the running time sit just
      above them rather than under the heart. */
@@ -2004,7 +2006,7 @@ button.danger:not(.btn, .iconbtn) {
 /* Laid out as Apple Photos lays out Duplicates: a date heading with its action
    beside it, a hairline between sets, and each copy in a square cell with its
    size on the picture. */
-.dupepage { --dupe-cell: clamp(150px, 19vw, 232px); }
+.dupepage { --dupe-cell: calc(clamp(150px, 19vw, 232px) * var(--zoom)); }
 
 /* The one control that acts on everything stays in view while the sets scroll
    under it, with the consequence stated before the button. */
@@ -2040,7 +2042,7 @@ button.danger:not(.btn, .iconbtn) {
 
 .dupetiles {
   list-style: none; margin: 0; padding: 0;
-  display: grid; grid-template-columns: repeat(auto-fill, var(--dupe-cell)); gap: 1.1rem 1.4rem;
+  display: grid; grid-template-columns: repeat(auto-fill, min(100%, var(--dupe-cell))); gap: 1.1rem 1.4rem;
 }
 .dupetile { min-width: 0; }
 .dupecell { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
@@ -2150,7 +2152,7 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
 
 .loggrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(156px * var(--zoom))), 1fr));
   gap: 8px;
   margin-top: .6rem;
 }
@@ -2194,7 +2196,7 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
 .graceform .btn { margin-left: .3rem; }
 .warntext { color: var(--warn); }
 /* On the Log the waiting files sit above the saved choices, at the same size. */
-.bingal.small { grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); }
+.bingal.small { grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(156px * var(--zoom))), 1fr)); }
 
 /* The Bin and Log footer keeps its buttons on one row; the hint gives way first. */
 .fbar.binbar .fleft { flex: none; flex-wrap: nowrap; }
@@ -2284,12 +2286,15 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
    proportion to their width so they end on one shared height, edge to edge.
    The filler after the last tile soaks up the space the last row does not
    need, so it keeps the row height instead of stretching. */
-.rows { --row: 232px; display: flex; flex-wrap: wrap; gap: 4px; }
+.rows { --row: calc(232px * var(--zoom)); display: flex; flex-wrap: wrap; gap: 4px; }
 .rows::after { content: ""; flex: 1000000 1 0; }
 .rt {
   position: relative; margin: 0; overflow: hidden;
   flex: calc(var(--r) * 1000) 1 calc(var(--r) * var(--row));
   aspect-ratio: var(--r);
+  /* A wide tile alone on its row would grow to the full width; past half as
+     tall again as a row it is cropped instead. */
+  max-height: calc(var(--row) * 1.5);
   background: var(--bg-3); cursor: pointer;
 }
 .rt > img, .rt > video, .rt > .actual-media { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -2306,7 +2311,7 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
 }
 .rt .dur .icon, .rt .dur .icon svg { width: 18px; height: 18px; }
 .rt .bdg { top: auto; bottom: 8px; left: 8px; }
-@media (width <= 600px) { .rows { --row: 128px; gap: 3px; } }
+@media (width <= 600px) { .rows { --row: calc(128px * var(--zoom)); gap: 3px; } }
 
 /* A page title with its one page-wide action at the far right, as Google
    Photos puts Empty trash. */
