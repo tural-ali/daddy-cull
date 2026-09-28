@@ -62,6 +62,10 @@ let unread=2,reads=[],seenReports=[],failNotifications=false;
   const bell=page.getByRole('button',{name:'Notifications, 2 new'});
   await bell.waitFor();
   assert.equal(await page.locator('.bellcount').textContent(),'2');
+  // The bell sits beside the logo with the streak, before the search.
+  const [logo,bellBox,field]=await Promise.all([page.locator('.brand').boundingBox(),bell.boundingBox(),page.locator('.search').boundingBox()]);
+  assert.ok(bellBox.x>=logo.x+logo.width&&bellBox.x+bellBox.width<=field.x,'the bell is between the logo and the search');
+  if(shots)await page.screenshot({path:`${shots}/notifications-bar.png`,clip:{x:0,y:0,width:900,height:90}});
   assert.deepEqual(await page.locator('.yhead .tag.fresh').allTextContents(),['1 new','1 new']);
   assert.equal(await page.locator('.gal figure .b.new').count(),2,'each new file carries a badge');
   // Opening the date saw them: the page says so once, and keeps the badges.

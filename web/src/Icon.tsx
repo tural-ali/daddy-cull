@@ -55,6 +55,14 @@ import ArrowBack from '@material-symbols/svg-400/outlined/arrow_back.svg?raw';
 import ArrowBackFill from '@material-symbols/svg-400/outlined/arrow_back-fill.svg?raw';
 import ZoomIn from '@material-symbols/svg-400/outlined/zoom_in.svg?raw';
 import ZoomInFill from '@material-symbols/svg-400/outlined/zoom_in-fill.svg?raw';
+import Play from '@material-symbols/svg-400/outlined/play_arrow.svg?raw';
+import PlayFill from '@material-symbols/svg-400/outlined/play_arrow-fill.svg?raw';
+import Pause from '@material-symbols/svg-400/outlined/pause.svg?raw';
+import PauseFill from '@material-symbols/svg-400/outlined/pause-fill.svg?raw';
+import Sound from '@material-symbols/svg-400/outlined/volume_up.svg?raw';
+import SoundFill from '@material-symbols/svg-400/outlined/volume_up-fill.svg?raw';
+import Muted from '@material-symbols/svg-400/outlined/volume_off.svg?raw';
+import MutedFill from '@material-symbols/svg-400/outlined/volume_off-fill.svg?raw';
 import Info from '@material-symbols/svg-400/outlined/info.svg?raw';
 import InfoFill from '@material-symbols/svg-400/outlined/info-fill.svg?raw';
 import Favorite from '@material-symbols/svg-400/outlined/favorite.svg?raw';
@@ -122,6 +130,10 @@ const icons={
   undo:[Undo,UndoFill],
   arrow_back:[ArrowBack,ArrowBackFill],
   zoom_in:[ZoomIn,ZoomInFill],
+  play_arrow:[Play,PlayFill],
+  pause:[Pause,PauseFill],
+  volume_up:[Sound,SoundFill],
+  volume_off:[Muted,MutedFill],
   info:[Info,InfoFill],
   favorite:[Favorite,FavoriteFill],
   check_circle:[CheckCircle,CheckCircleFill],

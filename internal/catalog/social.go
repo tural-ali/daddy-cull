@@ -224,10 +224,14 @@ func (s *Store) SocialCandidates(ctx context.Context, band string, from, limit i
 		Scan(&page.Shown); err != nil {
 		return page, err
 	}
+	// The report's width and height are the stored frame, which a phone keeps
+	// on its side; the catalogue's own reading is the shape as shown, so it
+	// wins once the file has been read at its current size.
 	query := `SELECT a.id,a.relative_path,a.captured_at,a.kind,a.size_bytes,COALESCE(d.status,'unreviewed'),COALESCE(d.favourite,0),COALESCE(d.revision,0),a.source_id,
 		(SELECT count(*) FROM assets alt WHERE alt.anchor_id=a.id),` + relatedCount + `,
-		COALESCE(social.day,''),social.name,social.score,social.evidence,social.width,social.height,social.duration,social.letterbox_top,social.poster
+		COALESCE(social.day,''),social.name,social.score,social.evidence,COALESCE(m.width,social.width),COALESCE(m.height,social.height),social.duration,social.letterbox_top,social.poster
 		FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id JOIN social_items social ON social.asset_id=a.id
+		LEFT JOIN media_shapes m ON m.asset_id=a.id AND m.size_bytes=a.size_bytes AND m.width>0 AND m.height>0
 		WHERE social.state='waiting'` + socialPending + where + ` ORDER BY social.score DESC,COALESCE(social.day,''),social.name LIMIT ? OFFSET ?`
 	args = append(args, limit, from)
 	rows, err := s.read.QueryContext(ctx, query, args...)

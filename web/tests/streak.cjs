@@ -46,17 +46,16 @@ async function open(browser,options={}){
   await intro.waitFor({state:'hidden',timeout:4000});
   if(shots)await page.screenshot({path:`${shots}/streak-4-landed.png`});
 
-  // As in Google Photos the search starts where the panel does, and the pill
-  // sits at the right of the bar with the bell; Settings has left the bar
-  // for the foot of the sidebar.
+  // The pill sits beside the logo, the search after it, no earlier than the
+  // panel, and Settings has left the bar for the foot of the sidebar.
   const pill=page.getByRole('button',{name:/^3 days in a row/});
   // The pill bumps as the flame lands; it is measured once it has settled.
   await page.locator('.streakpill.bump').waitFor({state:'detached'});
   await page.waitForFunction(()=>document.querySelector('.streakpill').getAnimations().length===0);
   const [brand,pillBox,search,panel]=await Promise.all([page.locator('.brand svg').first().boundingBox(),pill.boundingBox(),page.locator('.search').boundingBox(),page.locator('main').boundingBox()]);
   assert.ok(Math.abs(brand.x-32)<=1,`the logo sits 32px in, at ${brand.x}`);
-  assert.ok(Math.abs(search.x-panel.x)<=1,`the search starts where the panel does, at ${search.x} for ${panel.x}`);
-  assert.ok(pillBox.x>=search.x+search.width&&pillBox.x+pillBox.width<=1280,'the streak is right of the search');
+  assert.ok(pillBox.x>=brand.x+brand.width&&pillBox.x+pillBox.width<=search.x,'the streak follows the logo, before the search');
+  assert.ok(search.x>=panel.x-1,`the search starts no earlier than the panel, at ${search.x} for ${panel.x}`);
   assert.equal(await page.locator('.gbar').getByRole('link',{name:'Settings'}).count(),0,'Settings is not in the bar');
   const settings=await page.locator('#side').getByRole('link',{name:'Settings'}).boundingBox();
   const reviewed=await page.locator('.sideprogress').boundingBox();

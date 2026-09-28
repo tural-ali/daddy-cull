@@ -20,7 +20,7 @@ const picture='<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">
   await page.route('**/api/**',route=>{
     const request=route.request(),url=new URL(request.url());
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:3,synthetic:false,snapshotAt:'2026-09-06 01:49:00',candidates:0,calendarDays:1,reviewedDays:0,decisions:0,favourites:0,evidence:0,fullHashes:0,marked:0}});
-    if(url.pathname==='/api/today/09-07')return route.fulfill({json:{md:'09-07',label:'7 September',previous:'09-06',next:'09-08',years:[{day:'2010-09-07',year:2010,files:3,bytes:300,status:'pending',assets:[photo(1,'ONE.JPG'),photo(2,'TWO.JPG'),photo(3,'THREE.JPG')]}],memories:3,bytes:300}});
+    if(url.pathname==='/api/today/09-07')return route.fulfill({json:{md:'09-07',label:'7 September',previous:'09-06',next:'09-08',years:[{day:'2010-09-07',year:2010,files:3,bytes:300,status:'pending',assets:[photo(1,'ONE.JPG'),photo(2,'TWO.JPG'),{...photo(3,'THREE.JPG'),relatedCount:1}]}],memories:3,bytes:300}});
     if(url.pathname==='/api/decisions/batch'){const body=request.postDataJSON();batches.push(body);return route.fulfill({json:body.map(change=>({revision:change.expectedRevision+1,previousStatus:'unreviewed',previousFavourite:false}))})}
     if(url.pathname==='/api/turns'){
       const body=request.postDataJSON();turns.push(body);
@@ -56,6 +56,16 @@ const picture='<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">
   const [corner,heart]=await Promise.all([tile(1).boundingBox(),tile(1).getByRole("button",{name:"Favourite"}).boundingBox()]);
   assert.equal(await opacity(tile(1).getByRole('button',{name:'Favourite'})),'1');
   assert.ok(heart.x-corner.x<12&&corner.y+corner.height-(heart.y+heart.height)<12,'the heart sits in the bottom-left corner');
+  // A badge has the top-right corner, clear of the tick, and stays put on hover.
+  const badge=tile(3).locator('.b.dupe');
+  const place=async()=>{const [frame,box]=await Promise.all([tile(3).boundingBox(),badge.boundingBox()]);return {right:Math.round(frame.x+frame.width-(box.x+box.width)),top:Math.round(box.y-frame.y)}};
+  const resting=await place();
+  assert.ok(resting.right<=12&&resting.top<=12,`the duplicate badge sits top right: ${JSON.stringify(resting)}`);
+  await tile(3).hover();
+  await settle();
+  assert.deepEqual(await place(),resting,'and does not move for the tick');
+  await tile(1).hover();
+  await settle();
   if(shots)await page.screenshot({path:`${shots}/day-select-hover.png`,clip:{x:256,y:120,width:1024,height:420}});
 
   // One tick starts a selection: every tick shows, and a click on a tile adds it.

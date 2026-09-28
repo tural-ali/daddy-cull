@@ -23,7 +23,7 @@ const months=length.map((days,month)=>({name:new Date(Date.UTC(2000,month,1)).to
     return route.fulfill({status:404,json:{error:'not mocked'}});
   });
   const scroll=()=>page.locator('.calendar').evaluate(node=>({width:node.scrollWidth-node.clientWidth,height:node.scrollHeight-node.clientHeight}));
-  for(const width of [1440,1100,1000]){
+  for(const width of [2000,1440,1100,1000]){
     await page.setViewportSize({width,height:900});
     await page.goto(`${base}/year`);
     await page.locator('.cmonth').nth(11).waitFor();
@@ -35,6 +35,10 @@ const months=length.map((days,month)=>({name:new Date(Date.UTC(2000,month,1)).to
     // The month's name sits in view at the left, not cut by the edge.
     const [calendar,label]=await Promise.all([page.locator('.calendar').boundingBox(),page.locator('.mlabel').first().boundingBox()]);
     assert.ok(label.x>=calendar.x,'the month name is not cut');
+    // The calendar runs the panel's full width, its squares growing to fill it.
+    const [main,cell]=await Promise.all([page.locator('main').evaluate(node=>{const box=node.getBoundingClientRect(),style=getComputedStyle(node);return box.width-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)}),page.locator('.cell:not(.blank)').first().boundingBox()]);
+    assert.ok(Math.abs(calendar.width-16-main)<=2,`the calendar fills the panel at ${width}px: ${calendar.width} for ${main}`);
+    if(width===2000)assert.ok(cell.width>=44,`big squares on a wide screen: ${cell.width}`);
     if(shots)await page.screenshot({path:`${shots}/year-${width}.png`});
   }
   // A phone scrolls sideways, which is the design there.

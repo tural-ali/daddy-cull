@@ -45,7 +45,6 @@ export function runningTime(seconds:number){
   const hours=Math.floor(total/3600),minutes=Math.floor(total%3600/60),rest=String(total%60).padStart(2,'0');
   return hours?`${hours}:${String(minutes).padStart(2,'0')}:${rest}`:`${minutes}:${rest}`;
 }
-function captureTime(timestamp:number){return timestamp?new Date(timestamp*1000).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):null}
 
 function snapshot(asset:Asset):Snapshot{return {id:asset.id,status:asset.status,favourite:asset.favourite}}
 function fileName(asset:Asset){return asset.path.split('/').pop()??''}
@@ -546,16 +545,15 @@ export function Today({initial}:{initial:TodayData}){
         onKeyDown={event=>{if(event.target===event.currentTarget&&(event.key==='Enter'||event.key===' ')){event.preventDefault();openOrPick(asset,event.shiftKey)}}}>
         <Media asset={asset}/>
         <Pick checked={picks.picked.has(asset.id)} label={`Select ${fileName(asset)}`} onToggle={extend=>picks.toggle(place.get(asset.id)??0,extend)}/>
-        <div className="bdg">{asset.new&&asset.status==='unreviewed'&&<span className="b new">new</span>}{behind.has(asset.id)&&<span className="b pair">{pairLabel(asset)}</span>}{(asset.relatedCount??0)>(behind.has(asset.id)?1:0)&&<span className="b dupe">duplicate</span>}</div>
+        <div className="bdg end">{asset.new&&asset.status==='unreviewed'&&<span className="b new">new</span>}{behind.has(asset.id)&&<span className="b pair">{pairLabel(asset)}</span>}{(asset.relatedCount??0)>(behind.has(asset.id)?1:0)&&<span className="b dupe">duplicate</span>}</div>
         <button type="button" className="tfav" disabled={!queue.ready} aria-pressed={asset.favourite} aria-label={asset.favourite?'Remove from favourites':'Favourite'} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite)}}><Icon name="favorite" filled={asset.favourite}/></button>
-        {captureTime(asset.capturedAt)&&<div className="when">{captureTime(asset.capturedAt)}</div>}
         {(asset.duration||asset.kind==='video')&&<span className="dur" aria-label={asset.duration?`Video, ${runningTime(asset.duration)}`:'Video'}>{asset.duration?runningTime(asset.duration):<Icon name="play_circle" filled/>}</span>}
         {asset.status==='cull'&&<div className="undo"><span>Removed</span><button type="button" className="act" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,'unreviewed')}}>Undo</button></div>}
       </figure>}/>}
     </section>})}
-    {(message||(tip&&assets.length>0))&&<Snacks>
+    {(message||(tip&&assets.length>0&&viewing===null))&&<Snacks>
       {message&&<div className="snack" role="status">{saving?<Busy label={message} state="working"/>:message}</div>}
-      {tip&&assets.length>0&&<div className="snack" role="status">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>{undoKeys.undo}</b> undo, <b>{undoKeys.redo}</b> redo, <b>?</b> for the rest</div>}
+      {tip&&assets.length>0&&viewing===null&&<div className="snack" role="status">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>{undoKeys.undo}</b> undo, <b>{undoKeys.redo}</b> redo, <b>?</b> for the rest</div>}
     </Snacks>}
     {cheer&&<Celebration tally={cheer} nextHref={`/on/${initial.next}`} nextLabel={calendarLabel(initial.next)} onClose={()=>setCheer(null)}/>}
     {viewing!==null&&<Viewer assets={walked} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset} onRecord={history.record} onTurn={(asset,quarters)=>turn([asset],quarters)}

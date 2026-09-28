@@ -5,6 +5,7 @@ import {binChanged,type Asset,type Status} from '../api';
 import {tracked} from '../saving';
 import {undoKeys,type HistoryEntry} from './history';
 import {Kbd,tipProps} from './keys';
+import {TurnedControls} from './TurnedControls';
 
 function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
 function preview(asset:Asset){return `/api/media/${asset.id}/preview?size=large`}
@@ -92,9 +93,13 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   const capture=current?.capturedAt?new Date(current.capturedAt*1000):null;
   const name=current?.path.split('/').pop()??'';
   const folder=current?.path.split('/').slice(0,-1).join('/')??'';
-  const date=capture?.toLocaleDateString('en-GB',{year:'numeric',month:'long',day:'numeric'})??'Date unknown';
-  const weekday=capture?.toLocaleDateString('en-GB',{weekday:'short'})??'';
-  const time=capture?.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})??'';
+  // A file dated only by its folder is stored at midnight UTC: its day is
+  // known and its time is not, so the day is read in UTC and no time is shown.
+  const dayOnly=!!current?.capturedAt&&current.capturedAt%86400===0;
+  const zone=dayOnly?{timeZone:'UTC'}:{};
+  const date=capture?.toLocaleDateString('en-GB',{year:'numeric',month:'long',day:'numeric',...zone})??'Date unknown';
+  const weekday=capture?.toLocaleDateString('en-GB',{weekday:'short',...zone})??'';
+  const time=dayOnly?'':capture?.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})??'';
   const compareFiles=useMemo(()=>related??[],[related]);
   const media=useRef<HTMLImageElement&HTMLVideoElement>(null);
   const stage=useRef<HTMLDivElement>(null);
@@ -298,7 +303,8 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     <div ref={stage} className={`rvstage${zoom?' zoom':''}${current.kind==='video'?' hasvideo':''}`} onClick={event=>{if((event.target as HTMLElement).tagName==='IMG')setBare(value=>!value)}}>
       <button type="button" className="rvnav prev" aria-label="Previous" {...tipProps('Previous','ArrowLeft')} onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
       {broken?.id===onStage.id?<div className="rvgone" role="status"><b>{broken.gone?'This file is no longer in the archive':'This file could not be shown'}</b><span>{broken.gone?'It was moved or removed on the server since the last scan. It leaves review at the next nightly scan.':'Try again in a moment.'}</span></div>
-        :current.kind==='video'?<SessionVideo ref={media} key={current.id} data-turn={turn||undefined} controls autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onLoadedData={()=>setShown(current.id)} onError={()=>failed(current.id)}/>:<img ref={media} key={onStage.id} data-turn={turn||undefined} src={preview(onStage)} alt={onStage.path.split('/').pop()} onLoad={()=>setShown(current.id)} onError={()=>failed(onStage.id)}/>}
+        :current.kind==='video'?<SessionVideo ref={media} key={current.id} data-turn={turn||undefined} controls={!turn} autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onLoadedData={()=>setShown(current.id)} onError={()=>failed(current.id)}/>:<img ref={media} key={onStage.id} data-turn={turn||undefined} src={preview(onStage)} alt={onStage.path.split('/').pop()} onLoad={()=>setShown(current.id)} onError={()=>failed(onStage.id)}/>}
+      {current.kind==='video'&&turn!==0&&broken?.id!==onStage.id&&<TurnedControls key={current.id} video={media}/>}
       <button type="button" className="rvnav next" aria-label="Next" {...tipProps('Next','ArrowRight')} onClick={event=>{event.stopPropagation();step(1)}}>›</button>
     </div>
     <aside className="rvinfo" aria-label="Info">

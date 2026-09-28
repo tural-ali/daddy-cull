@@ -167,15 +167,15 @@ export function Layout({route,visit,binFiles,reviewed,streak,notifications,onNot
     {selection?<SelectionBar selection={selection}/>:<header className="gbar">
       <div className="gbarstart">
         <a className="brand" href="/" {...tipProps('Today')}><Logo/><LogoMark className="brandmark"/></a>
-      </div>
-      <DateSearch key={visit} date={pageDate} filters={pageFilters}/>
-      <div className="gbaracts">
-        {pageActions&&<PageActionButtons page={pageActions}/>}
         {streak&&<div className="streakwrap">
           <StreakPill streak={streak} pill={pill} open={calendarOpen} bump={bump} onToggle={()=>setCalendarOpen(open=>!open)}/>
           {calendarOpen&&<StreakCalendar streak={streak} anchor={pill} onClose={closeCalendar}/>}
         </div>}
         {notifications!==undefined&&<NotificationBell key={visit} unread={notifications} onRead={()=>onNotificationsRead?.()}/>}
+      </div>
+      <DateSearch key={visit} date={pageDate} filters={pageFilters}/>
+      <div className="gbaracts">
+        {pageActions&&<PageActionButtons page={pageActions}/>}
       </div>
     </header>}
     <aside id="side" className="side">

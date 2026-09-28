@@ -163,11 +163,11 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .gbar {
   grid-column: 1 / -1;
   position: sticky; top: 0; z-index: 30;
-  /* As in Google Photos, the logo has the sidebar's width and the search
-     starts where the panel does, with the page's own actions, the streak and
-     the bell at the right. The right side never gives up room it needs, so a
-     page's note narrows the search rather than sitting under it. */
-  display: grid; grid-template-columns: calc(var(--side-w) - 20px) minmax(0, 720px) minmax(max-content, 1fr); align-items: center; column-gap: 12px;
+  /* The logo, the streak and the bell share the first column, at least the
+     sidebar's width, then the search, then the page's own actions at the
+     right. The right side never gives up room it needs, so a page's note
+     narrows the search rather than sitting under it. */
+  display: grid; grid-template-columns: minmax(calc(var(--side-w) - 20px), max-content) minmax(0, 720px) minmax(max-content, 1fr); align-items: center; column-gap: 12px;
   height: var(--head-h); padding: 0 16px 0 8px;
   background: var(--shell);
 }
@@ -239,8 +239,8 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 /* The review streak beside the logo, as Duolingo keeps it at the top: a flame
    and the run of days, grey until today has a review and then lit. */
 .streakwrap { position: relative; flex: none; }
-/* The pill is at the right of the bar, so its calendar opens leftwards from it. */
-.streakwrap > .calpop { left: auto; right: 0; transform-origin: calc(100% - 30px) 0; }
+/* The pill sits beside the logo, so its calendar opens rightwards from it. */
+.streakwrap > .calpop { left: 0; right: auto; transform-origin: 30px 0; }
 .streakpill {
   display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 0 12px 0 8px;
   color: var(--muted); font: inherit; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums;
@@ -267,7 +267,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   pointer-events: none;
 }
 .bell { position: relative; }
-.bellwrap > .calpop { left: auto; right: 0; width: 380px; padding: 16px 8px 8px; transform-origin: calc(100% - 22px) 0; }
+.bellwrap > .calpop { left: 0; right: auto; width: 380px; padding: 16px 8px 8px; transform-origin: 22px 0; }
 .notehead { padding: 0 12px 10px; }
 .notehead h2 { margin: 0; font-size: 20px; font-weight: 500; }
 .notenote { margin: 0; padding: 18px 12px 20px; font-size: 14px; color: var(--muted); }
@@ -668,12 +668,14 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 main { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1.5rem 0; }
 /* A page built around a grid of photographs is the one kind that gets better
    with more room: more per row, each one larger, and less scrolling to see the
-   same day. The 1120px measure exists for reading, so grid pages run the full
-   width whether or not the grid has anything in it yet, and their prose keeps
-   a measure of its own - a hint stretched across a 34" monitor is not easier
-   to read, it is harder. */
-main.wide, main:has(.gal, .rows) { max-width: 100%; }
-:is(main.wide, main:has(.gal, .rows)) :is(.note, .hint, .ysum, .blankstate, .flash) { max-width: 88ch; }
+   same day. The year's calendar is the other: 31 day squares across, each
+   sized by the room the row has, so a wide screen gets big squares rather
+   than a small grid floating in space. The 1120px measure exists for
+   reading, so these pages run the full width whether or not the grid has
+   anything in it yet, and their prose keeps a measure of its own - a hint
+   stretched across a 34" monitor is not easier to read, it is harder. */
+main.wide, main:has(.gal, .rows, .calendar) { max-width: 100%; }
+:is(main.wide, main:has(.gal, .rows, .calendar)) :is(.note, .hint, .ysum, .blankstate, .flash) { max-width: 88ch; }
 
 /* --------------------------------------------------------- notes and bars -- */
 
@@ -986,19 +988,8 @@ main.selecting .tfav:not([aria-pressed="true"]) { opacity: 0; }
 .mo.picked .tfav { bottom: 10px; left: 10px; }
 @media (hover: none) { .tfav:not([aria-pressed="true"]) { display: none; } }
 
-/* Capture time: on hover, because it is context rather than identity. */
-.when {
-  position: absolute; bottom: 7px; right: 8px; z-index: 2;
-  font-size: 11px; color: #e9eaee;
-  text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
-  font-variant-numeric: tabular-nums;
-  opacity: 0; transition: opacity var(--ease);
-}
-.mo:hover .when { opacity: 1; }
-.mo:hover .acts + .when { opacity: 0; }
-
 /* A video says how long it runs in the bottom corner, as Google Photos marks
-   a clip, and gives the corner up to the actions while they show. */
+   a clip, and gives the corner up to a bar of actions while it shows. */
 .mo .dur {
   position: absolute; bottom: 9px; right: 10px; z-index: 2;
   display: inline-flex; align-items: center;
@@ -1009,14 +1000,14 @@ main.selecting .tfav:not([aria-pressed="true"]) { opacity: 0; }
 }
 .mo .dur .icon, .mo .dur .icon svg { width: 22px; height: 22px; }
 .mo .dur .icon { filter: drop-shadow(0 1px 3px rgb(0 0 0 / 55%)); }
-.mo:hover .dur, .mo:focus-within .dur { opacity: 0; }
+.mo:has(.acts):is(:hover, :focus-within) .dur { opacity: 0; }
 
 /* A culled tile keeps its place in the grid and dims, so the row does not
    reflow under the cursor mid-decision, and Undo is exactly where the eye
    already is. */
 .mo.culled { opacity: .5; }
 .mo.culled img { filter: grayscale(1); }
-.mo.culled .acts, .mo.culled .tfav, .mo.culled .bdg, .mo.culled .when, .mo.culled .dur { display: none; }
+.mo.culled .acts, .mo.culled .tfav, .mo.culled .bdg, .mo.culled .dur { display: none; }
 .mo .undo {
   position: absolute; inset: auto 0 0; z-index: 4;
   display: flex; align-items: center; justify-content: space-between; gap: .5rem;
@@ -1146,15 +1137,18 @@ main.selecting .mo.sel:not(:focus-visible) { box-shadow: none; transform: none; 
 .cmonth {
   display: grid;
   grid-template-columns: 2.75rem repeat(31, minmax(20px, 1fr));
-  align-items: center; gap: clamp(2px, .45cqi, 5px);
-  margin-bottom: clamp(2px, .45cqi, 5px);
+  align-items: center; gap: clamp(2px, .45cqi, 8px);
+  margin-bottom: clamp(2px, .45cqi, 8px);
 }
 .cmonth .mlabel { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .cell {
   position: relative; display: grid; place-items: center;
-  aspect-ratio: 1; max-height: 48px;
-  border-radius: clamp(4px, .65cqi, 7px);
-  font-size: clamp(11px, 1.3cqi, 14px); font-weight: 650; font-variant-numeric: tabular-nums;
+  /* Square at any width: the column is the only size, and the type, corner
+     and gap scale with the calendar's width so a 50px square on a wide
+     screen reads like a 26px one on a laptop, not like a stretched copy. */
+  aspect-ratio: 1;
+  border-radius: clamp(4px, .65cqi, 10px);
+  font-size: clamp(11px, 1.3cqi, 20px); font-weight: 650; font-variant-numeric: tabular-nums;
   color: var(--faint); background: var(--bg-3);
   transition: transform var(--ease), box-shadow var(--ease);
 }
@@ -1381,6 +1375,34 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .rvstage [data-turn="1"] { rotate: 90deg; }
 .rvstage [data-turn="2"] { rotate: 180deg; }
 .rvstage [data-turn="3"] { rotate: 270deg; }
+/* A turned clip's own controls would turn with it, so upright ones sit
+   under it, and the clip keeps clear of them. */
+.rvstage:has(.rvplay) { padding-bottom: 72px; }
+.rvplay {
+  position: absolute; bottom: 14px; left: 50%; translate: -50% 0; z-index: 3;
+  display: flex; align-items: center; gap: 10px;
+  width: min(640px, calc(100% - 32px)); padding: 4px 10px 4px 4px;
+  border-radius: 999px; background: rgb(32 33 36 / 88%);
+  color: #e3e3e3;
+}
+.rvtime { flex: none; font-size: 12.5px; font-variant-numeric: tabular-nums; color: #c4c7c5; }
+.rvplay input[type="range"] {
+  flex: 1; min-width: 0; height: 20px; margin: 0;
+  appearance: none; background: transparent; cursor: pointer;
+}
+.rvplay input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 2px;
+  background: linear-gradient(to right, #e3e3e3 var(--played), rgb(255 255 255 / 28%) var(--played));
+}
+.rvplay input[type="range"]::-moz-range-track { height: 4px; border-radius: 2px; background: rgb(255 255 255 / 28%); }
+.rvplay input[type="range"]::-moz-range-progress { height: 4px; border-radius: 2px; background: #e3e3e3; }
+.rvplay input[type="range"]::-webkit-slider-thumb {
+  appearance: none; width: 12px; height: 12px; margin-top: -4px;
+  border: 0; border-radius: 50%; background: #fff;
+}
+.rvplay input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: #fff; }
+.rvplay input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.rvstage video[data-turn] { cursor: pointer; }
 .rvstage.zoom {
   padding: 0; overflow: auto; cursor: grab;
   align-items: flex-start; justify-content: flex-start;
@@ -1688,11 +1710,9 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   .gal { grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(180px * var(--zoom))), 1fr)); gap: 8px; }
   .gal.tight { grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(148px * var(--zoom))), 1fr)); }
   .mo .acts { opacity: 1; }
-  /* Where a tile has a bar of actions it always shows here, so the time and
-     the running time sit just above it rather than under it. */
-  .mo:has(.acts) .when { opacity: 1; bottom: 42px; }
+  /* Where a tile has a bar of actions it always shows here, so the running
+     time sits just above it rather than under it. */
   .mo:has(.acts) .dur, .mo:has(.acts):is(:hover, :focus-within) .dur { opacity: 1; bottom: 42px; }
-  .mo:has(.acts) .dur ~ .when, .mo:has(.acts) .when:has(~ .dur) { left: 10px; right: auto; }
   .kv div { flex-direction: column; gap: .1rem; }
   .kv dt { flex: none; }
   .fbar { flex-wrap: wrap; gap: .5rem; }
@@ -2418,6 +2438,11 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
 .mo:has(.pick) .bdg { transition: left var(--ease); }
 .mo:has(.pick):hover .bdg, main.selecting .mo:has(.pick) .bdg { left: 44px; }
 @media (hover: none) { .mo:has(.pick) .bdg { left: 44px; } }
+/* On a date the tick has the top-left corner and the heart the bottom-left,
+   so the badges take the top right and never have to move aside. */
+.mo .bdg.end, .mo:has(.pick):hover .bdg.end, main.selecting .mo:has(.pick) .bdg.end { left: auto; right: 7px; justify-content: flex-end; }
+.mo.picked .bdg.end { top: 10px; right: 10px; }
+@media (hover: none) { .mo:has(.pick) .bdg.end { left: auto; } }
 
 /* A picture turned in Cull is drawn at its own shape and turned into the
    tile, which already has the turned shape. The file is left as it is. */

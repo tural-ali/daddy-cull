@@ -239,3 +239,42 @@ func TestSocialCandidatesDropDecidedFiles(t *testing.T) {
 		t.Fatalf("an undone keep should return to the list: %+v %v", page, err)
 	}
 }
+
+// The report reads a clip's stored frame, which a phone keeps on its side with
+// a rotation to stand it up. The catalogue's own reading of the shape turns it
+// the way it is shown, so a candidate takes that one once it is read, and the
+// report's until then.
+func TestSocialCandidatesTakeTheShapeAsShown(t *testing.T) {
+	store := testStore(t)
+	if _, err := store.write.Exec(`INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES
+		(7,'/archive/2021/2021-05/2021-05-14/turned.mp4',1,'video',4,'archive'),
+		(8,'/archive/2021/2021-05/2021-05-14/unread.mp4',2,'video',4,'archive'),
+		(9,'/archive/2021/2021-05/2021-05-14/replaced.mp4',3,'video',4,'archive')`); err != nil {
+		t.Fatal(err)
+	}
+	report := socialReport(
+		"12\t/host/archive/2021/2021-05/2021-05-14/turned.mp4\tuuid filename\t4\t1080\t1920\t15.0\t0\t0\t\n",
+		"11\t/host/archive/2021/2021-05/2021-05-14/unread.mp4\tuuid filename\t4\t480\t848\t15.0\t0\t0\t\n",
+		"10\t/host/archive/2021/2021-05/2021-05-14/replaced.mp4\tuuid filename\t4\t480\t848\t15.0\t0\t0\t\n")
+	if _, err := store.ImportSocialReport(context.Background(), strings.NewReader(report), "/host/archive"); err != nil {
+		t.Fatal(err)
+	}
+	// Read as shown for the first; read at a size the third no longer has.
+	if _, err := store.write.Exec(`INSERT INTO media_shapes(asset_id,size_bytes,width,height) VALUES(7,4,1920,1080),(9,99,848,480)`); err != nil {
+		t.Fatal(err)
+	}
+	page, err := store.SocialCandidates(context.Background(), "", 0, 50)
+	if err != nil || len(page.Items) != 3 {
+		t.Fatalf("unexpected page: %+v %v", page, err)
+	}
+	shapes := map[int64][2]int{}
+	for _, item := range page.Items {
+		shapes[item.Asset.ID] = [2]int{item.Width, item.Height}
+	}
+	want := map[int64][2]int{7: {1920, 1080}, 8: {480, 848}, 9: {480, 848}}
+	for id, shape := range want {
+		if shapes[id] != shape {
+			t.Errorf("asset %d: got %v, want %v", id, shapes[id], shape)
+		}
+	}
+}

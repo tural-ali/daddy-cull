@@ -24,7 +24,7 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   await page.addInitScript(key=>{const now=new Date();localStorage.setItem(key,`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`)},'cull.streak-intro');
   const apart=async()=>{
     const boxes=await page.locator('.gbar').evaluate(bar=>[...bar.querySelectorAll('.brand, .streakpill, .searchgo, .search, .datepill, .filterbtn, .pageacts')].filter(node=>node.offsetParent).map(node=>{const box=node.getBoundingClientRect();return {name:node.className.split(' ')[0],left:box.left,right:box.right}}));
-    const order=['brand','search','pageacts','streakpill'].map(name=>boxes.find(box=>box.name===name)).filter(Boolean);
+    const order=['brand','streakpill','search','pageacts'].map(name=>boxes.find(box=>box.name===name)).filter(Boolean);
     for(let index=1;index<order.length;index++)assert.ok(order[index].left>=order[index-1].right-0.5,`${order[index].name} clears ${order[index-1].name}`);
     assert.ok(order.at(-1).right<=page.viewportSize().width,'the bar fits');
   };
