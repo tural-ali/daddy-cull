@@ -1144,6 +1144,8 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 }
 ul.plain { padding-left: 1.1rem; }
 ul.plain li { margin-bottom: .5rem; color: var(--muted); }
+ul.failgroups li { display: grid; gap: .25rem; }
+ul.failgroups .mono { color: var(--text); font-size: .9em; overflow-wrap: anywhere; }
 
 /* ------------------------------------------------------------ bottom bar -- */
 

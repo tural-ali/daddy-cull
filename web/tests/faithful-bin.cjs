@@ -14,7 +14,7 @@ const fixture=()=>[
 (async()=>{
   const browser=await chromium.launch({channel:'chrome',headless:true});
   const page=await browser.newPage({viewport:{width:1440,height:900}});
-  let bin=fixture(),grace=0;
+  let bin=fixture(),grace=0,locked=false;
   const posts=[];
   await page.route('**/api/**',async route=>{
     const request=route.request(),url=new URL(request.url());
@@ -26,6 +26,8 @@ const fixture=()=>[
       const body=request.postDataJSON();posts.push({path:url.pathname,body});
       const groups=new Set(bin.filter(item=>(body.keys||bin.map(other=>other.key)).includes(item.key)).map(item=>item.group));
       const hit=bin.filter(item=>groups.has(item.group));
+      // A folder the app may not change: nothing moves, each file says why.
+      if(locked)return route.fulfill({json:{done:0,bytes:0,failures:hit.map(item=>({name:item.name,error:'the app is not allowed to change the folder 2020/2020-01/2020-01-02; fix its permissions and try again'})),keptDays:grace}});
       bin=bin.filter(item=>!groups.has(item.group));
       return route.fulfill({json:{done:hit.length,bytes:hit.reduce((sum,item)=>sum+item.size,0),failures:[],...(grace&&url.pathname!=='/api/trash/restore'?{keptDays:grace}:{})}});
     }
@@ -124,7 +126,20 @@ const fixture=()=>[
   await page.getByText(/1 file deleted from the Bin\. They stay on disk until .+ and can be restored from the Log until then\./).waitFor();
   assert.deepEqual(posts[3],{path:'/api/trash/delete',body:{keys:['marked:11'],confirmation:'DELETE 1'}});
   assert.equal(await page.locator('.bingrid figure').count(),4);
+
+  // Emptying into a locked folder deletes nothing: no "0 files deleted"
+  // banner, and one shared cause reads once with every name under it.
+  locked=true;
+  await page.getByRole('button',{name:'Empty Bin',exact:true}).click();
+  await page.getByRole('dialog',{name:'Empty the Bin?'}).getByRole('button',{name:'Empty the Bin'}).click();
+  const failed=page.locator('.note.warn[role=alert]');
+  await failed.waitFor();
+  assert.match(await failed.innerText(),/^4 files could not be handled and are still in the Bin:/);
+  assert.equal(await failed.locator('li').count(),1,'one cause, one line');
+  assert.match(await failed.locator('li').innerText(),/^The app is not allowed to change the folder 2020\/2020-01\/2020-01-02; fix its permissions and try again\.\s+BATCH-ONE\.JPG, BATCH-TWO\.JPG, OLD-TOOL\.MOV, 2020-01-02_SHOT\.PNG$/);
+  assert.equal(await page.getByText(/files? deleted from the Bin/).count(),0,'nothing deleted, nothing announced');
+  await failed.screenshot({path:process.env.FAILSHOT||'/tmp/faithful-bin-locked.png'});
   await page.screenshot({path:process.env.SHOT||'/tmp/faithful-bin.png'});
   await browser.close();
-  console.log(JSON.stringify({oneGallery:true,clickPreviews:true,previewAddress:true,backCloses:true,previewsForBothTools:true,batchSelectedTogether:true,shiftRange:true,restoreSelected:true,deleteAsksFirst:true,cancelSendsNothing:true,emptyNamesCount:true,graceSchedules:true},null,2));
+  console.log(JSON.stringify({oneGallery:true,clickPreviews:true,previewAddress:true,backCloses:true,previewsForBothTools:true,batchSelectedTogether:true,shiftRange:true,restoreSelected:true,deleteAsksFirst:true,cancelSendsNothing:true,emptyNamesCount:true,graceSchedules:true,lockedFolderGrouped:true},null,2));
 })().catch(error=>{console.error(error);process.exit(1)});

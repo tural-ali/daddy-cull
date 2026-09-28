@@ -14,6 +14,15 @@ export type TrashItem={key:string;group:string;source:'marked'|'bin'|'legacy'|'s
 export type DeletingItem=TrashItem&{deletedAt:string;dueAt:string;attempts:number;lastError?:string};
 export type DeletingReport={graceDays:number;graceError?:string;items:DeletingItem[];lastRun:string;lastDeleted:number;lastError:string;checkIntervalMinutes:number};
 type Result={done:number;bytes:number;failures:{name:string;error:string}[];keptDays?:number};
+/** How many file names a failure lists before summing up the rest. */
+const shownNames=12;
+/** Failures sharing a cause read as one: twelve files locked in the same
+ * folder is one thing to fix, not twelve. First seen, first listed. */
+function failureGroups(failures:Result['failures']){
+  const groups=new Map<string,string[]>();
+  for(const failure of failures)groups.set(failure.error,[...(groups.get(failure.error)??[]),failure.name]);
+  return [...groups].map(([error,names])=>({error,names}));
+}
 type Pending={title:string;body:string;confirm:string;run:()=>Promise<void>};
 type Control='empty'|'restore'|'delete'|'lightbox';
 const minimumBusy=600;
@@ -116,7 +125,8 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
     try{
       const result=await run();
       await shown;
-      setMessage(done(result));setFailures(result.failures);picks.clear();
+      // Nothing done is no news: the failures say what happened instead.
+      setMessage(result.done>0||result.failures.length===0?done(result):'');setFailures(result.failures);picks.clear();
     }catch(reason){await shown;setError((reason as Error).message)}
     finally{setBusy('');setDoing(null);await refresh();binChanged()}
   }
@@ -195,7 +205,10 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
     </section>
     {busy&&doing!=='empty'&&doing!=='lightbox'&&<p className="flash" role="status"><Busy label={busy} state="working"/></p>}
     {message&&<p className="flash" role="status">{message}</p>}
-    {failures.length>0&&<div className="note warn" role="alert"><b>{files(failures.length)} could not be handled and {failures.length===1?'is':'are'} still {mode==='bin'?'in the Bin':'waiting'}:</b><ul className="plain">{failures.slice(0,20).map((failure,index)=><li key={index}><span className="mono">{failure.name}</span>: {failure.error}</li>)}</ul>{failures.length>20&&<p>and {(failures.length-20).toLocaleString()} more.</p>}</div>}
+    {failures.length>0&&<div className="note warn" role="alert"><b>{files(failures.length)} could not be handled and {failures.length===1?'is':'are'} still {mode==='bin'?'in the Bin':'waiting'}:</b><ul className="plain failgroups">{failureGroups(failures).map(group=><li key={group.error}>
+      <span>{group.error.charAt(0).toUpperCase()+group.error.slice(1)}.</span>
+      <span className="mono">{group.names.slice(0,shownNames).join(', ')}{group.names.length>shownNames&&<> and {(group.names.length-shownNames).toLocaleString()} more</>}</span>
+    </li>)}</ul></div>}
     {error&&<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>{setError('');void refresh()}}>Reload</button></p>}
     {mode==='bin'&&items!==null&&list.length===0&&!error&&<p className="note">The Bin is empty. Nothing has been removed, or everything removed has been dealt with.</p>}
     {list.length>0&&<Rows className="bingrid">
