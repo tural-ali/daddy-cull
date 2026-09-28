@@ -19,8 +19,13 @@ import {pagePath} from './photoURL';
 import {Busy} from '../Busy';
 import {Snacks} from './Snacks';
 import {CATALOGUE_CHANGED,catalogueGeneration,quietEnough,watchCatalogue} from './catalogueWatch';
+import {NAVIGATED,RELOAD_PAGE,currentVisit,followLinks,savedScroll} from './router';
+import {settled} from '../saving';
 
 type PageState={route:LegacyRoute;content:ReactNode};
+/** The page the app is on: its path, which visit to it this is, and whether
+ * the visit was reached with Back or Forward rather than a link. */
+type Place={path:string;visit:number;returned:boolean};
 
 // The server counts a day of review in the viewer's own time zone.
 const zone=encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone||'');
@@ -56,15 +61,30 @@ function titleFor(path:string){
   return routeTitles[routeFor(path)];
 }
 
+/** The page's path for the address the browser is on. The bare address is
+ * today's date, and says so. An open photo's address is its page's address
+ * plus /photo/<id>; the page itself reads the photo, the frame only needs the
+ * page. */
+function currentPath(){
+  if(location.pathname==='/'){
+    const now=new Date();
+    const md=`${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    history.replaceState(history.state,'',`/on/${md}${location.search}${location.hash}`);
+  }
+  return pagePath();
+}
+
+/** What the panel shows while the next page is read: the frame stays, and a
+ * moment later, if the page is still on its way, an orb says which it is. */
+function Opening({label}:{label:string}){
+  return <div className="pageload"><Busy size={64} label={label}/></div>;
+}
+
 export function App(){
-  const now=new Date();
-  const currentMD=`${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-  // An open photo's address is its page's address plus /photo/<id>; the page
-  // itself reads the photo, the frame only needs the page.
-  const initialPath=location.pathname==='/'?`/on/${currentMD}`:pagePath();
-  const [path]=useState(initialPath);
+  const [place,setPlace]=useState<Place>(()=>({path:currentPath(),visit:currentVisit(),returned:false}));
+  const path=place.path;
   const [stats,setStats]=useState<Stats|null>(null);
-  const [page,setPage]=useState<PageState>({route:routeFor(initialPath),content:<Busy size={64} label="Opening the catalogue…"/>});
+  const [page,setPage]=useState<PageState>(()=>({route:routeFor(path),content:<Opening label="Opening the catalogue…"/>}));
   const [error,setError]=useState('');
   const [recovered,setRecovered]=useState(false);
   // The archive as the page was read: the catalogue's generation then, and
@@ -76,8 +96,26 @@ export function App(){
   const [version,setVersion]=useState(0);
   const [notice,setNotice]=useState<'refreshed'|'stale'|null>(null);
   const keepScroll=useRef<number|null>(null);
-  useEffect(()=>{if(location.pathname==='/')history.replaceState(null,'',initialPath)},[initialPath]);
+  // Where to put the scroll once a page just moved to has drawn: the top, the
+  // place Back returns to, or the part of the page the address names.
+  const arrival=useRef<number|'hash'|null>(null);
+  const first=useRef(true);
   useEffect(()=>{document.title=`${titleFor(path)} · Daddy, Cull!`},[path]);
+  // Links and Back move within the app; the page changes, the frame does not.
+  useEffect(()=>{
+    const moved=(returned:boolean)=>()=>{
+      const visit=currentVisit();
+      if(visit===place.visit&&!returned)return;
+      const next=currentPath();
+      setPlace(current=>current.visit===visit?current:{path:next,visit,returned});
+    };
+    const pushed=moved(false),popped=moved(true);
+    window.addEventListener(NAVIGATED,pushed);
+    window.addEventListener('popstate',popped);
+    const stop=followLinks();
+    return()=>{window.removeEventListener(NAVIGATED,pushed);window.removeEventListener('popstate',popped);stop()};
+  },[place.visit]);
+  const readStats=useCallback(()=>json<Stats>(`/api/stats?tz=${zone}`).then(setStats).catch(()=>{}),[]);
   useEffect(()=>{
     recoverPending().then(()=>setRecovered(true)).catch(reason=>setError((reason as Error).message));
   },[]);
@@ -91,14 +129,14 @@ export function App(){
     let timer=0;
     const reread=()=>{
       clearTimeout(timer);
-      timer=window.setTimeout(()=>{json<Stats>(`/api/stats?tz=${zone}`).then(setStats).catch(()=>{})},250);
+      timer=window.setTimeout(()=>{void readStats()},250);
     };
     const worked=()=>{touched.current=true};
     window.addEventListener(BIN_CHANGED,reread);
     window.addEventListener(BIN_CHANGED,worked);
     window.addEventListener(CATALOGUE_CHANGED,reread);
     return()=>{controller.abort();clearTimeout(timer);window.removeEventListener(BIN_CHANGED,reread);window.removeEventListener(BIN_CHANGED,worked);window.removeEventListener(CATALOGUE_CHANGED,reread)};
-  },[recovered]);
+  },[recovered,readStats]);
   const load=useCallback(async():Promise<PageState>=>{
     const route=routeFor(path);
       if(path.startsWith('/on/')){
@@ -138,16 +176,39 @@ export function App(){
     // so nothing loads until recovery has finished, and then it loads once.
     if(!recovered)return;
     let active=true;
-    setError('');
-    // The generation is read before the page, so a change that lands while
-    // the page loads is caught at the next check rather than missed.
-    catalogueGeneration().then(async next=>{
+    const moving=!first.current;
+    first.current=false;
+    setError('');setNotice(null);
+    touched.current=false;
+    if(moving){
+      // The old page goes at once, so nothing on it can be pressed, and the
+      // panel starts from its top while the next one is read.
+      setPage({route:routeFor(place.path),content:<Opening label={`Opening ${titleFor(place.path)}…`}/>});
+      window.scrollTo(0,0);
+    }
+    (async()=>{
+      // A choice still being saved on the page just left, or one kept in a
+      // journal, lands before the next page is read, as it did when every
+      // page was a fresh load.
+      if(moving){await settled();await recoverPending();void readStats()}
+      // The generation is read before the page, so a change that lands while
+      // the page loads is caught at the next check rather than missed.
+      const next=await catalogueGeneration();
       generation.current=next;
       const result=await load();
-      if(active)setPage(result);
-    }).catch(reason=>{if(active)setError((reason as Error).message)});
+      if(!active)return;
+      arrival.current=place.returned?savedScroll()??0:location.hash?'hash':moving?0:null;
+      setPage(result);
+    })().catch(reason=>{if(active)setError((reason as Error).message)});
     return()=>{active=false};
-  },[load,recovered]);
+  },[load,recovered,place,readStats]);
+  useLayoutEffect(()=>{
+    const to=arrival.current;
+    if(to===null)return;
+    arrival.current=null;
+    if(to==='hash')document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
+    else window.scrollTo(0,to);
+  },[page]);
 
   // Read the page again in place, where it was scrolled to. A read that fails
   // leaves the page as it was, and the next check tries again.
@@ -197,7 +258,26 @@ export function App(){
     const next=await catalogueGeneration();
     if(next!==null)await refresh(next);
   };
-  return <Layout route={page.route} binFiles={stats?.bin??stats?.marked??0} reviewed={stats?.calendarDates?{done:stats.reviewedDates??0,total:stats.calendarDates}:undefined} streak={stats?.streak!==undefined?{days:stats.streak,today:!!stats.reviewedToday}:undefined} notifications={stats?.notifications} onNotificationsRead={()=>setStats(current=>current&&{...current,notifications:0})}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:<Fragment key={version}>{page.content}</Fragment>}
+  // A page that asks to be read again, after an undo say, is redrawn where it
+  // is. If it cannot be read, the whole app is loaded again rather than left
+  // showing what is no longer so.
+  useEffect(()=>{
+    const again=()=>{void (async()=>{
+      await settled();
+      const next=await catalogueGeneration().catch(()=>null);
+      let result:PageState;
+      try{result=await load()}catch{location.reload();return}
+      if(next!==null)generation.current=next;
+      touched.current=false;
+      keepScroll.current=window.scrollY;
+      setPage(result);
+      setVersion(current=>current+1);
+      void readStats();
+    })()};
+    window.addEventListener(RELOAD_PAGE,again);
+    return()=>window.removeEventListener(RELOAD_PAGE,again);
+  },[load,readStats]);
+  return <Layout route={page.route} visit={place.visit} binFiles={stats?.bin??stats?.marked??0} reviewed={stats?.calendarDates?{done:stats.reviewedDates??0,total:stats.calendarDates}:undefined} streak={stats?.streak!==undefined?{days:stats.streak,today:!!stats.reviewedToday}:undefined} notifications={stats?.notifications} onNotificationsRead={()=>setStats(current=>current&&{...current,notifications:0})}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:<Fragment key={`${place.visit}:${version}`}>{page.content}</Fragment>}
     {notice&&<Snacks><div className="snack" role="status">{notice==='refreshed'?'Updated with new files from the archive.':<>New files arrived in the archive. <button type="button" className="snackact" onClick={()=>void refreshNow()}>Refresh</button></>}</div></Snacks>}
   </Layout>;
 }

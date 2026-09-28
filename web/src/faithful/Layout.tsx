@@ -2,6 +2,7 @@ import {useCallback,useEffect,useRef,useState,type CSSProperties,type FormEvent,
 import {Icon,type IconName} from '../Icon';
 import {Logo,LogoMark} from '../Logo';
 import {pathForDate} from './goto';
+import {navigate} from './router';
 import {SelectionBar,SelectionProvider,type Selection} from './selection';
 import {PageActionButtons,PageActionsProvider,type PageActions} from './pageActions';
 import {StreakCalendar,StreakIntro,StreakPill,introDue} from './Streak';
@@ -67,7 +68,7 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
     if(!value.trim()){input.current?.focus();return}
     if(suggestions.length>0){pick(suggestions[Math.min(active,suggestions.length-1)]);return}
     const path=pathForDate(value);
-    if(path)location.assign(path);
+    if(path)navigate(path);
     else setProblem(filters?'Type a date, such as 14 Aug 2019, or a filter, such as videos.':'Type a date, such as 14 Aug 2019, or 14 Aug for every year.');
   }
   function keys(event:ReactKeyboardEvent<HTMLInputElement>){
@@ -123,7 +124,7 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
  * into a rail of icons, so there is no menu button to reach for. */
 const narrowQuery='(max-width: 1000px)';
 
-export function Layout({route,binFiles,reviewed,streak,notifications,onNotificationsRead,flash,children}:{route:LegacyRoute;binFiles:number;reviewed?:{done:number;total:number};streak?:{days:number;today:boolean};notifications?:number;onNotificationsRead?:()=>void;flash?:string;children:ReactNode}){
+export function Layout({route,visit,binFiles,reviewed,streak,notifications,onNotificationsRead,flash,children}:{route:LegacyRoute;visit:number;binFiles:number;reviewed?:{done:number;total:number};streak?:{days:number;today:boolean};notifications?:number;onNotificationsRead?:()=>void;flash?:string;children:ReactNode}){
   const [selection,setSelection]=useState<Selection|null>(null);
   const [pageActions,setPageActions]=useState<PageActions|null>(null);
   const [pageDate,setPageDate]=useState<PageDate|null>(null);
@@ -141,6 +142,9 @@ export function Layout({route,binFiles,reviewed,streak,notifications,onNotificat
   // animation once a day, and a bump when today's first review lights it.
   const pill=useRef<HTMLButtonElement>(null);
   const [calendarOpen,setCalendarOpen]=useState(false);
+  // Moving to another page closes whatever the frame had open for the last.
+  const [shownVisit,setShownVisit]=useState(visit);
+  if(shownVisit!==visit){setShownVisit(visit);setCalendarOpen(false)}
   const closeCalendar=useCallback(()=>setCalendarOpen(false),[]);
   const [intro,setIntro]=useState(false);
   const [bump,setBump]=useState(false);
@@ -162,10 +166,10 @@ export function Layout({route,binFiles,reviewed,streak,notifications,onNotificat
           {calendarOpen&&<StreakCalendar streak={streak} anchor={pill} onClose={closeCalendar}/>}
         </div>}
       </div>
-      <DateSearch date={pageDate} filters={pageFilters}/>
+      <DateSearch key={visit} date={pageDate} filters={pageFilters}/>
       <div className="gbaracts">
         {pageActions&&<PageActionButtons page={pageActions}/>}
-        {notifications!==undefined&&<NotificationBell unread={notifications} onRead={()=>onNotificationsRead?.()}/>}
+        {notifications!==undefined&&<NotificationBell key={visit} unread={notifications} onRead={()=>onNotificationsRead?.()}/>}
       </div>
     </header>}
     <aside id="side" className="side">

@@ -7,6 +7,7 @@ import {usePhotoURL} from './photoURL';
 import {usePageFilters} from './SearchFilters';
 import {MoreMarker,useMoreOnScroll} from './more';
 import {reverting,requestID,sendDecisions,type Change} from './decisions';
+import {reloadPage} from './router';
 
 type SocialItem=Asset&{
   day:string;name:string;score:number;band:'likely'|'possible'|'watch';
@@ -120,7 +121,7 @@ export function Social({page,band:initialBand}:{page:SocialPage;band:string}){
   async function revert(){
     if(!undo||busy)return;
     setBusy(true);setError('');
-    try{await sendDecisions(undo.changes);location.reload()}
+    try{await sendDecisions(undo.changes);reloadPage()}
     catch(reason){setError((reason as Error).message);setBusy(false)}
   }
 

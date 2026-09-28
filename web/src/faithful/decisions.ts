@@ -1,4 +1,5 @@
 import {binChanged,type Status} from '../api';
+import {tracked} from '../saving';
 
 export function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
 
@@ -10,7 +11,11 @@ export type Change={assetId:number;status:Status;favourite:boolean;expectedRevis
 // is worse than one they can.
 const PER_REQUEST=20;
 
-export async function sendDecisions(changes:Change[]):Promise<{revision:number}[]>{
+export function sendDecisions(changes:Change[]):Promise<{revision:number}[]>{
+  return tracked(send(changes));
+}
+
+async function send(changes:Change[]):Promise<{revision:number}[]>{
   const saved:{revision:number}[]=[];
   for(let i=0;i<changes.length;i+=PER_REQUEST){
     const response=await fetch('/api/decisions/batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(changes.slice(i,i+PER_REQUEST))});

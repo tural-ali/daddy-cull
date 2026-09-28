@@ -3,6 +3,7 @@ import {Busy} from '../Busy';
 import {dayStartsAt,nightStartsAt,readChoice,saveChoice,themeEvent,themeFor,type ThemeChoice} from '../theme';
 import {bytes,longDate,readDeleting,type DeletingReport} from './Bin';
 import {clearSessionSound,setVideoSoundPreference} from '../SessionVideo';
+import {reloadPage} from './router';
 
 export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;videoMuted?:boolean;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number;immichRefused?:number;calendarDates?:number;reviewedDates?:number;streak?:number;reviewedToday?:boolean;notifications?:number};
 
@@ -147,7 +148,7 @@ export function Settings({stats}:{stats:Stats}){
       const response=await fetch('/api/reindex',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
       if(!response.ok)throw new Error('The index refresh did not complete.');
       setMessage('Index refreshed. Reloading…');
-      location.reload();
+      reloadPage();
     }catch(error){setMessage((error as Error).message);setBusy(false)}
   }
   return <section className="settings">

@@ -2369,3 +2369,12 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
 .more { display: grid; place-items: center; }
 .more:not(:empty) { padding: 24px 0 32px; }
 .more .note { margin: 0; }
+
+/* The panel while the next page is read. Most pages arrive before the orb
+   would show, so it waits a moment and then fades in, rather than flashing. */
+.pageload { display: grid; place-items: center; min-height: calc(100vh - var(--head-h) - 6rem); animation: pageload-in .25s ease-out .18s both; }
+.pageload .busy.big { margin: 0; }
+@keyframes pageload-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .pageload { animation: pageload-in 0s .18s both; }
+}

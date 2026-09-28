@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {type Asset,type Saved,type Status,decide} from './api';
+import {tracked} from './saving';
 export type PendingDecision={asset:Asset;status:Status;favourite:boolean;requestId:string;wasResolved:boolean};
 const randomId=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
 
@@ -12,8 +13,11 @@ export function useDecisionQueue(onSaved:(job:PendingDecision,result:Saved,overt
  const key=useRef('');const callback=useRef(onSaved);callback.current=onSaved;
  const [pending,setPending]=useState(0);const [error,setError]=useState('');const [ready,setReady]=useState(false);
  function persist(next:PendingDecision[]){localStorage.setItem(key.current,JSON.stringify(next));jobs.current=next;setPending(next.length)}
- async function drain(){
-  if(running.current||paused.current)return;running.current=true;
+ function drain(){
+  if(running.current||paused.current)return Promise.resolve();running.current=true;
+  return tracked(work());
+ }
+ async function work(){
   try{while(jobs.current.length){
    const job=jobs.current[0];
    const result=await decide(job.asset,job.status,job.favourite,job.requestId);

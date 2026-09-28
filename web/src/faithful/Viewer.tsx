@@ -2,6 +2,7 @@ import {useEffect,useEffectEvent,useLayoutEffect,useMemo,useRef,useState,type Mo
 import {SessionVideo} from '../SessionVideo';
 import {Icon,type IconName} from '../Icon';
 import {binChanged,type Asset,type Status} from '../api';
+import {tracked} from '../saving';
 import {undoKeys,type HistoryEntry} from './history';
 
 function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
@@ -178,7 +179,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     const journal=`cull.group.pending.${requestID()}`;
     try{
       localStorage.setItem(journal,JSON.stringify(jobs));
-      const response=await fetch('/api/decisions/batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(jobs)});
+      const response=await tracked(fetch('/api/decisions/batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(jobs)}));
       if(!response.ok)throw new Error(response.status===409?'One file changed. Close and reopen the comparison.':'The group choice was retained locally but not confirmed.');
       const results:{revision:number}[]=await response.json();
       binChanged();

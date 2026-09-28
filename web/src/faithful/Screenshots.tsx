@@ -9,6 +9,7 @@ import {MoreMarker,useMoreOnScroll} from './more';
 import {shapeOf} from './justified';
 import {usePhotoURL} from './photoURL';
 import {reverting,requestID,sendDecisions,type Change} from './decisions';
+import {reloadPage} from './router';
 
 type ScreenshotItem=Asset&{day:string;name:string;state:string};
 export type ScreenshotPage={items:ScreenshotItem[];total:number;bytes:number;unreviewed:number;reviewed:number;stills:number;recordings:number};
@@ -173,7 +174,7 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
     try{
       if(undo.changes)await sendDecisions(undo.changes);
       for(const plan of undo.plans??[])await post<ScreenshotPlan>('/api/screenshot-actions/undo',{id:plan.id});
-      location.reload();
+      reloadPage();
     }catch(reason){setError((reason as Error).message);setBusy(false)}
   }
 

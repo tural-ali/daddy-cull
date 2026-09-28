@@ -42,7 +42,10 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   // The next day, opened without a reload, does not bring it back.
   await page.getByRole('button',{name:/^7 September/}).click();
   await page.getByRole('navigation',{name:'Nearby dates'}).getByRole('link',{name:'8 Sep'}).click();
-  await page.locator('.gal figure').waitFor();
+  // The day is read in place now, so the page's fake clock is the one it
+  // waits on: move it along until the day arrives.
+  for(let step=0;step<50&&!await page.locator('.gal figure[data-asset="3"]').count();step++)await page.clock.runFor(100);
+  await page.locator('.gal figure[data-asset="3"]').waitFor();
   await page.clock.runFor(500);
   assert.equal(await tip.count(),0,'moving to another day shows no tip');
 
