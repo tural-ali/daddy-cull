@@ -8,8 +8,10 @@ import {usePageFilters} from './SearchFilters';
 import {MoreMarker,useMoreOnScroll} from './more';
 import {shapeOf} from './justified';
 import {usePhotoURL} from './photoURL';
-import {reverting,requestID,sendDecisions,type Change} from './decisions';
-import {reloadPage} from './router';
+import {requestID,sendDecisions} from './decisions';
+import {undoableDecisions,usePageUndo,type Undoable} from './pageUndo';
+import {tipProps} from './keys';
+import {undoKeys} from './history';
 import {flyToBin} from './binFlight';
 
 type ScreenshotItem=Asset&{day:string;name:string;state:string};
@@ -49,7 +51,22 @@ function filtersFrom(review:string,kind:string){
 }
 function query(review:string,kind:string,from:number){return `/api/screenshots?kind=${encodeURIComponent(kind)}&review=${review}&from=${from}`}
 
-type Undo={label:string;changes?:Change[];plans?:ScreenshotPlan[]};
+/** Moving screenshots to the Bin as an undoable step: undo brings each file
+ * back, last first, and redo moves them to the Bin again as new plans. */
+function undoableRemove(label:string,plans:ScreenshotPlan[]):Undoable{
+  let current=plans;
+  const ids=plans.map(plan=>plan.assetId);
+  return {label,
+    undo:async()=>{for(const plan of [...current].reverse())await post<ScreenshotPlan>('/api/screenshot-actions/undo',{id:plan.id})},
+    redo:async()=>{
+      const next:ScreenshotPlan[]=[];
+      for(const assetId of ids){
+        const plan=await post<ScreenshotPlan>('/api/screenshot-actions/preview',{assetId,action:'remove'});
+        next.push(await post<ScreenshotPlan>('/api/screenshot-actions/execute',{id:plan.id}));
+      }
+      current=next;
+    }};
+}
 
 export function Screenshots({page,filter:initialKind,review:initialReview}:{page:ScreenshotPage;filter:string;review:string}){
   const [current,setCurrent]=useState(page);
@@ -64,9 +81,9 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
   const [error,setError]=useState('');
-  const [undo,setUndo]=useState<Undo|null>(null);
   const {items,total,bytes:totalBytes}=current;
   const picks=usePicks(items,item=>item.id);
+  const steps=usePageUndo(busy,setError);
   const photo=usePhotoURL(id=>page.items.some(item=>String(item.id)===id));
 
   // Read at the length loaded: what was decided has already left the list
@@ -89,7 +106,7 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
     address.search=new URLSearchParams({review:nextReview,show:nextKind}).toString();
     history.replaceState(history.state,'',address);
     const asked=++version.current;
-    picks.clear();setMessage('');setUndo(null);setError('');
+    picks.clear();setMessage('');setError('');
     try{
       const response=await fetch(query(nextReview,nextKind,0));
       if(!response.ok)throw new Error('The screenshots for these filters could not be read. Try again.');
@@ -125,7 +142,7 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
   /** Keep, or put back as not reviewed: a catalogue decision, nothing moves. */
   async function decide(chosen:ScreenshotItem[],status:Status){
     if(chosen.length===0||busy)return;
-    setBusy(true);setError('');setMessage('');setUndo(null);
+    setBusy(true);setError('');setMessage('');
     try{
       const saved=await sendDecisions(chosen.map(item=>({assetId:item.id,status,favourite:item.favourite,expectedRevision:item.revision,requestId:requestID()})));
       const moved=chosen.length,label=plural(moved,'screenshot');
@@ -137,7 +154,7 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
           reviewed:value.reviewed+counts.reviewed,unreviewed:value.unreviewed+counts.unreviewed}));
       }else drop(new Set(chosen.map(item=>item.id)),counts);
       picks.clear();
-      setUndo({label,changes:reverting(chosen,saved)});
+      steps.record(undoableDecisions(status==='keep'?`kept ${label}`:`put ${label} back under Not reviewed`,chosen,chosen.map(item=>({...item,status})),saved));
       setMessage(status==='keep'
         ?`Kept ${label}. ${review==='all'?'Nothing':`${moved===1?'It is':'They are'} under Reviewed now; nothing`} moved on disk.`
         :`Put ${label} back under Not reviewed.`);
@@ -149,7 +166,7 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
    * and a failure stops the rest and says how far it got. */
   async function run(chosen:ScreenshotItem[],action:'keep'|'remove'){
     if(chosen.length===0||busy)return;
-    setBusy(true);setError('');setMessage('');setUndo(null);
+    setBusy(true);setError('');setMessage('');
     const done:ScreenshotPlan[]=[];
     try{
       for(const item of chosen){
@@ -164,20 +181,10 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
     picks.setPicked(previous=>new Set([...previous].filter(id=>!finished.has(id))));
     if(done.length>0){
       const label=plural(done.length,'screenshot');
-      if(action==='remove'){setUndo({label,plans:done});setMessage(`Moved ${label} to the recoverable Bin.`)}
+      if(action==='remove'){steps.record(undoableRemove(`moved ${label} to the Bin`,done));setMessage(`Moved ${label} to the recoverable Bin.`)}
       else setMessage(done.length===1?`Copied ${chosen[0].name} into ${done[0].files[0].destination}.`:`Copied ${label} into the archive, each under the date in its name.`);
     }
     setBusy(false);
-  }
-
-  async function revert(){
-    if(!undo||busy)return;
-    setBusy(true);setError('');
-    try{
-      if(undo.changes)await sendDecisions(undo.changes);
-      for(const plan of undo.plans??[])await post<ScreenshotPlan>('/api/screenshot-actions/undo',{id:plan.id});
-      reloadPage();
-    }catch(reason){setError((reason as Error).message);setBusy(false)}
   }
 
   // The viewer speaks in photo decisions: Keep keeps, Remove goes to the Bin,
@@ -218,10 +225,11 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
     <section className="dupehead">
       <h1>Screenshots</h1>
       <p className="ysum"><b>{total.toLocaleString()}</b> {review==='reviewed'?'reviewed':review===''?'to review':total===1?'screenshot':'screenshots'} · <b>{bytes(totalBytes)}</b></p>
-      <p className="hint">Nothing here is in the archive yet. Click a screenshot to look at it; <b>k</b> keeps it and <b>x</b> moves it to the Bin. Tick the circle on a tile to select it, then click others to add them or Shift-click to add every one between. The actions appear at the top.
+      <p className="hint">Nothing here is in the archive yet. Click a screenshot to look at it; <b>k</b> keeps it, <b>x</b> moves it to the Bin and <b>{undoKeys.undo}</b> takes back each step in turn. Tick the circle on a tile to select it, then click others to add them or Shift-click to add every one between. The actions appear at the top.
         <strong> Keep</strong> moves it to Reviewed without touching the file; from there <strong>Copy into the archive</strong> files it under the date in its name. <strong>Move to Bin</strong> stays recoverable.</p>
     </section>
-    {message&&<p className="flash" role="status">{message} {undo&&<button className="btn small" disabled={busy} onClick={()=>void revert()}>Undo</button>}</p>}
+    {message?<p className="flash" role="status">{message} {steps.latest&&<button className="btn small" disabled={busy||steps.working} {...tipProps('Undo','Mod+Z')} onClick={steps.undo}>Undo</button>}</p>
+      :steps.notice&&<p className="flash" role="status">{steps.notice} {steps.canRedo&&<button className="btn small" disabled={busy||steps.working} {...tipProps('Redo','Mod+Shift+Z Mod+U')} onClick={steps.redo}>Redo</button>}</p>}
     {error&&<p className="note warn" role="alert">{error}</p>}
     {items.length===0
       ? <p className="note">{filter?'Nothing here matches these filters.':current.unreviewed+current.reviewed===0?'The holding area is empty.':review==='reviewed'?'Nothing kept yet. Keep a screenshot and it shows here.':'Every screenshot here has been reviewed.'}</p>

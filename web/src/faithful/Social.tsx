@@ -6,8 +6,9 @@ import {Viewer} from './Viewer';
 import {usePhotoURL} from './photoURL';
 import {usePageFilters} from './SearchFilters';
 import {MoreMarker,useMoreOnScroll} from './more';
-import {reverting,requestID,sendDecisions,type Change} from './decisions';
-import {reloadPage} from './router';
+import {requestID,sendDecisions,type Change} from './decisions';
+import {undoableDecisions,usePageUndo} from './pageUndo';
+import {tipProps} from './keys';
 import {flyToBin} from './binFlight';
 
 type SocialItem=Asset&{
@@ -45,9 +46,9 @@ export function Social({page,band:initialBand}:{page:SocialPage;band:string}){
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
   const [error,setError]=useState('');
-  const [undo,setUndo]=useState<{changes:Change[];label:string}|null>(null);
   const {items,total,shown}=current;
   const picks=usePicks(items,item=>item.id);
+  const steps=usePageUndo(busy,setError);
   const photo=usePhotoURL(id=>page.items.some(item=>String(item.id)===id));
   const selected=picks.picked;
 
@@ -70,7 +71,7 @@ export function Social({page,band:initialBand}:{page:SocialPage;band:string}){
     address.search=new URLSearchParams({band:bandFor(next)}).toString();
     history.replaceState(history.state,'',address);
     const asked=++version.current;
-    picks.clear();setMessage('');setUndo(null);setError('');
+    picks.clear();setMessage('');setError('');
     try{
       const response=await fetch(query(bandFor(next),0));
       if(!response.ok)throw new Error('The videos for these filters could not be read. Try again.');
@@ -89,7 +90,7 @@ export function Social({page,band:initialBand}:{page:SocialPage;band:string}){
 
   async function apply(status:'keep'|'cull',chosen=items.filter(item=>selected.has(item.id))){
     if(chosen.length===0||busy)return;
-    setBusy(true);setError('');setMessage('');setUndo(null);
+    setBusy(true);setError('');setMessage('');
     const changes:Change[]=chosen.map(item=>({assetId:item.id,status,favourite:status!=='cull'&&item.favourite,expectedRevision:item.revision,requestId:requestID()}));
     try{
       const saved=await sendDecisions(changes);
@@ -113,19 +114,13 @@ export function Social({page,band:initialBand}:{page:SocialPage;band:string}){
         marked:value.marked+(status==='cull'?chosen.length:0),
       }));
       picks.setPicked(previous=>new Set([...previous].filter(id=>!gone.has(id))));
-      setUndo({changes:reverting(chosen,saved),label:count});
+      steps.record(undoableDecisions(status==='keep'?`kept ${count}`:`marked ${count} for the Bin`,chosen,changes.map(change=>({id:change.assetId,status:change.status,favourite:change.favourite})),saved));
       setMessage(status==='keep'
         ?`Kept ${count}. They have left this list and not moved on disk.`
         :`Marked ${count} for the Bin, ${bytes(freed)} in all. Nothing has moved: open Bin to carry it out, and it stays recoverable after that.`);
     }catch(reason){setError((reason as Error).message)}finally{setBusy(false)}
   }
 
-  async function revert(){
-    if(!undo||busy)return;
-    setBusy(true);setError('');
-    try{await sendDecisions(undo.changes);reloadPage()}
-    catch(reason){setError((reason as Error).message);setBusy(false)}
-  }
 
   // The viewer's Keep and Remove act on the one video showing, as the
   // selection bar does on many. It never advances by itself: the video just
@@ -159,7 +154,8 @@ export function Social({page,band:initialBand}:{page:SocialPage;band:string}){
       <p className="hint">Videos that look saved from an app rather than filmed on a camera, judged from each file's own metadata. <strong>Likely social</strong> means strong evidence; <strong>Not sure</strong> is worth a look before it goes.
         Click a video to watch it; <b>k</b> keeps it and <b>x</b> moves it to the Bin. Tick the circle on a tile to select several, and the actions appear at the top. <strong>Keep</strong> takes a video off this list; <strong>Move to Bin</strong> marks it for the Bin, where it stays recoverable.</p>
     </section>
-    {message&&<p className="flash" role="status">{message} {undo&&<button className="btn small" disabled={busy} onClick={()=>void revert()}>Undo {undo.label}</button>}</p>}
+    {message?<p className="flash" role="status">{message} {steps.latest&&<button className="btn small" disabled={busy||steps.working} {...tipProps('Undo','Mod+Z')} onClick={steps.undo}>Undo</button>}</p>
+      :steps.notice&&<p className="flash" role="status">{steps.notice} {steps.canRedo&&<button className="btn small" disabled={busy||steps.working} {...tipProps('Redo','Mod+Shift+Z Mod+U')} onClick={steps.redo}>Redo</button>}</p>}
     {error&&<p className="note warn" role="alert">{error}</p>}
     {items.length===0
       ? <p className="note">{total===0?'Every candidate has been decided. Nothing is left to review.':'Nothing matches this filter.'}</p>

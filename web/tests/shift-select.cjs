@@ -50,6 +50,19 @@ async function check(page,where){
   assert.deepEqual(await picked(),[1,2,5],`${where}: while selecting, a click adds a tile`);
   assert.equal(page.url(),start,`${where}: and opens nothing`);
   assert.equal(await page.evaluate(()=>String(getSelection())),'',`${where}: no text is selected by Shift`);
+  // A second run works as the first: after clearing, and straight on from a run.
+  await page.getByRole('button',{name:'Clear the selection'}).click();
+  await tile(2).hover();
+  await tile(2).getByRole('checkbox').click();
+  await shift(tile(4));
+  assert.deepEqual(await picked(),[2,3,4],`${where}: a second run after clearing`);
+  await tile(6).click();
+  await shift(tile(5));
+  assert.deepEqual(await picked(),[2,3,4,5,6],`${where}: a second run straight on`);
+  await page.keyboard.press('Escape');
+  await shift(tile(1));
+  await shift(tile(3));
+  assert.deepEqual(await picked(),[1,2,3],`${where}: a run begun with Shift, then another Shift-click`);
   await page.getByRole('button',{name:'Clear the selection'}).click();
   await shift(tile(2));
   assert.deepEqual(await picked(),[2],`${where}: Shift-click starts a selection`);
