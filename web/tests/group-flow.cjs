@@ -7,7 +7,7 @@ const assert=require('node:assert/strict');
  if(p==='/api/stats')return r.fulfill({json:{total:3,synthetic:true,candidates:0}});
  if(p==='/api/assets'){const eligible=assets.filter(a=>!u.searchParams.get('status')||a.status===u.searchParams.get('status'));return r.fulfill({json:{assets:[eligible.find(a=>a.id<3),eligible.find(a=>a.id===3)].filter(Boolean),next:''}})}
  if(p.endsWith('/related'))return r.fulfill({json:assets.slice(0,2)});
- if(p==='/api/decisions/batch'){const ds=r.request().postDataJSON();saves.push(ds);const out=ds.map(d=>{const a=assets.find(a=>a.id===d.assetId);assert.equal(d.expectedRevision,a.revision);const old={previousStatus:a.status,previousFavourite:a.favourite};a.status=d.status;a.revision++;return {...old,revision:a.revision}});return r.fulfill({json:out})}
+ if(p==='/api/decisions/batch'){const ds=r.request().postDataJSON();saves.push(ds);const out=ds.map(d=>{const a=assets.find(asset=>asset.id===d.assetId);assert.equal(d.expectedRevision,a.revision);const old={previousStatus:a.status,previousFavourite:a.favourite};a.status=d.status;a.revision++;return {...old,revision:a.revision}});return r.fulfill({json:out})}
  if(p.startsWith('/api/media/'))return r.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#657"/></svg>'});throw Error(p);
  });
  let page=await context.newPage();await page.goto('http://127.0.0.1:8840/queue.html');await page.locator('.tile').first().waitFor();assert.equal(await page.locator('.tile').count(),2);

@@ -36,7 +36,8 @@ function BinSettings(){
   },[]);
   // The page is drawn after its data arrives, so a link to /settings#bin lands
   // at the top unless the section is scrolled to once it exists.
-  useEffect(()=>{if(report&&location.hash==='#bin')document.getElementById('bin')?.scrollIntoView()},[report!==null]);
+  const reported=report!==null;
+  useEffect(()=>{if(reported&&location.hash==='#bin')document.getElementById('bin')?.scrollIntoView()},[reported]);
   const value=Number(days);
   const valid=/^\d{1,3}$/.test(days)&&value<=365;
   const changed=report!==null&&valid&&value!==report.graceDays;

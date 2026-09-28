@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useEffectEvent,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {type Asset,type Page,type Status,decide,get} from './api';
 import './style.css';
@@ -13,8 +13,9 @@ function newRequestId(){const bytes=crypto.getRandomValues(new Uint8Array(16));r
 const labels:Record<Status,string>={unreviewed:'Not reviewed',keep:'Keeping',later:'For later',cull:'Marked for culling'};
 type Resume={cursor:string;assetId:number;review:boolean;comparison:boolean;kind:string;from:string;status:string;matches:boolean};
 function readResume():Partial<Resume>{try{const r=JSON.parse(localStorage.getItem('cull.session.v1')||'{}');const saved=r&&typeof r==='object'?r:{};return new URLSearchParams(location.search).get('view')==='grid'?{...saved,review:false,comparison:false}:saved}catch{return {}}}
+// Read once, when the page loads.
+const resume=readResume();
 function App(){
-  const resume=useRef(readResume()).current;
   const resumeApplied=useRef(false);
   useEffect(()=>{const url=new URL(location.href);if(url.searchParams.get('view')==='grid'){url.searchParams.delete('view');window.history.replaceState(window.history.state,'',url)}},[]);
   const [page,setPage]=useState<Page>({assets:[],next:''});
@@ -60,15 +61,17 @@ function App(){
     get<Page>('/api/assets?'+qs,abort.signal).then(p=>{pageCache.current={key:qs.toString(),page:p};setNextPage(p)}).catch(()=>{});
     return()=>abort.abort();
   },[page.next,kind,from,matches,statusFilter]);
-  useEffect(()=>{if(loading||!current)return;try{localStorage.setItem('cull.session.v1',JSON.stringify({cursor,assetId:comparison?.id??current.id,review,comparison:!!comparison,kind,from,status:statusFilter,matches}))}catch{}},[loading,current?.id,cursor,review,comparison,kind,from,statusFilter,matches]);
-  useEffect(()=>{if(review&&!comparison&&current&&(current.relatedCount??0)>0&&!loading){setRelatedComparison(true);setComparison(current)}},[review,current?.id,loading]);
+  const remember=useEffectEvent(()=>{if(!current)return;try{localStorage.setItem('cull.session.v1',JSON.stringify({cursor,assetId:comparison?.id??current.id,review,comparison:!!comparison,kind,from,status:statusFilter,matches}))}catch{}});
+  useEffect(()=>{if(!loading)remember()},[loading,current?.id,cursor,review,comparison,kind,from,statusFilter,matches]);
+  const openRelated=useEffectEvent(()=>{if(review&&!comparison&&current&&(current.relatedCount??0)>0){setRelatedComparison(true);setComparison(current)}});
+  useEffect(()=>{if(!loading)openRelated()},[review,current?.id,loading]);
   function nextMemory(){
     const i=page.assets.findIndex(a=>a.id===comparison?.id);const next=page.assets[i+1];
     setComparison(null);setReview(true);
     if(next){setAt(i+1);if((next.relatedCount??0)>0){setRelatedComparison(true);setComparison(next)}}
     else{setCursor(page.next||'');setReload(x=>x+1)}
   }
-  function filter(which:'source'|'kind',value:string){if(saving.current)return;setCursor('');setHistory([]);setReview(false);which==='source'?setSource(value):setKind(value)}
+  function filter(which:'source'|'kind',value:string){if(saving.current)return;setCursor('');setHistory([]);setReview(false);if(which==='source')setSource(value);else setKind(value)}
   function patch(id:number,data:Partial<Asset>){setPage(p=>({...p,assets:p.assets.map(a=>a.id===id?{...a,...data}:a)}))}
   const queue=useDecisionQueue((job,r)=>{
     const {asset,status,favourite,wasResolved}=job;
@@ -98,7 +101,7 @@ function App(){
       const r=await decide(last.asset,last.status,last.favourite,newRequestId());
       patch(last.asset.id,{status:last.status,favourite:last.favourite,revision:r.revision});
       setUndo(u=>u.slice(0,-1).map(x=>x.asset.id===last.asset.id?{...x,asset:{...x.asset,revision:r.revision}}:x));
-      setResolved(s=>{const n=new Set(s);last.wasResolved?n.add(last.asset.id):n.delete(last.asset.id);return n});setNotice('Previous decision restored.');
+      setResolved(s=>{const n=new Set(s);if(last.wasResolved)n.add(last.asset.id);else n.delete(last.asset.id);return n});setNotice('Previous decision restored.');
     }catch(e){setError((e as Error).message)}finally{saving.current=false;setBusy(false)}
   }
   useEffect(()=>{
@@ -108,7 +111,7 @@ function App(){
       if(e.key==='ArrowRight'){e.preventDefault();setAt(i=>Math.min(i+1,page.assets.length-1))}
       if(e.key==='ArrowLeft'){e.preventDefault();setAt(i=>Math.max(0,i-1))}
       if(e.repeat)return;
-      if(['k','x','l','f','u'].includes(e.key.toLowerCase())){e.preventDefault();switch(e.key.toLowerCase()){case 'k':void save('keep');break;case 'x':void save('cull');break;case 'l':void save('later');break;case 'f':void save(current.status,!current.favourite);break;case 'u':void undoLast()}}
+      if(['k','x','l','f','u'].includes(e.key.toLowerCase())){e.preventDefault();switch(e.key.toLowerCase()){case 'k':save('keep');break;case 'x':save('cull');break;case 'l':save('later');break;case 'f':save(current.status,!current.favourite);break;case 'u':void undoLast()}}
     }
     window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);
   });
@@ -125,8 +128,8 @@ function App(){
       {queue.error&&<div role="alert" className="error">{queue.error} <button onClick={queue.retry}>Retry pending saves</button></div>}
       <div className="notice" role="status" aria-live="polite">{busy?'Saving…':queue.pending?`${queue.pending} choice${queue.pending===1?'':'s'} saving…`:notice}</div>
       {comparison?<Compare related={relatedComparison} asset={comparison} onNext={nextMemory} onClose={()=>{setComparison(null);setReview(false);setReload(x=>x+1)}} onChanged={changes=>{setUndo([]);for(const file of changes)patch(file.id,file);setResolved(previous=>{const next=new Set(previous);for(const file of changes){if(file.status==='keep'||file.status==='cull')next.add(file.id);else next.delete(file.id)}return next})}}/>:loading?<div className="empty">Opening your next batch…</div>:!current?<div className="empty"><h2>{queue.pending?'Finishing your saved choices…':statusFilter==='unreviewed'?'No undecided photos in this view.':'No photos in this view.'}</h2><p>{queue.pending?'Your pending choices are retained locally.':'Change the date or media filter, or revisit your choices using Show.'}</p></div>:review?<>
-        <section className="review"><div className="stage">{[...page.assets.slice(Math.max(0,at-1),at+5),...(at+5>=page.assets.length?(nextPage?.assets.slice(0,4)??[]):[])].map(asset=><div className="review-frame" key={asset.id} hidden={asset.id!==current.id}><Media asset={asset} large onReady={id=>setReadyMedia(s=>s.has(id)?s:new Set(s).add(id))}/></div>)}</div><aside className="details"><span className="source">{current.source==='takeout'?'Google Takeout':'Family archive'}</span><h2>{current.path.split('/').pop()}</h2><p>{current.capturedAt?new Date(current.capturedAt*1000).toLocaleString():'Date unknown'}</p><dl><dt>Decision</dt><dd>{labels[current.status]}</dd><dt>File size</dt><dd>{(current.size/1048576).toFixed(1)} MB</dd><dt>Favourite</dt><dd>{current.favourite?'Yes':'Not yet'}</dd></dl><p className="path">{current.path}</p>{current.alternativeCount>0&&<button disabled={locked} className="primary" onClick={()=>{setRelatedComparison(false);setComparison(current)}}>Compare possible upgrade ({current.alternativeCount})</button>}{(current.relatedCount??0)>0&&<button disabled={locked} className="primary" onClick={()=>{setRelatedComparison(true);setComparison(current)}}>Compare related copies ({(current.relatedCount??0)+1})</button>}<p className="helper">Marking for culling saves your choice. It does not move or delete a file.</p><button disabled={busy||!queue.ready||!!queue.error||!readyMedia.has(current.id)} onClick={()=>void save(current.status,!current.favourite)}>{current.favourite?'★ Favourite':'☆ Favourite'} <kbd>F</kbd></button></aside></section>
-        <div className="decisionbar"><button disabled={busy||at===0} aria-label="Previous asset" onClick={()=>setAt(at-1)}>←</button><span>{at+1} of {page.assets.length}</span><button disabled={busy||at===page.assets.length-1} aria-label="Next asset" onClick={()=>setAt(at+1)}>→</button><div className="choices"><button disabled={busy||!queue.ready||!!queue.error||!readyMedia.has(current.id)} className="primary" onClick={()=>void save('keep')}>Keep <kbd>K</kbd></button><button disabled={busy||!queue.ready||!!queue.error||!readyMedia.has(current.id)} onClick={()=>void save('later')}>Later <kbd>L</kbd></button><button disabled={busy||!queue.ready||!!queue.error||!readyMedia.has(current.id)} className="cull" onClick={()=>void save('cull')}>Mark for culling <kbd>X</kbd></button></div><button disabled={locked} onClick={()=>setReview(false)}>Back to library</button></div>
+        <section className="review"><div className="stage">{[...page.assets.slice(Math.max(0,at-1),at+5),...(at+5>=page.assets.length?(nextPage?.assets.slice(0,4)??[]):[])].map(asset=><div className="review-frame" key={asset.id} hidden={asset.id!==current.id}><Media asset={asset} large onReady={id=>setReadyMedia(s=>s.has(id)?s:new Set(s).add(id))}/></div>)}</div><aside className="details"><span className="source">{current.source==='takeout'?'Google Takeout':'Family archive'}</span><h2>{current.path.split('/').pop()}</h2><p>{current.capturedAt?new Date(current.capturedAt*1000).toLocaleString():'Date unknown'}</p><dl><dt>Decision</dt><dd>{labels[current.status]}</dd><dt>File size</dt><dd>{(current.size/1048576).toFixed(1)} MB</dd><dt>Favourite</dt><dd>{current.favourite?'Yes':'Not yet'}</dd></dl><p className="path">{current.path}</p>{current.alternativeCount>0&&<button disabled={locked} className="primary" onClick={()=>{setRelatedComparison(false);setComparison(current)}}>Compare possible upgrade ({current.alternativeCount})</button>}{(current.relatedCount??0)>0&&<button disabled={locked} className="primary" onClick={()=>{setRelatedComparison(true);setComparison(current)}}>Compare related copies ({(current.relatedCount??0)+1})</button>}<p className="helper">Marking for culling saves your choice. It does not move or delete a file.</p><button disabled={busy||!queue.ready||!!queue.error||!readyMedia.has(current.id)} onClick={()=>save(current.status,!current.favourite)}>{current.favourite?'★ Favourite':'☆ Favourite'} <kbd>F</kbd></button></aside></section>
+        <div className="decisionbar"><button disabled={busy||at===0} aria-label="Previous asset" onClick={()=>setAt(at-1)}>←</button><span>{at+1} of {page.assets.length}</span><button disabled={busy||at===page.assets.length-1} aria-label="Next asset" onClick={()=>setAt(at+1)}>→</button><div className="choices"><button disabled={busy||!queue.ready||!!queue.error||!readyMedia.has(current.id)} className="primary" onClick={()=>save('keep')}>Keep <kbd>K</kbd></button><button disabled={busy||!queue.ready||!!queue.error||!readyMedia.has(current.id)} onClick={()=>save('later')}>Later <kbd>L</kbd></button><button disabled={busy||!queue.ready||!!queue.error||!readyMedia.has(current.id)} className="cull" onClick={()=>save('cull')}>Mark for culling <kbd>X</kbd></button></div><button disabled={locked} onClick={()=>setReview(false)}>Back to library</button></div>
       </>:<><div className="batchhead"><h2>Your next {page.assets.length} memories</h2><button className="primary" onClick={()=>{setAt(Math.max(0,page.assets.findIndex(a=>a.status==='unreviewed')));if((page.assets[Math.max(0,page.assets.findIndex(a=>a.status==='unreviewed'))]?.relatedCount??0)>0){setRelatedComparison(true);setComparison(page.assets[Math.max(0,page.assets.findIndex(a=>a.status==='unreviewed'))])}setReview(true)}}>Start reviewing</button></div><div className="grid">{page.assets.map((a,i)=><button className={`tile ${a.status}`} key={a.id} onClick={()=>{setAt(i);if((a.relatedCount??0)>0){setRelatedComparison(true);setComparison(a)}else setReview(true)}}><div className={`mini ${a.kind}`}><Media key={a.id} asset={a}/>{/* favourite overlay */}{a.favourite&&<b>★</b>}</div><div className="tiletext"><strong>{a.path.split('/').pop()}</strong><span>{a.capturedAt?new Date(a.capturedAt*1000).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}):'Date unknown'}</span><small>{(a.relatedCount??0)>0?`Possible duplicate / related copy · ${(a.relatedCount??0)+1} files`:a.alternativeCount>0?`Possible upgrade · ${a.alternativeCount} alternative`:labels[a.status]}</small></div></button>)}</div></>}
       <footer><p>Browsing is not a decision. Every saved choice can be changed.</p><div><button disabled={locked||loading||history.length===0} onClick={()=>{setCursor(history.at(-1)!);setHistory(h=>h.slice(0,-1))}}>Previous batch</button><button disabled={locked||loading||!page.next} onClick={()=>{setHistory(h=>[...h.slice(-99),cursor]);setCursor(page.next)}}>Next batch</button></div></footer>
     </>}

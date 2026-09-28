@@ -69,7 +69,7 @@
   /* Where you are: a filled pill in the accent's own family. */
   --pill:      #0f3b2b;
   --pill-ink:  #b8f0d6;
-  --hover:     rgba(238, 240, 245, .07);
+  --hover:     rgb(238 240 245 / 7%);
 
   --head-h:    64px;
   --side-w:    256px;
@@ -87,9 +87,9 @@
   --shell:  #f1f5f3;
   --pill:   #c4eedb;
   --pill-ink:#00210f;
-  --hover:  rgba(22, 24, 29, .06);
+  --hover:  rgb(22 24 29 / 6%);
   --bg:     #fcfdfc;
-  --bg-2:   #ffffff;
+  --bg-2:   #fff;
   --bg-3:   #f1f2f5;
   --bg-4:   #e7e9ee;
   --line:   #e3e5ea;
@@ -99,7 +99,7 @@
   --faint:  #8b8f99;
   /* The same three hues, deepened until text on white passes 4.5:1. */
   --accent:    #0f7a52;
-  --on-accent: #ffffff;
+  --on-accent: #fff;
   --good:      #0f7a52;
   --warn:      #8a5d0d;
   --flame:     #e8700f;
@@ -177,7 +177,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .brand .t1 { fill: var(--logo-amber); }
 
 .icon { display: inline-grid; place-items: center; width: 24px; height: 24px; flex: none; }
-.icon svg { width: 24px; height: 24px; fill: currentColor; }
+.icon svg { width: 24px; height: 24px; fill: currentcolor; }
 
 .search {
   position: relative; min-width: 0;
@@ -186,21 +186,20 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   background: var(--bg-3); border-radius: 999px;
   transition: background var(--ease), box-shadow var(--ease);
 }
-.search:has(input:focus) { background: var(--bg-2); box-shadow: 0 1px 3px rgba(0,0,0,.25), 0 0 0 1px var(--line-2); }
+.search:has(input:focus) { background: var(--bg-2); box-shadow: 0 1px 3px rgb(0 0 0 / 25%), 0 0 0 1px var(--line-2); }
 .search input {
-  flex: 1; min-width: 0; height: 100%;
+  flex: 1; min-width: 0; height: 100%; text-overflow: ellipsis;
   font: inherit; font-size: 16px; color: var(--text);
   background: none; border: 0; outline: none;
 }
 .search input::placeholder { color: var(--muted); }
-.search input { text-overflow: ellipsis; }
 .search input::-webkit-search-cancel-button { filter: grayscale(1); }
 .searchgo { display: grid; place-items: center; width: 40px; height: 40px; flex: none; color: var(--muted); background: none; border: 0; border-radius: 999px; cursor: pointer; }
 .searchgo:hover { color: var(--text); background: var(--hover); }
 .searchproblem {
   position: absolute; top: calc(100% + 6px); left: 16px; right: 16px; z-index: 5; margin: 0;
   padding: .5rem .8rem; font-size: 13px; color: var(--text);
-  background: var(--bg-4); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,.3);
+  background: var(--bg-4); border-radius: var(--radius); box-shadow: 0 4px 16px rgb(0 0 0 / 30%);
 }
 .gbaracts { justify-self: end; display: flex; align-items: center; gap: 4px; min-width: 0; }
 /* The page's own actions, before the streak and Settings. */
@@ -209,8 +208,8 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .pageacts .btn.primary { height: 36px; padding: 0 18px; border-radius: 18px; white-space: nowrap; }
 .pageacts .textbtn { white-space: nowrap; }
 .pageacts .short, .pageacts .icon { display: none; }
-@media (max-width: 1000px) { .pagenote { display: none; } }
-@media (max-width: 600px) {
+@media (width <= 1000px) { .pagenote { display: none; } }
+@media (width <= 600px) {
   .pageacts .long { display: none; }
   .pageacts .short { display: inline; }
   .pageacts .hasicon .short { display: none; }
@@ -218,7 +217,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   .pageacts .hasicon { width: 40px; height: 40px; padding: 0; justify-content: center; border-radius: 999px; }
   .pageacts .btn.primary.hasicon { padding: 0; }
 }
-@media (max-width: 600px) { .pageacts { margin-right: 0; } .pageacts .textbtn { padding: 0 10px; font-size: 13px; } .pageacts .btn.primary { padding: 0 12px; font-size: 13px; } }
+@media (width <= 600px) { .pageacts { margin-right: 0; } .pageacts .textbtn { padding: 0 10px; font-size: 13px; } .pageacts .btn.primary { padding: 0 12px; font-size: 13px; } }
 .iconbtn {
   display: grid; place-items: center; width: 44px; height: 44px; flex: none;
   color: var(--muted); background: none; border: 0; border-radius: 999px; cursor: pointer;
@@ -294,7 +293,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
   width: 336px; padding: 20px 16px 14px;
   background: var(--bg-2); border: 1px solid var(--line); border-radius: 24px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, .4);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 40%);
   transform-origin: 24px 0;
   animation: calin 220ms cubic-bezier(.2, 0, 0, 1) both;
   outline: none;
@@ -337,7 +336,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 }
 .streakcal .d.jl::before { left: 0; }
 .streakcal .d.jr::after { right: 0; }
-.streakcal .d.today.on > span { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .85); }
+.streakcal .d.today.on > span { box-shadow: inset 0 0 0 2px rgb(255 255 255 / 85%); }
 
 /* The date pill in the search bar: the page's date, ticked once every year
    on it is reviewed, opening the calendar of dates. */
@@ -410,7 +409,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .filteropt:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .searchsuggest {
   position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 60; margin: 0; padding: 6px; list-style: none;
-  background: var(--bg-2); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 12px 32px rgba(0, 0, 0, .35);
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 12px 32px rgb(0 0 0 / 35%);
 }
 .searchsuggest b { font-weight: 600; }
 
@@ -461,7 +460,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .streakintro .introscrim {
   position: absolute; inset: 0;
   background: color-mix(in oklab, var(--bg) 62%, transparent);
-  -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2);
+  backdrop-filter: blur(22px) saturate(1.2);
   animation: cheerin 380ms cubic-bezier(.2, 0, 0, 1) both;
 }
 .streakintro .confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
@@ -484,7 +483,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .introunit { margin: 8px 0 0; font-size: 22px; font-weight: 500; animation: risein 520ms cubic-bezier(.2, 0, 0, 1) 380ms both; }
 .introsub { margin: 10px 0 0; font-size: 15px; color: var(--muted); animation: risein 520ms cubic-bezier(.2, 0, 0, 1) 520ms both; }
 @keyframes risein { from { opacity: 0; transform: translateY(16px); } }
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .introflame, .introflame .icon, .introflame .icon svg { width: 128px; height: 128px; }
   .introcount b { font-size: 84px; }
   .calpop, .searchwrap > .calpop, .bellwrap > .calpop { position: fixed; top: calc(var(--head-h) + 4px); left: 8px; right: 8px; width: auto; }
@@ -495,7 +494,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
    rules instead of titles, and every label kept as the link's name and
    tooltip. Reviewed folds to its icon inside a ring that fills as dates are
    reviewed. */
-@media (min-width: 1001px) {
+@media (width >= 1001px) {
   .side-hidden { grid-template-columns: var(--rail-w) minmax(0, 1fr); }
   .side-hidden .side { padding: 8px 0 16px; align-items: center; scrollbar-width: none; }
   .side-hidden .sidesec { align-items: center; gap: 4px; }
@@ -520,7 +519,6 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   .side-hidden .sideprogresshead::before {
     content: ""; position: absolute; inset: 6px; border-radius: 999px;
     background: conic-gradient(var(--accent) calc(var(--share, 0) * 1turn), var(--bg-4) 0);
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
     mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
   }
   .side-hidden .sideprogresshead .icon, .side-hidden .sideprogresshead .icon svg { width: 20px; height: 20px; }
@@ -532,7 +530,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   position: sticky; top: var(--head-h); align-self: start;
   height: calc(100vh - var(--head-h)); overflow-y: auto;
   display: flex; flex-direction: column;
-  padding: 8px 12px 16px 12px;
+  padding: 8px 12px 16px;
   background: var(--shell);
   scrollbar-width: thin;
 }
@@ -584,7 +582,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .scrim { display: none; }
 
 /* Below tablet width the sidebar is a drawer over the page. */
-@media (max-width: 1000px) {
+@media (width <= 1000px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
   .gbar { padding: 0 8px; gap: 4px; }
   .brand { width: auto; margin-right: 8px; }
@@ -593,13 +591,13 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
     width: min(var(--side-w), 86vw); height: auto;
     transform: translateX(-100%); visibility: hidden;
     transition: transform 200ms cubic-bezier(.2, 0, 0, 1), visibility 0s linear 200ms;
-    box-shadow: 0 8px 28px rgba(0,0,0,.35);
+    box-shadow: 0 8px 28px rgb(0 0 0 / 35%);
   }
   .drawer-open .side { transform: none; visibility: visible; transition: transform 200ms cubic-bezier(.2, 0, 0, 1); }
-  .drawer-open .scrim { display: block; position: fixed; inset: var(--head-h) 0 0 0; z-index: 35; background: rgba(0,0,0,.45); border: 0; }
+  .drawer-open .scrim { display: block; position: fixed; inset: var(--head-h) 0 0 0; z-index: 35; background: rgb(0 0 0 / 45%); border: 0; }
   .panel { margin-right: 0; border-radius: 20px 20px 0 0; }
 }
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .gbar { display: flex; }
   .searchwrap { flex: 1 1 auto; }
   .gbaracts { margin-left: auto; }
@@ -615,7 +613,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 /* A phone has no room for a field beside the logo and the streak, so search
    folds to its icon and the date pill, as in Google Photos, and opens across
    the bar when tapped. */
-@media (max-width: 480px) {
+@media (width <= 480px) {
   .searchwrap { position: static; flex: none; }
   .search { flex: none; width: auto; padding: 0 2px; background: none; transition: none; }
   .search input { width: 0; flex: 0; padding: 0; }
@@ -835,7 +833,7 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 .mo.fav::before {
   content: "\2665"; position: absolute; top: 7px; right: 9px; z-index: 3;
   color: var(--fav); font-size: 14px; line-height: 1;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, .6);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 60%);
 }
 
 /* Group indicators are always visible: they change what the decision means. */
@@ -848,7 +846,7 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 .bdg .b {
   padding: .1rem .38rem;
   font-size: 10.5px; font-weight: 500; letter-spacing: .01em;
-  color: #f2f3f6; background: rgba(12, 13, 17, .72);
+  color: #f2f3f6; background: rgb(12 13 17 / 72%);
   border-radius: 4px; white-space: nowrap;
 }
 .bdg .b.dupe { background: color-mix(in oklab, var(--warn) 82%, #000); }
@@ -861,7 +859,7 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
    else in .bdg stays inert so it never steals a click from the photograph. */
 .bdg .b.tocmp {
   pointer-events: auto; cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, .28);
+  border: 1px solid rgb(255 255 255 / 28%);
   font: inherit; font-size: 10.5px; font-weight: 500;
   padding: .1rem .38rem;
   display: inline-flex; align-items: center; gap: .28rem;
@@ -881,18 +879,18 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
   display: flex; align-items: center; gap: 6px;
   padding: 7px;
   opacity: 0; transition: opacity var(--ease);
-  background: linear-gradient(to top, rgba(10, 11, 15, .78), transparent);
+  background: linear-gradient(to top, rgb(10 11 15 / 78%), transparent);
 }
 .mo:hover .acts, .mo:focus-within .acts { opacity: 1; }
 .act {
   font: inherit; font-size: 12px; line-height: 1;
   padding: .32rem .55rem;
-  color: #f2f3f6; background: rgba(20, 22, 28, .82);
-  border: 1px solid rgba(255, 255, 255, .16);
+  color: #f2f3f6; background: rgb(20 22 28 / 82%);
+  border: 1px solid rgb(255 255 255 / 16%);
   border-radius: var(--radius-sm); cursor: pointer;
   transition: background var(--ease), color var(--ease);
 }
-.act:hover { background: rgba(32, 35, 43, .95); }
+.act:hover { background: rgb(32 35 43 / 95%); }
 .act.cull:hover { background: var(--bad); border-color: var(--bad); }
 .act.fav { margin-left: auto; font-size: 14px; padding: .26rem .48rem; }
 .act.fav:hover { color: var(--fav); }
@@ -902,7 +900,7 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 .when {
   position: absolute; bottom: 7px; right: 8px; z-index: 2;
   font-size: 11px; color: #e9eaee;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, .7);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
   font-variant-numeric: tabular-nums;
   opacity: 0; transition: opacity var(--ease);
 }
@@ -915,32 +913,31 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
   position: absolute; bottom: 9px; right: 10px; z-index: 2;
   display: inline-flex; align-items: center;
   color: #fff; font-size: 14px; font-weight: 650; line-height: 1; letter-spacing: .01em;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, .55), 0 0 12px rgba(0, 0, 0, .35);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 55%), 0 0 12px rgb(0 0 0 / 35%);
   font-variant-numeric: tabular-nums;
   pointer-events: none; transition: opacity var(--ease);
 }
 .mo .dur .icon, .mo .dur .icon svg { width: 22px; height: 22px; }
-.mo .dur .icon { filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .55)); }
+.mo .dur .icon { filter: drop-shadow(0 1px 3px rgb(0 0 0 / 55%)); }
 .mo:hover .dur, .mo:focus-within .dur { opacity: 0; }
 
 /* A culled tile keeps its place in the grid and dims, so the row does not
    reflow under the cursor mid-decision, and Undo is exactly where the eye
    already is. */
-.mo.culled { opacity: .34; }
+.mo.culled { opacity: .5; }
 .mo.culled img { filter: grayscale(1); }
 .mo.culled .acts, .mo.culled .bdg, .mo.culled .when, .mo.culled .dur { display: none; }
 .mo .undo {
-  position: absolute; inset: auto 0 0 0; z-index: 4;
+  position: absolute; inset: auto 0 0; z-index: 4;
   display: flex; align-items: center; justify-content: space-between; gap: .5rem;
   padding: 7px; font-size: 12px; color: #f2f3f6;
-  background: rgba(10, 11, 15, .82);
+  background: rgb(10 11 15 / 82%);
 }
 /* `[hidden]` has to beat the rule above. The browser's own `[hidden]` default is
    specificity (0,1,0) and `.mo .undo` is (0,2,0), so without this every tile
    shows an "Removed / Undo" bar before anything has been removed. The JS drops
    the attribute when a removal actually happens. */
 .mo .undo[hidden] { display: none; }
-.mo.culled { opacity: .5; }
 
 .mo.gone { opacity: .7; }
 .mo.gone img { filter: grayscale(.75); }
@@ -951,16 +948,16 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
    pale grey. It also has to stay one line - the tile is square and clips, so a
    wrapped filename pushed the size out of sight entirely. */
 .mo .cap {
-  position: absolute; inset: auto 0 0 0;
+  position: absolute; inset: auto 0 0;
   padding: .35rem .5rem;
   display: flex; gap: .4rem; flex-wrap: nowrap; align-items: baseline;
   justify-content: space-between;
   font-size: 11px; color: #f2f4f7;
-  background: linear-gradient(to top, rgba(10, 11, 15, .94), rgba(10, 11, 15, .82) 65%, transparent);
+  background: linear-gradient(to top, rgb(10 11 15 / 94%), rgb(10 11 15 / 82%) 65%, transparent);
 }
 .mo .cap > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mo .cap > :last-child { flex: none; }
-.mo .cap .dim { color: rgba(242, 244, 247, .72); }
+.mo .cap .dim { color: rgb(242 244 247 / 72%); }
 .mo .cap .due { color: var(--warn); }
 
 /* A Bin card carries more than a tile does: the size, which disk the stored copy
@@ -981,7 +978,7 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
  * than above: same specificity, later wins.
  */
 .mo.sel {
-  box-shadow: inset 0 0 0 3px var(--accent), 0 4px 14px rgba(0, 0, 0, .3);
+  box-shadow: inset 0 0 0 3px var(--accent), 0 4px 14px rgb(0 0 0 / 30%);
   transform: translateY(-1px);
   opacity: 1;
 }
@@ -1052,14 +1049,14 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 }
 .cmonth .mlabel { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .cell {
-  display: grid; place-items: center;
+  position: relative; display: grid; place-items: center;
   aspect-ratio: 1; max-height: 48px;
   border-radius: 7px;
   font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums;
   color: var(--faint); background: var(--bg-3);
   transition: transform var(--ease), box-shadow var(--ease);
 }
-.cell:hover { transform: scale(1.1); text-decoration: none; z-index: 2; box-shadow: 0 4px 14px rgb(0 0 0 / .25); }
+.cell:hover { transform: scale(1.1); text-decoration: none; z-index: 2; box-shadow: 0 4px 14px rgb(0 0 0 / 25%); }
 .cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cell.blank { visibility: hidden; }
 .cell.none { background: transparent; box-shadow: inset 0 0 0 1px var(--line); font-weight: 500; }
@@ -1099,7 +1096,6 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 /* A waiting date, as on the calendar, with the dot on its corner. */
 .legend .key.fresh { position: relative; background: color-mix(in oklab, var(--deep) 50%, var(--pale)); }
 .legend .key.fresh .freshdot { position: absolute; top: -3px; right: -3px; width: 7px; height: 7px; box-shadow: 0 0 0 1.5px var(--bg); }
-.cell { position: relative; }
 .cell > .freshdot { position: absolute; top: -3px; right: -3px; box-shadow: 0 0 0 2px var(--bg); }
 
 /* ------------------------------------------------------------- completion -- */
@@ -1189,7 +1185,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   position: absolute; top: 0; left: 0; right: 0; z-index: 4;
   display: flex; align-items: center; justify-content: space-between;
   height: 80px; padding: 8px 12px 0;
-  background: linear-gradient(rgba(0, 0, 0, .55), rgba(0, 0, 0, 0));
+  background: linear-gradient(rgb(0 0 0 / 55%), rgb(0 0 0 / 0%));
   pointer-events: none;
   transition: opacity var(--ease);
 }
@@ -1200,12 +1196,12 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   color: #fff; background: none; border: 0; border-radius: 50%; cursor: pointer;
   transition: background var(--ease), color var(--ease);
 }
-.rvact:hover { background: rgba(255, 255, 255, .12); }
+.rvact:hover { background: rgb(255 255 255 / 12%); }
 /* A pressed toggle, zoom or info, reads from its filled icon and a tint; the
    ring is for keyboard focus only, and a click hands focus back so a key
    pressed afterwards does not draw one on the button just clicked. */
-.rvact[aria-pressed="true"] { background: rgba(255, 255, 255, .16); }
-.rvact:focus-visible { outline: 2px solid rgba(255, 255, 255, .7); outline-offset: 2px; }
+.rvact[aria-pressed="true"] { background: rgb(255 255 255 / 16%); }
+.rvact:focus-visible { outline: 2px solid rgb(255 255 255 / 70%); outline-offset: 2px; }
 .rvact .icon, .rvact .icon svg { width: 24px; height: 24px; }
 /* The three states that show on the icon itself: a red heart, a green tick,
    and the Bin's restore arrow once the photo is marked. */
@@ -1216,7 +1212,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   position: absolute; top: 52px; right: 0; z-index: 6; min-width: 240px;
   display: flex; flex-direction: column; padding: 8px 0;
   background: #2b2b2b; border-radius: 4px;
-  box-shadow: 0 4px 8px 3px rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .3);
+  box-shadow: 0 4px 8px 3px rgb(0 0 0 / 30%), 0 1px 3px rgb(0 0 0 / 30%);
   animation: rvmenu 120ms ease-out;
 }
 @keyframes rvmenu { from { opacity: 0; transform: translateY(-4px); } }
@@ -1226,7 +1222,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   font: inherit; font-size: 14px; color: #e3e3e3; text-decoration: none; text-align: left;
   background: none; border: 0; cursor: pointer; white-space: nowrap;
 }
-.rvmenu [role="menuitem"]:hover { background: rgba(255, 255, 255, .08); }
+.rvmenu [role="menuitem"]:hover { background: rgb(255 255 255 / 8%); }
 .rvmenu [role="menuitem"] .icon { color: #c4c7c5; }
 .rvmenu kbd { margin-left: auto; padding-left: 24px; font: inherit; font-size: 12px; color: #9a9d9b; }
 
@@ -1265,7 +1261,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
    so the RAW is one press away from the photo that stands for it. */
 .rvpair {
   display: flex; gap: 2px; margin-right: 8px; padding: 2px;
-  border-radius: 999px; background: rgba(255, 255, 255, .08);
+  border-radius: 999px; background: rgb(255 255 255 / 8%);
 }
 .rvpair button {
   min-width: 52px; height: 28px; padding: 0 12px;
@@ -1273,7 +1269,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   color: #c4c7c5; font: inherit; font-size: 13px; font-weight: 500; letter-spacing: .08em;
   cursor: pointer;
 }
-.rvpair button:hover:not([aria-pressed="true"]) { background: rgba(255, 255, 255, .08); color: #eceef2; }
+.rvpair button:hover:not([aria-pressed="true"]) { background: rgb(255 255 255 / 8%); color: #eceef2; }
 .rvpair button[aria-pressed="true"] { background: #e3e3e3; color: #1f1f1f; }
 .rvpair button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .rvstage.zoom {
@@ -1304,7 +1300,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   position: absolute; top: 50%; width: 3.5rem; height: 6rem;
   transform: translateY(-50%);
   display: grid; place-items: center;
-  border: 0; border-radius: var(--radius-sm); background: rgba(10, 11, 14, .35);
+  border: 0; border-radius: var(--radius-sm); background: rgb(10 11 14 / 35%);
   cursor: pointer; color: #fff; font-size: 26px; opacity: 0;
   transition: opacity var(--ease);
 }
@@ -1329,7 +1325,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   color: #8b8f99; background: #24262c; border-radius: 3px;
 }
 .rvbtn.cull:hover { background: var(--bad); border-color: var(--bad); color: #fff; }
-.rvbtn.cull:hover kbd { color: #fff; background: rgba(0,0,0,.25); }
+.rvbtn.cull:hover kbd { color: #fff; background: rgb(0 0 0 / 25%); }
 /* The only control in the comparison that leaves nothing behind, so it carries
    its warning at rest rather than only on hover - the row it sits in is three
    buttons wide and the other two are both ways of keeping something. */
@@ -1367,8 +1363,8 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 }
 .rv.info .rvinfo { transform: none; }
 /* With no room beside the photograph the panel covers it, strip included. */
-@media (max-width: 899px) { .rv.info .rvinfo { z-index: 5; } }
-@media (min-width: 900px) {
+@media (width <= 899px) { .rv.info .rvinfo { z-index: 5; } }
+@media (width >= 900px) {
   /* The strip and compare panel are pinned, so their right edge moves; the
      stage flows in the body, so it gives up the width instead and the
      photograph is fitted again to what is left, as Google Photos does. */
@@ -1432,7 +1428,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .rvcmp .pick {
   position: absolute; top: 6px; left: 8px;
   display: grid; place-items: center; width: 1.3rem; height: 1.3rem;
-  background: rgba(12,13,17,.8); border-radius: 4px;
+  background: rgb(12 13 17 / 80%); border-radius: 4px;
   font-size: 11px; color: #cdd0d7;
 }
 .rvcmp figure.on { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
@@ -1474,7 +1470,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .rvkeys {
   position: absolute; inset: 0; z-index: 6;
   display: none; place-items: center;
-  background: rgba(6, 7, 9, .9);
+  background: rgb(6 7 9 / 90%);
 }
 .rv.keys .rvkeys { display: grid; }
 .rvkeys table { border-collapse: collapse; font-size: 13px; color: #cdd0d7; }
@@ -1494,7 +1490,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   position: fixed; inset: 0; z-index: 300;
   display: grid; place-items: center; padding: 24px;
   background: color-mix(in oklab, var(--bg) 55%, transparent);
-  -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2);
+  backdrop-filter: blur(18px) saturate(1.2);
   animation: cheerin 320ms cubic-bezier(.2, 0, 0, 1) both;
 }
 @keyframes cheerin { from { opacity: 0; } }
@@ -1503,7 +1499,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   position: relative; width: min(460px, 100%);
   padding: 32px 32px 28px; text-align: center;
   background: var(--bg-2); border: 1px solid var(--line); border-radius: 28px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, .45);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 45%);
   animation: cardin 560ms cubic-bezier(.34, 1.4, .64, 1) both;
 }
 @keyframes cardin { from { opacity: 0; transform: translateY(28px) scale(.9); } }
@@ -1517,7 +1513,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .cheercard dd { margin: 0; font-size: 24px; font-weight: 500; line-height: 30px; font-variant-numeric: tabular-nums; }
 .cheercard dd small { font-size: 13px; font-weight: 400; color: var(--muted); }
 .cheeracts { display: flex; justify-content: center; gap: 10px; margin: 0; }
-@media (max-width: 520px) { .cheercard { padding: 24px 20px; } .cheercard dl { grid-template-columns: 1fr; } }
+@media (width <= 520px) { .cheercard { padding: 24px 20px; } .cheercard dl { grid-template-columns: 1fr; } }
 
 /* Notices are snackbars in the bottom-left corner, as Google Photos places
    them: text on the opposite ground to the page, no border, a short rise on
@@ -1531,7 +1527,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   padding: 14px 16px;
   color: var(--bg); background: var(--text);
   border-radius: 4px;
-  box-shadow: 0 3px 5px -1px rgba(0, 0, 0, .2), 0 6px 10px rgba(0, 0, 0, .14), 0 1px 18px rgba(0, 0, 0, .12);
+  box-shadow: 0 3px 5px -1px rgb(0 0 0 / 20%), 0 6px 10px rgb(0 0 0 / 14%), 0 1px 18px rgb(0 0 0 / 12%);
   font-size: 14px; line-height: 20px;
   animation: snackin 240ms cubic-bezier(.2, 0, 0, 1) both;
 }
@@ -1548,7 +1544,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 @keyframes snackin { from { opacity: 0; transform: translateY(12px); } }
 /* Beside the sidebar they sit in the panel's corner, clear of Settings at
    the sidebar's foot. */
-@media (min-width: 1001px) {
+@media (width >= 1001px) {
   .shell .snacks { left: calc(var(--side-w) + 24px); max-width: min(680px, calc(100vw - var(--side-w) - 48px)); }
   .shell.side-hidden .snacks { left: calc(var(--rail-w) + 24px); }
 }
@@ -1561,15 +1557,15 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   padding: .55rem .8rem;
   color: #e8e9ee; background: #1c1f26;
   border: 1px solid #2f3340; border-radius: var(--radius);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 35%);
   font-size: 13px;
 }
 .toast.on { display: flex; }
 /* The filename is the expendable half: Undo must never be pushed off the edge
    by a long name, so the text truncates and the button keeps its size. */
 .toast > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.toast button { flex: none; }
 .toast button {
+  flex: none;
   font: inherit; font-size: 12.5px; padding: .2rem .55rem;
   color: #e8e9ee; background: #282c35;
   border: 1px solid #383d49; border-radius: 4px; cursor: pointer;
@@ -1581,7 +1577,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 /* Mobile is for the daily habit, not administration: one column, bigger tap
    targets, and the actions permanently visible because there is no hover. */
 
-@media (max-width: 720px) {
+@media (width <= 720px) {
   main, main.wide { padding: 1rem .8rem 0; }
   .gal { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
   .gal.tight { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
@@ -1606,13 +1602,13 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 /* A phone has room for the back arrow and seven actions, no more. The format
    is in Info, and a pair's switch floats just under the bar, clear of the
    notices that rise from the foot of the screen. */
-@media (max-width: 480px) {
+@media (width <= 480px) {
   .rvformat { display: none; }
   .rvpair {
     position: fixed; left: 50%; top: 72px; z-index: 3;
     transform: translateX(-50%); margin: 0;
-    background: rgba(32, 33, 36, .82); backdrop-filter: blur(8px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, .4);
+    background: rgb(32 33 36 / 82%); backdrop-filter: blur(8px);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 40%);
   }
   .rvpair button { height: 36px; min-width: 64px; }
   .rv.info .rvpair { display: none; }
@@ -1794,7 +1790,7 @@ button.danger:not(.btn, .iconbtn) {
 .pfav {
   position: absolute; right: 4px; bottom: 3px;
   color: var(--fav); font-size: 13px; line-height: 1;
-  text-shadow: 0 0 3px rgb(0 0 0 / .6);
+  text-shadow: 0 0 3px rgb(0 0 0 / 60%);
 }
 .pmatches { display: flex; gap: 6px; flex-wrap: wrap; }
 .parrow { flex: none; color: var(--faint); font-size: 18px; }
@@ -1819,7 +1815,7 @@ button.danger:not(.btn, .iconbtn) {
 
 .psynced { max-width: 36rem; margin-top: 2rem; }
 
-@media (max-width: 640px) {
+@media (width <= 640px) {
   .pthumb { width: 64px; height: 64px; }
   .prow > label, .prow:not(:has(> label)) { flex-wrap: wrap; gap: .6rem; }
   .pinfo { flex-basis: 100%; }
@@ -1834,8 +1830,8 @@ button.danger:not(.btn, .iconbtn) {
 .bdg .b.disk {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px; letter-spacing: .02em;
-  background: rgba(12, 13, 17, .82);
-  border: 1px solid rgba(255, 255, 255, .22);
+  background: rgb(12 13 17 / 82%);
+  border: 1px solid rgb(255 255 255 / 22%);
 }
 .bdg .b.warn { background: color-mix(in oklab, var(--warn) 82%, #000); }
 
@@ -1845,8 +1841,8 @@ button.danger:not(.btn, .iconbtn) {
 .bdg .b.ext {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px; letter-spacing: .02em;
-  background: rgba(12, 13, 17, .82);
-  border: 1px solid rgba(255, 255, 255, .22);
+  background: rgb(12 13 17 / 82%);
+  border: 1px solid rgb(255 255 255 / 22%);
   color: var(--accent);
 }
 
@@ -1949,7 +1945,7 @@ button.danger:not(.btn, .iconbtn) {
 }
 .log .lsize { font-size: 11.5px; color: var(--faint); text-align: right; font-variant-numeric: tabular-nums; }
 
-@media (max-width: 700px) {
+@media (width <= 700px) {
   /* The path is the first thing to go: on a phone it is never fully readable
      anyway, and the filename plus the picture is enough to recognise a file. */
   .log .lrow { grid-template-columns: 3.2rem 40px minmax(0, 1fr); row-gap: .2rem; }
@@ -1988,7 +1984,7 @@ button.danger:not(.btn, .iconbtn) {
 /* Saved from social: one answer per tile, likely social in the logo's coral
    for what tends to leave, or not sure on the plain chip. */
 .bdg .b.social { background: color-mix(in oklab, var(--bad) 80%, #000); }
-.bdg .b.unsure { background: rgba(12, 13, 17, .72); }
+.bdg .b.unsure { background: rgb(12 13 17 / 72%); }
 
 .socialplay {
   position: absolute; bottom: 5px; left: 5px; z-index: 3;
@@ -1996,12 +1992,12 @@ button.danger:not(.btn, .iconbtn) {
   width: 26px; height: 26px; padding: 0;
   font-size: 11px; line-height: 1;
   color: #f2f4f7;
-  background: rgba(10, 11, 15, .72);
-  border: 1px solid rgba(242, 244, 247, .28);
+  background: rgb(10 11 15 / 72%);
+  border: 1px solid rgb(242 244 247 / 28%);
   border-radius: 50%;
   cursor: pointer;
 }
-.socialplay:hover { background: rgba(10, 11, 15, .88); border-color: rgba(242, 244, 247, .5); }
+.socialplay:hover { background: rgb(10 11 15 / 88%); border-color: rgb(242 244 247 / 50%); }
 .socialplay:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ------------------------------------------------- duplicate comparison -- */
@@ -2071,36 +2067,36 @@ button.danger:not(.btn, .iconbtn) {
 }
 .dupechoose:disabled { cursor: default; }
 .dupechoose:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.dupetile:not(.keeper) .dupechoose:hover:not(:disabled) { background: rgba(255, 255, 255, .08); }
+.dupetile:not(.keeper) .dupechoose:hover:not(:disabled) { background: rgb(255 255 255 / 8%); }
 .dupemark {
   position: absolute; top: 8px; right: 8px; z-index: 2; pointer-events: none;
   width: 26px; height: 26px; border-radius: 50%;
   display: grid; place-items: center;
 }
 .dupemark .icon, .dupemark .icon svg { width: 17px; height: 17px; display: block; }
-.dupemark.keep { background: var(--accent); color: var(--on-accent); box-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
+.dupemark.keep { background: var(--accent); color: var(--on-accent); box-shadow: 0 1px 4px rgb(0 0 0 / 35%); }
 .dupemark.bin {
-  color: rgba(255, 255, 255, .92); background: rgba(16, 17, 21, .5);
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  color: rgb(255 255 255 / 92%); background: rgb(16 17 21 / 50%);
+  backdrop-filter: blur(10px);
 }
 .dupesize {
   position: absolute; left: 0; right: 0; bottom: 8px; z-index: 2; pointer-events: none;
   text-align: center; font-size: 12.5px; font-weight: 600; letter-spacing: .01em;
   font-variant-numeric: tabular-nums; color: #fff;
-  text-shadow: 0 0 1px rgba(0, 0, 0, .6), 0 1px 5px rgba(0, 0, 0, .55);
+  text-shadow: 0 0 1px rgb(0 0 0 / 60%), 0 1px 5px rgb(0 0 0 / 55%);
 }
 .duplay {
   position: absolute; left: 50%; top: 50%; z-index: 2; transform: translate(-50%, -50%);
   width: 52px; height: 52px; padding: 0; border: 0; border-radius: 50%;
   display: grid; place-items: center; cursor: pointer;
-  color: #fff; background: rgba(10, 11, 15, .45);
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  color: #fff; background: rgb(10 11 15 / 45%);
+  backdrop-filter: blur(8px);
 }
 .duplay .icon, .duplay .icon svg { width: 36px; height: 36px; display: block; }
 /* Until the preview arrives the caption sits on the placeholder, where white
    would vanish. */
 .dupefig:not(.ready) .dupesize { color: var(--muted); text-shadow: none; }
-@media (max-width: 1000px) {
+@media (width <= 1000px) {
   .duplay { width: 40px; height: 40px; }
   .duplay .icon, .duplay .icon svg { width: 28px; height: 28px; }
 }
@@ -2116,7 +2112,7 @@ button.danger:not(.btn, .iconbtn) {
   color: var(--warn); background: color-mix(in oklab, var(--warn) 16%, transparent);
 }
 
-@media (max-width: 640px) {
+@media (width <= 640px) {
   .dupetiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem .9rem; }
   .dupebulk .dupespace { margin-left: 0; width: 100%; justify-content: space-between; }
 }
@@ -2130,7 +2126,7 @@ dialog.confirm {
   color: var(--text); background: var(--bg-2);
   border: 1px solid var(--line-2); border-radius: var(--radius);
 }
-dialog.confirm::backdrop { background: rgba(6, 7, 10, .6); }
+dialog.confirm::backdrop { background: rgb(6 7 10 / 60%); }
 dialog.confirm h2 { margin: 0 0 .5rem; font-size: 17px; text-wrap: balance; }
 dialog.confirm p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
 dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.2rem; }
@@ -2138,7 +2134,7 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
 .bingal .video-badge {
   position: absolute; top: 8px; right: 8px; z-index: 3;
   padding: 2px 6px; border-radius: 4px;
-  font-size: 10.5px; color: #fff; background: rgba(10, 11, 15, .72);
+  font-size: 10.5px; color: #fff; background: rgb(10 11 15 / 72%);
 }
 
 /* ------------------------------------------------------------ Log grid -- */
@@ -2173,7 +2169,7 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
 /* Undo sits top right, clear of the caption, which is what identifies the file. */
 .logtile .acts {
   top: 0; bottom: auto; justify-content: flex-end;
-  background: linear-gradient(to bottom, rgba(10, 11, 15, .7), transparent);
+  background: linear-gradient(to bottom, rgb(10 11 15 / 70%), transparent);
 }
 .logtile.fav::before { display: none; }
 .logtile .cap a { color: inherit; }
@@ -2204,8 +2200,8 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
 /* The Bin and Log footer keeps its buttons on one row; the hint gives way first. */
 .fbar.binbar .fleft { flex: none; flex-wrap: nowrap; }
 .fbar.binbar .fright { flex: 1 1 0; min-width: 0; justify-content: flex-end; text-align: right; }
-@media (max-width: 960px) { .fbar.binbar .fright { display: none; } }
-@media (max-width: 720px) { .fbar.binbar .fleft { flex-wrap: wrap; } }
+@media (width <= 960px) { .fbar.binbar .fright { display: none; } }
+@media (width <= 720px) { .fbar.binbar .fleft { flex-wrap: wrap; } }
 
 /* A small segmented control: the theme choice in Settings. */
 .segmented { display: inline-flex; margin: .6rem 0 .2rem; padding: 2px; gap: 2px; background: var(--bg-3); border: 1px solid var(--line-2); border-radius: var(--radius); }
@@ -2217,8 +2213,8 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
 
 /* The action bar belongs to the page, so beside the sidebar it spans the panel
    only, and floats as a rounded bar like Google Photos' selection bar. */
-@media (min-width: 1001px) {
-  .fbar { left: calc(var(--side-w) + 16px); right: 32px; bottom: 16px; border: 1px solid var(--line-2); border-radius: 16px; box-shadow: 0 6px 24px rgba(0,0,0,.3); }
+@media (width >= 1001px) {
+  .fbar { left: calc(var(--side-w) + 16px); right: 32px; bottom: 16px; border: 1px solid var(--line-2); border-radius: 16px; box-shadow: 0 6px 24px rgb(0 0 0 / 30%); }
   body:has(.fbar) { padding-bottom: 6rem; }
 }
 
@@ -2245,7 +2241,7 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
 .psetup .pcommand .btn { flex: none; min-width: 5rem; justify-content: center; margin-top: .2rem; }
 .psetup .psetupstate { min-height: 1.6rem; margin-top: .2rem; font-size: 13.5px; color: var(--muted); }
 .psetup .psetupstate .note { margin: 0; }
-@media (max-width: 520px) {
+@media (width <= 520px) {
   .psetup .pcommand { flex-direction: column; align-items: stretch; }
   .psetup .pcommand .btn { margin-top: 0; }
 }
@@ -2269,18 +2265,18 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
   background: none; border: 0; border-radius: 50%; cursor: pointer;
   opacity: 0; transition: opacity var(--ease);
 }
-.pick svg { width: 24px; height: 24px; overflow: visible; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
-.pick circle { fill: rgba(0,0,0,.12); stroke: #fff; stroke-width: 2; }
+.pick svg { width: 24px; height: 24px; overflow: visible; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 45%)); }
+.pick circle { fill: rgb(0 0 0 / 12%); stroke: #fff; stroke-width: 2; }
 .pick path { fill: none; stroke: transparent; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-.pick:hover circle { fill: rgba(255,255,255,.28); }
+.pick:hover circle { fill: rgb(255 255 255 / 28%); }
 .pick[aria-checked="true"] circle { fill: var(--accent); stroke: var(--accent); }
 .pick[aria-checked="true"] path { stroke: var(--on-accent); }
 .pick:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 0; }
 :is(.rt, .mo):hover .pick, main.selecting .pick, .pick[aria-checked="true"] { opacity: 1; }
 /* A dark wash at the top keeps the white tick legible on a bright sky. */
 :is(.rt, .mo):has(.pick)::before {
-  content: ""; position: absolute; inset: 0 0 auto 0; height: 56px; z-index: 3;
-  background: linear-gradient(rgba(0,0,0,.32), transparent);
+  content: ""; position: absolute; inset: 0 0 auto; height: 56px; z-index: 3;
+  background: linear-gradient(rgb(0 0 0 / 32%), transparent);
   opacity: 0; transition: opacity var(--ease); pointer-events: none;
 }
 :is(.rt, .mo):hover::before, main.selecting :is(.rt, .mo)::before { opacity: 1; }
@@ -2298,7 +2294,6 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
   background: var(--bg-3); cursor: pointer;
 }
 .rt > img, .rt > video, .rt > .actual-media { display: block; width: 100%; height: 100%; object-fit: cover; }
-.rt .media-missing { position: absolute; inset: 0; }
 .rt img { transition: transform var(--ease), border-radius var(--ease); }
 .rt.picked { background: color-mix(in oklab, var(--accent) 22%, var(--bg-3)); }
 .rt.picked img, .rt.picked .actual-media { transform: scale(.86); border-radius: 8px; }
@@ -2307,12 +2302,12 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
   position: absolute; top: 9px; right: 10px; z-index: 4;
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 12.5px; font-weight: 500; color: #fff;
-  font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px rgba(0,0,0,.7);
+  font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
   pointer-events: none;
 }
 .rt .dur .icon, .rt .dur .icon svg { width: 18px; height: 18px; }
 .rt .bdg { top: auto; bottom: 8px; left: 8px; }
-@media (max-width: 600px) { .rows { --row: 128px; gap: 3px; } }
+@media (width <= 600px) { .rows { --row: 128px; gap: 3px; } }
 
 /* A page title with its one page-wide action at the far right, as Google
    Photos puts Empty trash. */
@@ -2338,7 +2333,7 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
 /* In a rows grid the round tick and the corner marks say what a file is; the
    old "Video" chip would only repeat it. */
 .rt .video-badge { display: none; }
-.rt .media-missing { display: grid; place-content: center; gap: 2px; padding: 8px; text-align: center; }
+.rt .media-missing { position: absolute; inset: 0; display: grid; place-content: center; gap: 2px; padding: 8px; text-align: center; }
 /* Every file waiting to be deleted shares one countdown most of the time, so
    the chip only shows on the tile under the pointer; a failure always shows. */
 .rt.gone .bdg .b:not(.warn) { opacity: 0; transition: opacity var(--ease); }
@@ -2348,4 +2343,4 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
    phone's narrow tiles a clip keeps its play mark and drops the length, which
    would otherwise run into the tick. */
 @media (hover: none) { .pick { opacity: .9; } :is(.rt, .mo):has(.pick)::before { opacity: 1; } }
-@media (max-width: 600px) { .rt .dur { font-size: 0; gap: 0; top: 10px; right: 8px; } }
+@media (width <= 600px) { .rt .dur { font-size: 0; gap: 0; top: 10px; right: 8px; } }

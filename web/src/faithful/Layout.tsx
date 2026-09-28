@@ -97,7 +97,9 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
         onChange={event=>{setValue(event.target.value);setProblem('');setActive(0)}} onKeyDown={keys}/>
       {filters&&<FilterButton filters={filters} button={filterButton} open={open==='filters'} onToggle={()=>setOpen(current=>current==='filters'?null:'filters')}/>}
       {problem&&<p id="search-problem" className="searchproblem" role="alert">{problem}</p>}
+      {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role -- the combobox's listbox, see the options below */}
       {listing&&<ul id="search-suggestions" className="searchsuggest" role="listbox" aria-label="Filters">
+        {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-to-interactive-role -- a combobox: focus stays in the field, whose arrow keys and Enter drive these options */}
         {suggestions.map((option,index)=><li key={option.id} id={`search-suggestion-${index}`} role="option" aria-selected={index===Math.min(active,suggestions.length-1)}
           onPointerDown={event=>event.preventDefault()} onClick={()=>pick(option)} onPointerEnter={()=>setActive(index)}>
           <Icon name={option.icon} filled={option.on}/><span className="label">{option.on?'Stop showing only':'Show only'} <b>{option.label.toLowerCase()}</b></span><span className="n">{option.count.toLocaleString()}</span>

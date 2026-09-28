@@ -42,7 +42,9 @@ export function usePhotoURL(has:(id:string)=>boolean|undefined,enabled=true){
     window.addEventListener('popstate',pop);
     return()=>window.removeEventListener('popstate',pop);
   },[enabled]);
-  // The photo named by the address is checked once the page knows its list.
+  // The photo named by the address is checked once the page knows its list,
+  // so this looks after every render until it has settled.
+  // oxlint-disable-next-line react/exhaustive-deps -- runs until settled, see above
   useEffect(()=>{
     if(!enabled||settled.current)return;
     const id=photoInAddress();

@@ -15,8 +15,8 @@ const svg=(w,h,fill)=>`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" heig
   const page=await browser.newPage({viewport:{width:1400,height:1000}});
   const previews=[];let posted=null;
   await page.route('**/api/duplicate-report**',route=>route.fulfill({json:report}));
-  await page.route(/\/api\/media\/9\d\/preview/,route=>{const id=Number(/media\/(\d+)/.exec(route.request().url())[1]);previews.push(id);route.fulfill({contentType:'image/svg+xml',body:id===93?svg(600,800,'#6b8f71'):svg(800,533,'#4d6f94')})});
-  await page.route('**/api/decisions/batch',route=>{posted=JSON.parse(route.request().postData());route.fulfill({json:posted.map(change=>({...change,revision:1}))})});
+  await page.route(/\/api\/media\/9\d\/preview/,route=>{const id=Number(/media\/(\d+)/.exec(route.request().url())[1]);previews.push(id);return route.fulfill({contentType:'image/svg+xml',body:id===93?svg(600,800,'#6b8f71'):svg(800,533,'#4d6f94')})});
+  await page.route('**/api/decisions/batch',route=>{posted=JSON.parse(route.request().postData());return route.fulfill({json:posted.map(change=>({...change,revision:1}))})});
   // A set of one, which the server should never send, is not offered.
   report.groups.push({hash:'dddd',size:1000,reclaimable:0,members:[member(97,'/archive/2026/2026-07/2026-07-25/A7401914-2.ARW','2026-07-25','raw')]});
   await page.goto((process.env.APP_URL||'http://127.0.0.1:8850').replace(/\/$/,'')+'/duplicates');
@@ -28,7 +28,7 @@ const svg=(w,h,fill)=>`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" heig
   assert.match(headings[1],/2025/);
   assert.match(headings[2],/2024/);
   assert.deepEqual(await page.locator('.dupegroup').nth(0).locator('.dupesize').allInnerTexts(),['3.4 MB','3.4 MB']);
-  assert.deepEqual([...new Set(previews)].sort(),[91,93,95],'one preview per set, however many copies');
+  assert.deepEqual([...new Set(previews)].sort((a,b)=>a-b),[91,93,95],'one preview per set, however many copies');
   // A portrait set keeps its shape inside the square cell.
   const portrait=await page.locator('.dupegroup').nth(0).locator('.dupefig').first().boundingBox();
   const cell=await page.locator('.dupegroup').nth(0).locator('.dupecell').first().boundingBox();

@@ -41,7 +41,7 @@ export function pathForDate(input:string):string|null{
 /** The day page a file is filed under, found from the first date in its path
  * (the day folder, or a screenshot's date-stamped name), or null. */
 export function dayOfPath(path:string):string|null{
-  const match=path.match(/(?:^|\/)(\d{4})-(\d{2})-(\d{2})(?=[\/_ .]|$)/);
+  const match=path.match(/(?:^|\/)(\d{4})-(\d{2})-(\d{2})(?=[/_ .]|$)/);
   return match?target(+match[1],+match[2],+match[3]):null;
 }
 

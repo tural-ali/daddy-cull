@@ -12,7 +12,7 @@ const assert=require('node:assert/strict');
    const d=route.request().postDataJSON();requests.push(d);await new Promise(r=>setTimeout(r,200));
    if(fail)return route.fulfill({status:503,body:'offline'});
    if(receipts.has(d.requestId))return route.fulfill({json:receipts.get(d.requestId)});
-   const a=assets.find(a=>a.id===d.assetId);assert.equal(d.expectedRevision,a.revision);
+   const a=assets.find(asset=>asset.id===d.assetId);assert.equal(d.expectedRevision,a.revision);
    const result={revision:a.revision+1,previousStatus:a.status,previousFavourite:a.favourite};Object.assign(a,{status:d.status,revision:result.revision,favourite:d.favourite});receipts.set(d.requestId,result);return route.fulfill({json:result});
   }
   return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"/>'});

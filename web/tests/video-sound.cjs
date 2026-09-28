@@ -106,6 +106,7 @@ async function playing(page){await page.waitForFunction(()=>{const v=document.qu
   await mock(guarded);
   await guarded.addInitScript(()=>{
     sessionStorage.setItem('cull.video-sound',JSON.stringify({muted:false,volume:0.7}));
+    // oxlint-disable-next-line typescript/unbound-method -- called below with the element as this
     const play=HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play=function(){return this.muted?play.call(this):Promise.reject(new DOMException('play() needs a user gesture','NotAllowedError'))};
   });

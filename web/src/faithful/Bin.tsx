@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useEffectEvent,useRef,useState} from 'react';
 import {FilePreview} from '../Media';
 import {binChanged} from '../api';
 import {Icon} from '../Icon';
@@ -93,7 +93,8 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
       setItems(next);onCount?.(next.length);
     }catch(reason){setError((reason as Error).message)}
   }
-  useEffect(()=>{void refresh()},[]);
+  const firstRead=useEffectEvent(()=>{void refresh()});
+  useEffect(()=>firstRead(),[]);
   useEffect(()=>{
     const element=dialog.current;
     if(!element)return;
@@ -227,7 +228,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
           {waiting&&<div className="bdg"><span className={`b${waiting.lastError?' warn':''}`}>{waiting.lastError?'Could not delete':`Goes ${countdown(waiting.dueAt)}`}</span></div>}
         </RowTile>})}
     </Rows>}
-    {photo.open!==null&&previews.length>0&&<Lightbox items={previews} initialKey={photo.open} onClose={photo.close} onMove={photo.moved} actions={current=>{
+    {photo.open!==null&&previews.length>0&&<Lightbox items={previews} initialKey={photo.open} onClose={photo.close} onMove={photo.moved} renderActions={current=>{
       // The writer's own batches give back one photograph at a time; the other
       // engines move a batch only as a whole, so the button says so.
       const item=list.find(other=>other.key===current.key);
@@ -236,6 +237,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
       if(item.source==='bin'||batch===1)return <button type="button" className="rvbtn" disabled={!!busy} onClick={()=>restoreFile(item)}>{face('lightbox','Restore this file')}</button>;
       return <button type="button" className="rvbtn" disabled={!!busy} onClick={()=>restore([current.key],'lightbox')}>{face('lightbox',`Restore with its batch (${batch} files)`)}</button>;
     }}/>}
+    {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- a click on the backdrop is the mouse's Esc */}
     <dialog ref={dialog} className="confirm" aria-labelledby={`confirm-title-${mode}`} onClose={()=>setPending(null)} onClick={event=>{if(event.target===event.currentTarget)setPending(null)}}>
       {pending&&<form method="dialog" onSubmit={event=>{event.preventDefault();const run=pending.run;setPending(null);void run()}}>
         <h2 id={`confirm-title-${mode}`}>{pending.title}</h2>

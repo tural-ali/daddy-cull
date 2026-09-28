@@ -166,6 +166,7 @@ export function StreakIntro({streak,target,onDone}:{streak:StreakState;target:Re
     ],{duration:flightTime,easing:ease,fill:'forwards'});
     flight?.finished.then(()=>done.current(),()=>done.current());
   },[phase,target]);
+  // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- a click skips the intro, as any key does
   return <div className="streakintro" role="dialog" aria-modal="true" aria-label={`${streak.days} ${unit(streak.days)} in a row`} onClick={()=>setPhase('fly')}>
     <div ref={scrim} className="introscrim"/>
     {phase==='party'&&<Confetti/>}

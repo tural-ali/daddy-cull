@@ -3,7 +3,7 @@ import {Layout,type LegacyRoute} from './Layout';
 import {dayName} from './goto';
 import {Today,type TodayData} from './Today';
 import {Year,type YearData} from './Year';
-import {Duplicates,type DuplicateGroup,type DuplicateReport} from './Duplicates';
+import {Duplicates,type DuplicateReport} from './Duplicates';
 import {Settings,type Stats} from './Settings';
 import {setVideoSoundPreference} from '../SessionVideo';
 import {Log,logPage,type HistoryEvent} from './Log';
@@ -99,37 +99,37 @@ export function App(){
     window.addEventListener(CATALOGUE_CHANGED,reread);
     return()=>{controller.abort();clearTimeout(timer);window.removeEventListener(BIN_CHANGED,reread);window.removeEventListener(BIN_CHANGED,worked);window.removeEventListener(CATALOGUE_CHANGED,reread)};
   },[recovered]);
-  const load=useCallback(async()=>{
+  const load=useCallback(async():Promise<PageState>=>{
     const route=routeFor(path);
       if(path.startsWith('/on/')){
         const md=path.slice(4);
         const data=await json<TodayData>(`/api/today/${md}`);
-        return {route,content:<Today initial={data}/>} as PageState;
+        return {route,content:<Today initial={data}/>};
       }
       if(/^\/day\/\d{4}-\d{2}-\d{2}$/.test(path)){
         const day=path.slice(5),md=day.slice(5),data=await json<TodayData>(`/api/today/${md}`);
         const years=data.years.filter(year=>year.day===day);
         const oneDay={...data,years,memories:years.reduce((sum,year)=>sum+year.assets.length,0),bytes:years.reduce((sum,year)=>sum+year.bytes,0)};
-        return {route:'today',content:<Today initial={oneDay}/>} as PageState;
+        return {route:'today',content:<Today initial={oneDay}/>};
       }
-      if(path==='/year')return {route,content:<Year {...await json<YearData>(`/api/year?tz=${zone}`)}/>} as PageState;
+      if(path==='/year')return {route,content:<Year {...await json<YearData>(`/api/year?tz=${zone}`)}/>};
       // Coverage against the files that could possibly be duplicates is what makes
       // an empty result readable: no groups found is a different statement from no
       // groups because nothing was ever hashed.
-      if(path==='/duplicates')return {route,content:<Duplicates report={await json<DuplicateReport>('/api/duplicate-report?limit=1000')}/>} as PageState;
-      if(path==='/upgrades')return {route,content:<Upgrades initial={await json<UpgradePage>('/api/upgrades')}/>} as PageState;
-      if(path==='/log')return {route,content:<Log initial={await json<HistoryEvent[]>(`/api/log?limit=${logPage}`)}/>} as PageState;
-      if(path==='/photos')return {route,content:<Photos/>} as PageState;
-      if(path==='/bin')return {route,content:<Bin onCount={count=>setStats(current=>current&&{...current,bin:count})}/>} as PageState;
-      if(path==='/settings')return {route,content:<Settings stats={await json<Stats>(`/api/stats?tz=${zone}`)}/>} as PageState;
-      if(path==='/shadows')return {route,content:<Shadows groups={await json<Parameters<typeof Shadows>[0]['groups']>('/api/shadows')}/>} as PageState;
+      if(path==='/duplicates')return {route,content:<Duplicates report={await json<DuplicateReport>('/api/duplicate-report?limit=1000')}/>};
+      if(path==='/upgrades')return {route,content:<Upgrades initial={await json<UpgradePage>('/api/upgrades')}/>};
+      if(path==='/log')return {route,content:<Log initial={await json<HistoryEvent[]>(`/api/log?limit=${logPage}`)}/>};
+      if(path==='/photos')return {route,content:<Photos/>};
+      if(path==='/bin')return {route,content:<Bin onCount={count=>setStats(current=>current&&{...current,bin:count})}/>};
+      if(path==='/settings')return {route,content:<Settings stats={await json<Stats>(`/api/stats?tz=${zone}`)}/>};
+      if(path==='/shadows')return {route,content:<Shadows groups={await json<Parameters<typeof Shadows>[0]['groups']>('/api/shadows')}/>};
       if(path==='/social'){
         const params=new URLSearchParams(location.search),band=params.get('band')||'',from=Math.max(0,Number.parseInt(params.get('from')||'0',10)||0);
-        return {route,content:<Social page={await json<SocialPage>(`/api/social?band=${encodeURIComponent(band)}&from=${from}`)} band={band} from={from}/>} as PageState;
+        return {route,content:<Social page={await json<SocialPage>(`/api/social?band=${encodeURIComponent(band)}&from=${from}`)} band={band} from={from}/>};
       }
       if(path==='/screenshots'){
         const params=new URLSearchParams(location.search),filter=params.get('show')||'',review=params.get('review')==='reviewed'?'reviewed':'',from=Math.max(0,Number.parseInt(params.get('from')||'0',10)||0);
-        return {route,content:<Screenshots page={await json<ScreenshotPage>(`/api/screenshots?kind=${encodeURIComponent(filter)}&review=${review}&from=${from}`)} filter={filter} review={review} from={from}/>} as PageState;
+        return {route,content:<Screenshots page={await json<ScreenshotPage>(`/api/screenshots?kind=${encodeURIComponent(filter)}&review=${review}&from=${from}`)} filter={filter} review={review} from={from}/>};
       }
       throw new Error('This legacy workflow has not been connected yet.');
   },[path]);

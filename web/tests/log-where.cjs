@@ -28,7 +28,7 @@ const events=[event(0),event(1,'bin'),event(2,'deleting'),event(3,'deleted')];
   const tile=id=>page.locator(`.logtile[data-asset="${id}"]`);
   await tile(1).waitFor();
   await page.waitForFunction(()=>document.querySelectorAll('.logtile img').length===3);
-  assert.deepEqual([...media].sort(),['1','2','3'],'every file still on disk is shown, from wherever it is');
+  assert.deepEqual([...media].sort((a,b)=>a.localeCompare(b)),['1','2','3'],'every file still on disk is shown, from wherever it is');
 
   assert.equal(await tile(1).getByRole('button',{name:'Undo'}).count(),1,'a file in its day folder can be undone');
   for(const [id,label] of [[2,'In the Bin'],[3,'Waiting to go']]){

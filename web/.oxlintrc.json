@@ -1,0 +1,55 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "react", "jsx-a11y", "import", "promise"],
+  "categories": {
+    "correctness": "error"
+  },
+  "env": { "browser": true, "es2024": true },
+  "options": {
+    "typeAware": true,
+    "reportUnusedDisableDirectives": "error"
+  },
+  "rules": {
+    // Hooks: the rules that catch real React bugs.
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error",
+    "react/no-unstable-nested-components": "error",
+
+    // Promises and types, checked with the TypeScript 7 type checker.
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
+
+    // Everything a mouse can do, a keyboard can do.
+    "jsx-a11y/click-events-have-key-events": "error",
+    "jsx-a11y/no-static-element-interactions": "error",
+    "jsx-a11y/no-noninteractive-element-interactions": "error",
+    "jsx-a11y/interactive-supports-focus": "error",
+    "jsx-a11y/no-noninteractive-tabindex": "error",
+
+    "eslint/no-shadow": "error",
+    "eslint/no-unused-expressions": "error",
+
+    // The new JSX runtime needs no React in scope.
+    "react/react-in-jsx-scope": "off",
+    // role="dialog" on a div is what the popovers are: a <dialog> element
+    // renders hidden until opened, and <output> belongs to forms.
+    "jsx-a11y/prefer-tag-over-role": "off",
+    // These guard code for the React Compiler, which this app does not use.
+    // The latest-value ref and state reset in an effect are deliberate here.
+    "react/refs": "off",
+    "react/set-state-in-effect": "off",
+    "react/purity": "off",
+    "react/immutability": "off",
+    // Made for Node callbacks; here it only mistakes a value named next for one.
+    "promise/no-callback-in-promise": "off"
+  },
+  "overrides": [
+    {
+      "files": ["tests/**/*.cjs"],
+      "env": { "node": true, "browser": true }
+    }
+  ],
+  "ignorePatterns": ["dist/**"]
+}

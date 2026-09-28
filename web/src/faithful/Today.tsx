@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useRef,useState} from 'react';
+import {useEffect,useEffectEvent,useMemo,useRef,useState} from 'react';
 import {binChanged,type Asset,type Status} from '../api';
 import {Media} from '../Media';
 import {useDecisionQueue} from '../useDecisionQueue';
@@ -217,8 +217,8 @@ export function Today({initial}:{initial:TodayData}){
   }
   /** Splits a pair so the RAW is a photo of its own, or joins it again. */
   async function pairing(raw:number,partner:number,paired:boolean,remember=true){
-    const photo=assets.find(asset=>asset.id===partner);
-    const name=photo?fileName(photo):'the photo';
+    const partnerAsset=assets.find(asset=>asset.id===partner);
+    const name=partnerAsset?fileName(partnerAsset):'the photo';
     try{
       await setPaired(raw,partner,paired);
       patchAsset(raw,{pair:paired?partner:undefined});
@@ -306,6 +306,10 @@ export function Today({initial}:{initial:TodayData}){
     window.addEventListener('keydown',key);
     return()=>window.removeEventListener('keydown',key);
   });
+  const decideKey=useEffectEvent((asset:Asset,key:string)=>{
+    if(key==='x')save(asset,asset.status==='cull'?'unreviewed':'cull');
+    if(key==='f')save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite);
+  });
   useEffect(()=>{
     function key(event:KeyboardEvent){
       if(viewer!==null||event.ctrlKey||event.metaKey||event.altKey||event.target instanceof HTMLButtonElement||typing(event.target))return;
@@ -319,8 +323,7 @@ export function Today({initial}:{initial:TodayData}){
       }else if(!event.repeat&&selected!==null){
         const asset=shown.find(item=>item.id===selected);
         if(!asset)return;
-        if(event.key.toLowerCase()==='x')save(asset,asset.status==='cull'?'unreviewed':'cull');
-        if(event.key.toLowerCase()==='f')save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite);
+        decideKey(asset,event.key.toLowerCase());
       }
     }
     window.addEventListener('keydown',key);
@@ -400,7 +403,10 @@ export function Today({initial}:{initial:TodayData}){
       const memories=year.assets.filter(asset=>!hidden.has(asset.id)).length;
       return <section className={`yr${year.status==='done'?' settled':''}`} key={year.day}>
       <div className="yhead"><h2>{year.year}{year.status==='done'&&<span className="tag done">reviewed</span>}{(year.fresh??0)>0&&<span className="tag fresh" title="Reached the archive since this date was last opened"><span className="freshdot" aria-hidden="true"/>{year.fresh!.toLocaleString()} new</span>}</h2><p className="ymeta"><span>{memories.toLocaleString()} {memories===1?'memory':'memories'}{memories!==year.files&&<span className="dim"> from {year.files.toLocaleString()} files</span>}</span><span className="dim">{bytes(year.bytes)}</span></p></div>
-      {year.assets.length===0?<p className="note">Nothing left in this folder.</p>:<div className="gal">{year.assets.filter(asset=>shownIDs.has(asset.id)).map(asset=><figure className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}`} key={asset.id} data-asset={asset.id} onClick={()=>{setSelected(asset.id);photo.show(asset.id)}} tabIndex={0}>
+      {year.assets.length===0?<p className="note">Nothing left in this folder.</p>:<div className="gal">{year.assets.filter(asset=>shownIDs.has(asset.id)).map(asset=>
+        // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex -- a tile holds its own buttons, so it cannot be one; it is the grid's focus stop and opens on Enter
+        <figure tabIndex={0} className={`mo${asset.favourite?' fav':''}${asset.status!=='unreviewed'?' seen':''}${asset.status==='cull'?' culled':''}${selected===asset.id?' sel':''}`} key={asset.id} data-asset={asset.id} onClick={()=>{setSelected(asset.id);photo.show(asset.id)}}
+        onKeyDown={event=>{if(event.target===event.currentTarget&&(event.key==='Enter'||event.key===' ')){event.preventDefault();setSelected(asset.id);photo.show(asset.id)}}}>
         <Media asset={asset}/>
         <div className="bdg">{asset.new&&asset.status==='unreviewed'&&<span className="b new">new</span>}{behind.has(asset.id)&&<span className="b pair">{pairLabel(asset)}</span>}{(asset.relatedCount??0)>(behind.has(asset.id)?1:0)&&<span className="b dupe">duplicate</span>}</div>
         <div className="acts"><button type="button" className="act cull" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':'cull')}}>{asset.status==='cull'?'Undo':'Remove'}</button><button type="button" className="act fav" disabled={!queue.ready} aria-pressed={asset.favourite} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite)}}>♡</button></div>
@@ -415,6 +421,6 @@ export function Today({initial}:{initial:TodayData}){
     </Snacks>}
     {cheer&&<Celebration tally={cheer} nextHref={`/on/${initial.next}`} nextLabel={calendarLabel(initial.next)} onClose={()=>setCheer(null)}/>}
     {viewing!==null&&<Viewer assets={walked} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset} onRecord={history.record}
-      rawOf={asset=>behind.get(asset.id)} onUnpair={(photo,raw)=>void pairing(raw.id,photo.id,false)}/>}
+      rawOf={asset=>behind.get(asset.id)} onUnpair={(still,raw)=>void pairing(raw.id,still.id,false)}/>}
   </>;
 }

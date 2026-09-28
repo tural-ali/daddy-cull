@@ -129,7 +129,7 @@ export function DateCalendar({date,anchor,onClose}:{date:PageDate;anchor:RefObje
       </div>
     </div>
     <MonthNav title={monthName} sub={year?`${reviewed.toLocaleString()} of ${plural(filed.length,'date')} reviewed`:undefined} onStep={step}/>
-    <div ref={grid} className="calgrid" role="grid" aria-label={monthName} aria-busy={!year&&!failed} onKeyDown={walk}>
+    <div ref={grid} className="calgrid" role="grid" tabIndex={-1} aria-label={monthName} aria-busy={!year&&!failed} onKeyDown={walk}>
       {weekdays.map((day,index)=><span key={index} className="dow" aria-hidden="true">{day}</span>)}
       {Array.from({length:leadDays(layoutYear,month)},(_,index)=><span key={`lead${index}`}/>)}
       {days.map(({md,dom,cell})=><a key={md} href={`/on/${md}`} data-md={md} role="gridcell" tabIndex={md===focusable?0:-1}

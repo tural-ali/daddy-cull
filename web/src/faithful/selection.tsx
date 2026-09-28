@@ -83,7 +83,8 @@ export function usePicks<T,K extends string|number=number>(items:T[],id:(item:T)
   // A selection only ever names what the list still holds.
   const present=new Set(items.map(id));
   const stale=[...picked].some(key=>!present.has(key));
-  useEffect(()=>{if(stale)setPicked(previous=>new Set([...previous].filter(key=>present.has(key))))});
+  // Adjusted while rendering, as React advises for state derived from props.
+  if(stale)setPicked(new Set([...picked].filter(key=>present.has(key))));
   return {picked,toggle,clear,all,setPicked};
 }
 

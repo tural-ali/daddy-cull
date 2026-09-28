@@ -10,7 +10,7 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
 const shots=process.env.SHOTS;
 const pad=value=>String(value).padStart(2,'0');
 // September: the 1st reviewed, the 2nd partly, the 3rd empty, the rest to do.
-const months=Array.from({length:12},(_,month)=>({name:'',cells:Array.from({length:31},(_,index)=>{
+const months=Array.from({length:12},(_,month)=>({name:'',cells:Array.from({length:31},(_day,index)=>{
   const days=new Date(2000,month+1,0).getDate();
   if(index>=days)return null;
   const md=`${pad(month+1)}-${pad(index+1)}`;

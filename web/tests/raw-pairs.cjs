@@ -66,7 +66,7 @@ const colours={1:'#7a5b3a',2:'#2f4f6f',3:'#4f6f2f',4:'#6f2f4f',5:'#3a6b6b'};
   assert.deepEqual(await tileIDs(),[2,3,4,5],'the removed pair stays one tile');
   await page.keyboard.press(process.platform==='darwin'?'Meta+z':'Control+z');
   await saved(4);
-  assert.deepEqual(decisions.slice(2).map(d=>[d.assetId,d.status]).sort(),[[1,'unreviewed'],[2,'unreviewed']]);
+  assert.deepEqual(decisions.slice(2).map(d=>[d.assetId,d.status]).sort((a,b)=>a[0]-b[0]),[[1,'unreviewed'],[2,'unreviewed']]);
   await page.getByRole('status').filter({hasText:'Undone: removed A7404251.JPG and its RAW.'}).waitFor();
 
   // The viewer shows the JPEG and, on request, the RAW.
