@@ -74,20 +74,30 @@ export function Pick({checked,label,onToggle}:{checked:boolean;label:string;onTo
  * tile clicked. */
 export function usePicks<T,K extends string|number=number>(items:T[],id:(item:T)=>K){
   const [picked,setPicked]=useState<Set<K>>(new Set());
-  const anchor=useRef<number|null>(null);
+  // The last tile clicked, by id, so it holds as files leave the list.
+  const anchor=useRef<K|null>(null);
   function toggle(index:number,extend:boolean){
     const key=id(items[index]);
+    // The run is found now: the update below runs later, after the anchor has moved.
+    const from=extend&&anchor.current!==null?items.findIndex(item=>id(item)===anchor.current):-1;
     setPicked(previous=>{
       const next=new Set(previous);
-      if(extend&&anchor.current!==null){
-        const start=Math.min(anchor.current,index),end=Math.max(anchor.current,index),adding=!next.has(key);
+      if(from>=0){
+        const start=Math.min(from,index),end=Math.max(from,index),adding=!next.has(key);
         for(let i=start;i<=end;i++){if(adding)next.add(id(items[i]));else next.delete(id(items[i]))}
         return next;
       }
       if(next.has(key))next.delete(key);else next.add(key);
       return next;
     });
-    anchor.current=index;
+    anchor.current=key;
+  }
+  /** A click on a tile: while anything is selected, or with Shift held, it
+   * selects rather than opens. Says whether it did. */
+  function tap(index:number,shift:boolean){
+    if(picked.size===0&&!shift)return false;
+    toggle(index,shift);
+    return true;
   }
   function clear(){setPicked(new Set());anchor.current=null}
   function all(){setPicked(new Set(items.map(id)));anchor.current=null}
@@ -96,7 +106,7 @@ export function usePicks<T,K extends string|number=number>(items:T[],id:(item:T)
   const stale=[...picked].some(key=>!present.has(key));
   // Adjusted while rendering, as React advises for state derived from props.
   if(stale)setPicked(new Set([...picked].filter(key=>present.has(key))));
-  return {picked,toggle,clear,all,setPicked};
+  return {picked,toggle,tap,clear,all,setPicked};
 }
 
 /** A row-filling grid, as in Google Photos: every tile keeps its picture's

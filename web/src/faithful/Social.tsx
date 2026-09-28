@@ -168,7 +168,7 @@ export function Social({page,band:initialBand}:{page:SocialPage;band:string}){
           const detail=[item.day||'undated',bytes(item.size),item.duration>0?clock(item.duration):''].filter(Boolean).join(' · ');
           const picked=selected.has(item.id);
           return <RowTile className={`social${picked?' picked':''}`} key={item.id} data-asset={item.id} ratio={item.width>0&&item.height>0?item.width/item.height:undefined} title={detail}
-            onClick={event=>{if(event.shiftKey&&selected.size>0)picks.toggle(index,true);else photo.show(item.id)}}>
+            onClick={event=>{if(!picks.tap(index,event.shiftKey))photo.show(item.id)}}>
             {item.poster
               ? <img src={`/api/social-poster/${item.id}`} alt={item.name} loading="lazy" decoding="async"/>
               : <div className="media-missing"><span>No still captured</span></div>}

@@ -224,7 +224,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
           ?`${waiting.lastError?`Could not delete, will retry: ${waiting.lastError}`:`Goes ${countdown(waiting.dueAt)}`} · ${bytes(item.size)}`
           :[bytes(item.size),item.sidecars>0?`+${item.sidecars} sidecar${item.sidecars===1?'':'s'}`:'',item.removedAt?`removed ${removed(item.removedAt)}`:'',item.disk??''].filter(Boolean).join(' · ');
         return <RowTile key={item.key} className={`gone${picked?' picked':''}${waiting&&parse(waiting.dueAt)<=Date.now()?' due':''}`} title={`${item.name}\n${item.original}\n${detail}`}
-          onClick={event=>{if(event.shiftKey&&picks.picked.size>0)picks.toggle(index,true);else if(item.preview)photo.show(item.key);else picks.toggle(index,false)}}>
+          onClick={event=>{if(!picks.tap(index,event.shiftKey)){if(item.preview)photo.show(item.key);else picks.toggle(index,false)}}}>
           {item.preview?<FilePreview base={item.preview} name={item.name} kind={item.kind}/>
             :<div className="media-missing"><span>{item.kind==='sidecar'?'Sidecar':'Preview unavailable'}</span><small>{item.name.split('.').pop()?.toUpperCase()}{item.kind==='sidecar'?' · its photograph has already left':''}</small></div>}
           <Pick checked={picked} label={`Select ${item.name}, ${detail}`} onToggle={extend=>picks.toggle(index,extend)}/>

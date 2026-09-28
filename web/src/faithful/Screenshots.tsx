@@ -218,7 +218,7 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
     <section className="dupehead">
       <h1>Screenshots</h1>
       <p className="ysum"><b>{total.toLocaleString()}</b> {review==='reviewed'?'reviewed':review===''?'to review':total===1?'screenshot':'screenshots'} · <b>{bytes(totalBytes)}</b></p>
-      <p className="hint">Nothing here is in the archive yet. Click a screenshot to look at it; <b>k</b> keeps it and <b>x</b> moves it to the Bin. Tick the circle on a tile to select several, and the actions appear at the top.
+      <p className="hint">Nothing here is in the archive yet. Click a screenshot to look at it; <b>k</b> keeps it and <b>x</b> moves it to the Bin. Tick the circle on a tile to select it, then click others to add them or Shift-click to add every one between. The actions appear at the top.
         <strong> Keep</strong> moves it to Reviewed without touching the file; from there <strong>Copy into the archive</strong> files it under the date in its name. <strong>Move to Bin</strong> stays recoverable.</p>
     </section>
     {message&&<p className="flash" role="status">{message} {undo&&<button className="btn small" disabled={busy} onClick={()=>void revert()}>Undo</button>}</p>}
@@ -229,7 +229,7 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
           const picked=picks.picked.has(item.id);
           const detail=[item.day||'undated',bytes(item.size)].join(' · ');
           return <RowTile className={picked?'picked':''} key={item.id} data-asset={item.id} ratio={shapeOf(item)} title={`${item.name} · ${detail}`}
-            onClick={event=>{if(event.shiftKey&&picks.picked.size>0)picks.toggle(index,true);else photo.show(item.id)}}>
+            onClick={event=>{if(!picks.tap(index,event.shiftKey))photo.show(item.id)}}>
             <Media asset={item}/>
             <Pick checked={picked} label={`Select ${item.name}, ${detail}`} onToggle={extend=>picks.toggle(index,extend)}/>
             {item.kind==='video'&&<span className="dur"><Icon name="play_circle"/></span>}

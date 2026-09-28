@@ -513,7 +513,7 @@ export function Today({initial}:{initial:TodayData}){
       onClick:()=>void saveMany(chosen,asset=>({id:asset.id,status:allRemoved?'unreviewed':'cull',favourite:asset.favourite}),`${allRemoved?'put back':'removed'} ${many}`).then(done=>{if(done&&!allRemoved)picks.clear()})},
   ]});
   function openOrPick(asset:Asset,extend:boolean){
-    if(picking){picks.toggle(place.get(asset.id)??0,extend);return}
+    if(picks.tap(place.get(asset.id)??0,extend))return;
     setSelected(asset.id);photo.show(asset.id);
   }
   usePageActions(assets.length>0&&doneYears<years.length?{actions:[{label:`Mark ${initial.label} reviewed`,short:'Mark reviewed',icon:'check',keys:'Shift+R',disabled:saving||queue.pending>0,onClick:()=>void markDate()}]}:null);
