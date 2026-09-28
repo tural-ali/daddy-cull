@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -536,5 +537,42 @@ func TestPhotosHubNeverPrintsItsKey(t *testing.T) {
 		if strings.Contains(printed, fakePhotosKey) || strings.Contains(printed, fmt.Sprintf("%x", h.keyHash[:4])) {
 			t.Fatalf("printed %q", printed)
 		}
+	}
+}
+
+// The page offers to update a helper older than the one this server was built
+// with, and the two version numbers are kept in one place each: a test, not a
+// reviewer, notices when Info.plist moves on without the server.
+func TestPhotosAgentVersionMatchesTheHelper(t *testing.T) {
+	plist, err := os.ReadFile("../../mac/CullSync/Info.plist")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "<key>CFBundleShortVersionString</key>\n\t<string>" + PhotosAgentVersion + "</string>"
+	if !strings.Contains(string(plist), want) {
+		t.Errorf("Info.plist does not say version %s", PhotosAgentVersion)
+	}
+	for _, c := range []struct {
+		a, b  string
+		older bool
+	}{
+		{"1.0", "1.1", true}, {"1.1", "1.1", false}, {"1.2", "1.1", false}, {"1", "1.1", true},
+		{"1.1.0", "1.1", false}, {"1.10", "1.9", false}, {"0.9", "1.0", true}, {"dev", "1.1", false}, {"", "1.1", false},
+	} {
+		if got := photosOlder(c.a, c.b); got != c.older {
+			t.Errorf("photosOlder(%q, %q) = %v", c.a, c.b, got)
+		}
+	}
+
+	hub, _, _ := photosHubFixture(t)
+	beat := func(version string) PhotosAgentView {
+		hub.Seen(PhotosHeartbeat{Version: version, Access: "authorized"})
+		return hub.Status().Agent
+	}
+	if agent := beat("1.0"); !agent.Outdated || agent.Latest != PhotosAgentVersion {
+		t.Errorf("a 1.0 helper is not offered an update: %+v", agent)
+	}
+	if beat(PhotosAgentVersion).Outdated {
+		t.Error("the current helper is offered an update")
 	}
 }

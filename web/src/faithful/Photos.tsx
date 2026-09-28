@@ -5,7 +5,7 @@ import {CullSyncSetup} from './CullSyncSetup';
 import {usePageActions} from './pageActions';
 
 type JobState='queued_check'|'checking'|'planned'|'queued_apply'|'applying'|'done'|'failed'|'cancelled';
-type Agent={online:boolean;lastSeen?:string;version?:string;access?:string};
+type Agent={online:boolean;lastSeen?:string;version?:string;access?:string;outdated?:boolean;latest?:string};
 type Summary={id:string;state:JobState;rev:number;stage?:string;message?:string;done:number;total:number;error?:string};
 type Status={configured:boolean;settling?:boolean;now:string;agent:Agent;job:Summary|null};
 type PhotosAsset={id:string;name:string;created:string;favourite:boolean;thumb?:string};
@@ -98,6 +98,7 @@ function access(agent:Agent){
 function setupIntro(status:Status){
   const agent=status.agent;
   if(!status.configured)return 'Cull Sync is the small app on your Mac that makes the changes in Photos. It is not set up yet. Set it up once, on the Mac that has your Photos library, and it keeps running from then on, starting again whenever you log in.';
+  if(agent.online&&agent.outdated)return `This Mac has Cull Sync ${agent.version}, and version ${agent.latest} is ready. Run the command on this same Mac to update it. macOS may ask again whether Cull Sync can use Photos: click Allow.`;
   if(agent.online)return 'Cull Sync is running. Set it up again only to update it or to move it to another Mac: whichever Mac runs this command takes over, and the key the old one has stops working.';
   if(agent.lastSeen)return `Cull Sync last answered ${ago(agent.lastSeen,status.now)}. If that Mac is asleep, wake it and this page will notice. If Cull Sync was removed or keeps failing, set it up again.`;
   return 'Cull Sync has not called in since the server started. If it is installed, make sure that Mac is awake and logged in. Otherwise, set it up now.';
@@ -295,11 +296,11 @@ export function Photos(){
     {status&&agent&&<div className={`phelper${agent.online?' online':''}`}>
       <span className="pdot" aria-hidden="true"/>
       <span>{!status.configured?<>Cull Sync is not set up yet, so Photos cannot be checked.</>
-        :agent.online?<>Cull Sync is running on the Mac{agent.version&&<span className="dim"> · version {agent.version}</span>}</>
+        :agent.online?<>Cull Sync is running on the Mac{agent.version&&<span className="dim"> · version {agent.version}</span>}{agent.outdated&&<span className="dim"> · version {agent.latest} is ready</span>}</>
         :agent.lastSeen?<>Cull Sync is not answering. Last seen {ago(agent.lastSeen,status.now)}. Is the Mac awake?</>
         :status.settling?<>Waiting for Cull Sync to call in…</>
         :<>Cull Sync has not connected yet.</>}</span>
-      <button type="button" className="btn small" onClick={openSetup}>Set up Cull Sync</button>
+      <button type="button" className={`btn small${agent.online&&agent.outdated?' primary':''}`} onClick={openSetup}>{agent.online&&agent.outdated?'Update Cull Sync':'Set up Cull Sync'}</button>
     </div>}
     {setup&&<CullSyncSetup intro={setup.intro} auto={setup.auto} agent={agent} onClose={closeSetup}/>}
     {warning&&<p className="note warn" role="alert">{warning}</p>}
@@ -344,7 +345,7 @@ export function Photos(){
       {(view.missing.length>0||view.held.length>0||view.undated>0)&&<section className="psec quiet">
         {missingGroups.map(group=>{
           const items=view.missing.filter(item=>(item.why??'')===group.why);
-          return items.length>0&&<details className="pmore" key={group.why} data-why={group.why||'none'}><summary>{group.title(items.length)}</summary><p className="hint">{group.hint}</p><ul className="plain">{items.slice(0,300).map((item,index)=><li key={index}><span className="mono">{item.name}</span> · {day(item.day)}{item.action==='favourite'&&' · favourite'}</li>)}</ul>{items.length>300&&<p>and {(items.length-300).toLocaleString()} more.</p>}</details>;
+          return items.length>0&&<details className="pmore" key={group.why} data-why={group.why||'none'}><summary>{group.title(items.length)}</summary><p className="hint">{group.hint}{group.why===''&&agent?.outdated&&' This Mac\'s Cull Sync is too old to say which of these are only in a shared album or only on another day: update it and check again.'}</p><ul className="plain">{items.slice(0,300).map((item,index)=><li key={index}><span className="mono">{item.name}</span> · {day(item.day)}{item.action==='favourite'&&' · favourite'}</li>)}</ul>{items.length>300&&<p>and {(items.length-300).toLocaleString()} more.</p>}</details>;
         })}
         {view.held.length>0&&<details className="pmore"><summary>{view.held.length.toLocaleString()} not deleted from Photos: you kept another copy of {view.held.length===1?'it':'each'}, such as the JPG of a HEIC</summary><ul className="plain">{view.held.slice(0,300).map((item,index)=><li key={index}><span className="mono">{item.name}</span> · {day(item.day)} · kept as <span className="mono">{item.kept}</span></li>)}</ul>{view.held.length>300&&<p>and {(view.held.length-300).toLocaleString()} more.</p>}</details>}
         {view.undated>0&&<p className="hint">{plural(view.undated,'removed file')} {view.undated===1?'has':'have'} no date to match on and {view.undated===1?'is':'are'} left alone.</p>}

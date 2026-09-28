@@ -3,7 +3,7 @@ import {Busy} from '../Busy';
 
 type SetupState='waiting'|'used'|'connected'|'expired';
 type Setup={id:string;command?:string;state:SetupState;expires:string;now:string};
-export type SetupAgent={online:boolean;access?:string};
+export type SetupAgent={online:boolean;access?:string;outdated?:boolean};
 
 // copy puts the command on the clipboard. The page is usually opened over plain
 // http on the tailnet or the LAN, where browsers do not offer the Clipboard API
@@ -89,7 +89,7 @@ export function CullSyncSetup({intro,agent,auto,onClose}:{intro:string;agent?:Se
   // command by dragging can end outside the dialog, and that must not throw
   // the command away. Escape and Close still close it.
   return <dialog ref={dialog} className="confirm psetup" aria-labelledby="psetup-title" onClose={()=>close(false)}>
-    <h2 id="psetup-title">Set up Cull Sync on your Mac</h2>
+    <h2 id="psetup-title">{agent?.online&&agent.outdated?'Update Cull Sync on your Mac':'Set up Cull Sync on your Mac'}</h2>
     <p>{intro}</p>
     <ol className="psteps">
       <li>

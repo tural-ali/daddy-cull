@@ -4,7 +4,8 @@ const assert=require('node:assert/strict');
 // Files Cull Sync did not find in Photos are grouped by what it saw instead: a
 // file in no library it can read, one only in a shared album, and a name
 // Photos holds only on another day. While it reads the shared albums, the page
-// says so.
+// says so. A helper older than the server's is offered an update, since it
+// cannot say what it saw.
 const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
 const shots=process.env.SHOTS;
 const now='2026-09-27T10:00:00Z';
@@ -16,6 +17,7 @@ const missing=[
   miss('IMG_0412.MOV','2024-12-25','other-day'),
 ];
 let stage='';
+let agent={online:true,lastSeen:now,version:'1.1',access:'authorized'};
 const summary=()=>stage?{id:'J1',state:'checking',rev:1,stage,done:40,total:120}:{id:'J1',state:'planned',rev:2,done:0,total:0};
 
 (async()=>{
@@ -24,7 +26,7 @@ const summary=()=>stage?{id:'J1',state:'checking',rev:1,stage,done:40,total:120}
   await page.route('**/api/**',route=>{
     const url=new URL(route.request().url());
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:4,synthetic:false,snapshotAt:'2026-09-06 01:49:00',candidates:0,calendarDays:1,reviewedDays:0,decisions:0,favourites:0,evidence:0,fullHashes:0,marked:0}});
-    if(url.pathname==='/api/photos')return route.fulfill({json:{configured:true,now,agent:{online:true,lastSeen:now,version:'1.1',access:'authorized'},job:summary()}});
+    if(url.pathname==='/api/photos')return route.fulfill({json:{configured:true,now,agent,job:summary()}});
     if(url.pathname==='/api/photos/overview')return route.fulfill({json:{delete:4,favourite:0,held:0,undated:0,restored:[],synced:{deleted:0,favourited:0,last:''}}});
     if(url.pathname==='/api/photos/jobs/J1')return route.fulfill({json:{...summary(),created:now,updated:now,toCheck:4,delete:[],favourite:[],missing:stage?[]:missing,held:[],undated:0,selected:[],skipped:0}});
     return route.fulfill({status:404,json:{error:'not mocked'}});
@@ -51,6 +53,23 @@ const summary=()=>stage?{id:'J1',state:'checking',rev:1,stage,done:40,total:120}
   assert.deepEqual(await page.locator('details[data-why="none"] li .mono').allInnerTexts(),['IMG_8157.MOV','IMG_8160.MOV']);
   if(shots)await page.locator('details[data-why="none"]').evaluate(node=>node.closest('section').scrollIntoView());
   if(shots)await page.screenshot({path:`${shots}/photos-missing.png`});
+
+  // An old helper is named, offered an update, and its unexplained misses say why.
+  agent={...agent,version:'1.0',outdated:true,latest:'1.1'};
+  await page.reload();
+  const helper=page.locator('.phelper');
+  await helper.getByText('version 1.1 is ready').waitFor();
+  assert.match(await helper.innerText(),/version 1\.0 · version 1\.1 is ready/);
+  const update=helper.getByRole('button',{name:'Update Cull Sync'});
+  assert.match(await update.getAttribute('class'),/primary/);
+  await page.locator('details[data-why="none"] summary').click();
+  assert.match(await page.locator('details[data-why="none"] .hint').innerText(),/too old to say which of these are only in a shared album/);
+  assert.doesNotMatch(await page.locator('details[data-why="shared-album"] .hint').innerText(),/too old/);
+  if(shots)await helper.screenshot({path:`${shots}/photos-outdated.png`});
+  agent={...agent,version:'1.1',outdated:false,latest:undefined};
+  await page.reload();
+  await helper.getByRole('button',{name:'Set up Cull Sync'}).waitFor();
+  assert.doesNotMatch(await helper.innerText(),/is ready/);
 
   // Nothing pushes the page sideways on a phone.
   await page.setViewportSize({width:375,height:760});

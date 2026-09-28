@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -814,12 +815,57 @@ func (h *PhotosHub) Thumb(jobID string, n int) ([]byte, bool) {
 	return j.thumbs[n-1], true
 }
 
+// PhotosAgentVersion is the Cull Sync this server was built with, the
+// CFBundleShortVersionString in mac/CullSync/Info.plist. A helper reporting an
+// older one still works, but misses what was added since, such as saying why
+// a file was not found, so the page offers to update it.
+const PhotosAgentVersion = "1.1"
+
 // PhotosAgentView is how the page describes the helper.
 type PhotosAgentView struct {
 	Online   bool   `json:"online"`
 	LastSeen string `json:"lastSeen,omitempty"`
 	Version  string `json:"version,omitempty"`
 	Access   string `json:"access,omitempty"`
+	// Outdated is true when the helper is older than PhotosAgentVersion,
+	// which Latest then names.
+	Outdated bool   `json:"outdated,omitempty"`
+	Latest   string `json:"latest,omitempty"`
+}
+
+// photosOlder reports whether dotted version a is older than b. A version
+// that is not dotted numbers, such as a "dev" build, is never called older.
+func photosOlder(a, b string) bool {
+	parse := func(v string) ([]int, bool) {
+		parts := strings.Split(v, ".")
+		out := make([]int, len(parts))
+		for i, part := range parts {
+			n, err := strconv.Atoi(part)
+			if err != nil || n < 0 {
+				return nil, false
+			}
+			out[i] = n
+		}
+		return out, true
+	}
+	x, okA := parse(a)
+	y, okB := parse(b)
+	if !okA || !okB {
+		return false
+	}
+	for i := 0; i < max(len(x), len(y)); i++ {
+		var p, q int
+		if i < len(x) {
+			p = x[i]
+		}
+		if i < len(y) {
+			q = y[i]
+		}
+		if p != q {
+			return p < q
+		}
+	}
+	return false
 }
 
 // PhotosJobSummary is the part of a job the page polls for; the full view is
@@ -860,6 +906,9 @@ func (h *PhotosHub) Status() PhotosStatus {
 			Online:   now.Sub(h.agent.at) <= photosOnlineWindow,
 			LastSeen: h.agent.at.UTC().Format(time.RFC3339),
 			Version:  h.agent.version, Access: h.agent.access,
+		}
+		if photosOlder(h.agent.version, PhotosAgentVersion) {
+			status.Agent.Outdated, status.Agent.Latest = true, PhotosAgentVersion
 		}
 	}
 	if j := h.job; j != nil {
