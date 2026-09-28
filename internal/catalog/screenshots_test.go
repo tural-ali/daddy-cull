@@ -58,6 +58,16 @@ func TestScreenshotPageSplitsReviewedFromWaiting(t *testing.T) {
 	if err != nil || reviewed.Total != 1 || len(reviewed.Items) != 1 || reviewed.Items[0].ID != all.Items[0].ID || reviewed.Items[0].Status != "keep" {
 		t.Fatalf("reviewed: %+v %v", reviewed, err)
 	}
+	// Each kind is counted within the review side, whichever kind is shown.
+	for _, kind := range []string{"", "video"} {
+		page, pageErr := s.ScreenshotPage(ctx, kind, "", 0, 100)
+		if pageErr != nil || page.Stills != 1 || page.Recordings != 1 {
+			t.Fatalf("kinds not reviewed, showing %q: %+v %v", kind, page, pageErr)
+		}
+	}
+	if reviewed.Stills != 1 || reviewed.Recordings != 0 {
+		t.Fatalf("kinds reviewed: %+v", reviewed)
+	}
 	videos, err := s.ScreenshotPage(ctx, "video", "all", 0, 100)
 	if err != nil || videos.Total != 1 || videos.Unreviewed != 1 || videos.Reviewed != 0 {
 		t.Fatalf("videos: %+v %v", videos, err)

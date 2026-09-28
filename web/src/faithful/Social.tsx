@@ -1,9 +1,11 @@
 import {type Asset,type Status} from '../api';
-import {useState} from 'react';
+import {useRef,useState} from 'react';
 import {Icon} from '../Icon';
 import {Pick,RowTile,Rows,useSelectionBar,usePicks} from './selection';
 import {Viewer} from './Viewer';
 import {usePhotoURL} from './photoURL';
+import {usePageFilters} from './SearchFilters';
+import {MoreMarker,useMoreOnScroll} from './more';
 import {reverting,requestID,sendDecisions,type Change} from './decisions';
 
 type SocialItem=Asset&{
@@ -14,19 +16,30 @@ export type SocialPage={items:SocialItem[];total:number;shown:number;bytes:numbe
 
 function bytes(value:number){return value<1024**2?`${(value/1024).toFixed(1)} KB`:value<1024**3?`${(value/1024**2).toFixed(1)} MB`:`${(value/1024**3).toFixed(1)} GB`}
 function clock(seconds:number){if(!seconds)return '';const s=Math.round(seconds);return s<60?`${s}s`:`${Math.floor(s/60)}m ${String(s%60).padStart(2,'0')}s`}
-const BANDS:{key:string;label:string;count:(page:SocialPage)=>number}[]=[
-  {key:'',label:'Everything',count:page=>page.total},
-  {key:'social',label:'Likely social',count:page=>page.social},
-  {key:'unsure',label:'Not sure',count:page=>page.unsure},
+// The two answers are filters in the search bar; both, like neither, show
+// every candidate.
+type Band='social'|'unsure';
+const BANDS:{id:Band;label:string;icon:'forum'|'info';words:string[];count:(page:SocialPage)=>number}[]=[
+  {id:'social',label:'Likely social',icon:'forum',words:['likely social','social','saved from an app'],count:page=>page.social},
+  {id:'unsure',label:'Not sure',icon:'info',words:['not sure','unsure','maybe'],count:page=>page.unsure},
 ];
+function bandFor(on:ReadonlySet<Band>){return on.size===1?[...on][0]:''}
+function query(band:string,from:number){return `/api/social?band=${encodeURIComponent(band)}&from=${from}`}
 
 // Each tile gives one answer. Strong evidence, or a Story letterbox (about
 // nine in ten true on inspection), is likely social; anything less is a
 // maybe that deserves a look before it goes.
 function likelySocial(item:SocialItem){return item.band==='likely'||item.letterbox}
 
-export function Social({page,band,from}:{page:SocialPage;band:string;from:number}){
+export function Social({page,band:initialBand}:{page:SocialPage;band:string}){
   const [current,setCurrent]=useState(page);
+  const [on,setOn]=useState<ReadonlySet<Band>>(()=>new Set(initialBand==='social'||initialBand==='unsure'?[initialBand]:[]));
+  // The search bar shows the filters as switched; the list keeps its own
+  // until the list for the new ones lands.
+  const [band,setBand]=useState(()=>bandFor(on));
+  // Bumped whenever the list changes under a read in flight, which then
+  // lands nowhere: its offset no longer points where it did.
+  const version=useRef(0);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
   const [error,setError]=useState('');
@@ -35,8 +48,42 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
   const picks=usePicks(items,item=>item.id);
   const photo=usePhotoURL(id=>page.items.some(item=>String(item.id)===id));
   const selected=picks.picked;
-  const per=120,to=Math.min(shown,from+items.length);
-  const href=(value:string,offset:number)=>`/social?band=${value}&from=${offset}`;
+
+  // Read at the length loaded: what was decided has already left the list
+  // here and on the server, so the offsets agree.
+  const more=useMoreOnScroll(band,items.length<shown,items.length,async()=>{
+    const asked=version.current;
+    const response=await fetch(query(band,items.length));
+    if(!response.ok)throw new Error('more');
+    const next:SocialPage=await response.json();
+    if(asked!==version.current)return;
+    setCurrent(value=>{
+      const have=new Set(value.items.map(item=>item.id));
+      return {...next,items:[...value.items,...next.items.filter(item=>!have.has(item.id))]};
+    });
+  });
+  async function choose(next:ReadonlySet<Band>){
+    setOn(next);
+    const address=new URL(location.href);
+    address.search=new URLSearchParams({band:bandFor(next)}).toString();
+    history.replaceState(history.state,'',address);
+    const asked=++version.current;
+    picks.clear();setMessage('');setUndo(null);setError('');
+    try{
+      const response=await fetch(query(bandFor(next),0));
+      if(!response.ok)throw new Error('The videos for these filters could not be read. Try again.');
+      const fresh:SocialPage=await response.json();
+      if(asked!==version.current)return;
+      setCurrent(fresh);
+      setBand(bandFor(next));
+      window.scrollTo({top:0});
+    }catch(reason){if(asked===version.current)setError((reason as Error).message)}
+  }
+  usePageFilters(total>0||on.size>0?{
+    options:BANDS.map(({count,...option})=>({...option,group:'Answer',on:on.has(option.id),count:count(current)})),
+    toggle:id=>{const next=new Set(on);if(next.has(id as Band))next.delete(id as Band);else next.add(id as Band);void choose(next)},
+    clear:()=>void choose(new Set()),
+  }:null);
 
   async function apply(status:'keep'|'cull',chosen=items.filter(item=>selected.has(item.id))){
     if(chosen.length===0||busy)return;
@@ -47,6 +94,7 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
       const gone=new Set(chosen.map(item=>item.id));
       const freed=chosen.reduce((sum,item)=>sum+item.size,0);
       const count=`${chosen.length} ${chosen.length===1?'video':'videos'}`;
+      version.current++;
       setCurrent(value=>({...value,
         items:value.items.filter(item=>!gone.has(item.id)),
         total:value.total-chosen.length,
@@ -62,17 +110,6 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
         marked:value.marked+(status==='cull'?chosen.length:0),
       }));
       picks.setPicked(previous=>new Set([...previous].filter(id=>!gone.has(id))));
-      // What was decided has left the list, so reading the same offset again
-      // brings the next videos up into view instead of leaving the page empty.
-      // Past the last page, the one before it is shown instead.
-      try{
-        const response=await fetch(`/api/social?band=${encodeURIComponent(band)}&from=${from}`);
-        if(response.ok){
-          const next:SocialPage=await response.json();
-          if(next.items.length===0&&from>0){location.assign(href(band,Math.max(0,from-per)));return}
-          setCurrent(next);
-        }
-      }catch{/* the local list above is already correct, only shorter */}
       setUndo({changes:reverting(chosen,saved),label:count});
       setMessage(status==='keep'
         ?`Kept ${count}. They have left this list and not moved on disk.`
@@ -113,10 +150,9 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
     <section className="dupehead">
       <h1>Saved from social</h1>
       <p className="ysum"><b>{total.toLocaleString()}</b> undecided · <b>{bytes(current.bytes)}</b>
-        {shown>0&&<span className="dim"> · showing {(from+1).toLocaleString()}–{to.toLocaleString()} of {shown.toLocaleString()}</span>}
+        {band&&<span className="dim"> · {shown.toLocaleString()} {band==='social'?'likely social':'not sure'}</span>}
         {(current.kept>0||current.marked>0)&&<span className="dim"> · {current.kept.toLocaleString()} kept, {current.marked.toLocaleString()} marked for the Bin</span>}
       </p>
-      <p className="pager">{BANDS.map(entry=><a className={`btn small${band===entry.key?' on':''}`} aria-current={band===entry.key||undefined} href={href(entry.key,0)} key={entry.label}>{entry.label} <span className="dim">{entry.count(current).toLocaleString()}</span></a>)}</p>
       <p className="hint">Videos that look saved from an app rather than filmed on a camera, judged from each file's own metadata. <strong>Likely social</strong> means strong evidence; <strong>Not sure</strong> is worth a look before it goes.
         Click a video to watch it; <b>k</b> keeps it and <b>x</b> moves it to the Bin. Tick the circle on a tile to select several, and the actions appear at the top. <strong>Keep</strong> takes a video off this list; <strong>Move to Bin</strong> marks it for the Bin, where it stays recoverable.</p>
     </section>
@@ -139,6 +175,6 @@ export function Social({page,band,from}:{page:SocialPage;band:string;from:number
           </RowTile>;
         })}</Rows>}
     {viewing!==null&&items.length>0&&<Viewer assets={items} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={decideInViewer} onPatch={()=>{}}/>}
-    {items.length>0&&<p className="pager">{from>0&&<a className="btn small" href={href(band,Math.max(0,from-per))}>← Previous</a>}{to<shown&&<a className="btn small" href={href(band,from+per)}>Next {per} →</a>}</p>}
+    <MoreMarker state={more} what="videos"/>
   </>;
 }

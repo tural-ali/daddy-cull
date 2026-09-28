@@ -28,14 +28,17 @@ type ScreenshotItem struct {
 }
 
 // ScreenshotPage is one page of the holding area under one filter. Total and
-// Bytes are for that filter; Unreviewed and Reviewed count both sides of it,
-// for the filter buttons.
+// Bytes are for that filter. For the filters' counts, Unreviewed and Reviewed
+// count both sides of it within its kind, and Stills and Recordings count
+// each kind within its review side.
 type ScreenshotPage struct {
 	Items      []ScreenshotItem `json:"items"`
 	Total      int              `json:"total"`
 	Bytes      int64            `json:"bytes"`
 	Unreviewed int              `json:"unreviewed"`
 	Reviewed   int              `json:"reviewed"`
+	Stills     int              `json:"stills"`
+	Recordings int              `json:"recordings"`
 }
 
 // A screenshot is reviewed once it has been kept: a decision only, so nothing
@@ -140,15 +143,21 @@ func (s *Store) ScreenshotPage(ctx context.Context, kind, review string, from, l
 		FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id JOIN screenshot_items shots ON shots.asset_id=a.id`+where, args...).Scan(&page.Reviewed, &reviewedBytes, &page.Unreviewed, &unreviewedBytes); err != nil {
 		return page, err
 	}
+	side := ""
 	switch review {
 	case "":
-		where += " AND NOT " + screenshotReviewed
+		side = " AND NOT " + screenshotReviewed
 		page.Total, page.Bytes = page.Unreviewed, unreviewedBytes
 	case "reviewed":
-		where += " AND " + screenshotReviewed
+		side = " AND " + screenshotReviewed
 		page.Total, page.Bytes = page.Reviewed, reviewedBytes
 	default:
 		page.Total, page.Bytes = page.Reviewed+page.Unreviewed, reviewedBytes+unreviewedBytes
+	}
+	where += side
+	if err := s.read.QueryRowContext(ctx, `SELECT COALESCE(sum(a.kind='image'),0),COALESCE(sum(a.kind='video'),0)
+		FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id JOIN screenshot_items shots ON shots.asset_id=a.id WHERE shots.state='waiting'`+side).Scan(&page.Stills, &page.Recordings); err != nil {
+		return page, err
 	}
 	query := `SELECT a.id,a.relative_path,a.captured_at,a.kind,a.size_bytes,COALESCE(d.status,'unreviewed'),COALESCE(d.favourite,0),COALESCE(d.revision,0),a.source_id,(SELECT count(*) FROM assets alt WHERE alt.anchor_id=a.id),` + relatedCount + `,COALESCE(shots.day,''),shots.name,shots.state FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id JOIN screenshot_items shots ON shots.asset_id=a.id` + where
 	query += " ORDER BY COALESCE(shots.day,''),shots.name LIMIT ? OFFSET ?"

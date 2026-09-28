@@ -1016,7 +1016,6 @@ main.wide, main:has(.gal, .rows) { max-width: 100%; }
 }
 .xmeta .hash { margin-left: auto; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--faint); }
 .xact { display: flex; align-items: center; gap: .8rem; margin: .7rem 0 0; flex-wrap: wrap; }
-.dupehead .pager { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: .8rem 0; }
 
 /* --------------------------------------------------------------- the bin -- */
 
@@ -2327,8 +2326,6 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
 .textbtn .icon, .textbtn .icon svg { width: 20px; height: 20px; }
 
 /* Filters in two groups, how reviewed and what kind, with room between. */
-.pager.filters { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; }
-.pager.filters .fgroup { display: inline-flex; flex-wrap: wrap; gap: .4rem; }
 
 /* In a rows grid the round tick and the corner marks say what a file is; the
    old "Video" chip would only repeat it. */
@@ -2344,3 +2341,9 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
    would otherwise run into the tick. */
 @media (hover: none) { .pick { opacity: .9; } :is(.rt, .mo):has(.pick)::before { opacity: 1; } }
 @media (width <= 600px) { .rt .dur { font-size: 0; gap: 0; top: 10px; right: 8px; } }
+
+/* The end of a list that loads as it scrolls: nothing while idle, the orb
+   while the next page is on its way, and Try again if it did not come. */
+.more { display: grid; place-items: center; }
+.more:not(:empty) { padding: 24px 0 32px; }
+.more .note { margin: 0; }

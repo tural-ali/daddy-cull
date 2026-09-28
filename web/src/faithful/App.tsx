@@ -124,12 +124,12 @@ export function App(){
       if(path==='/settings')return {route,content:<Settings stats={await json<Stats>(`/api/stats?tz=${zone}`)}/>};
       if(path==='/shadows')return {route,content:<Shadows groups={await json<Parameters<typeof Shadows>[0]['groups']>('/api/shadows')}/>};
       if(path==='/social'){
-        const params=new URLSearchParams(location.search),band=params.get('band')||'',from=Math.max(0,Number.parseInt(params.get('from')||'0',10)||0);
-        return {route,content:<Social page={await json<SocialPage>(`/api/social?band=${encodeURIComponent(band)}&from=${from}`)} band={band} from={from}/>};
+        const band=new URLSearchParams(location.search).get('band')||'';
+        return {route,content:<Social page={await json<SocialPage>(`/api/social?band=${encodeURIComponent(band)}&from=0`)} band={band}/>};
       }
       if(path==='/screenshots'){
-        const params=new URLSearchParams(location.search),filter=params.get('show')||'',review=params.get('review')==='reviewed'?'reviewed':'',from=Math.max(0,Number.parseInt(params.get('from')||'0',10)||0);
-        return {route,content:<Screenshots page={await json<ScreenshotPage>(`/api/screenshots?kind=${encodeURIComponent(filter)}&review=${review}&from=${from}`)} filter={filter} review={review} from={from}/>};
+        const params=new URLSearchParams(location.search),filter=params.get('show')||'',review=params.get('review')==='reviewed'||params.get('review')==='all'?params.get('review')!:'';
+        return {route,content:<Screenshots page={await json<ScreenshotPage>(`/api/screenshots?kind=${encodeURIComponent(filter)}&review=${review}&from=0`)} filter={filter} review={review}/>};
       }
       throw new Error('This legacy workflow has not been connected yet.');
   },[path]);

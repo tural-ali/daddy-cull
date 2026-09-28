@@ -2,13 +2,15 @@ import {Media} from '../Media';
 import {binChanged,type Asset,type Status} from '../api';
 import {Icon} from '../Icon';
 import {Viewer} from './Viewer';
-import {useState} from 'react';
+import {useRef,useState} from 'react';
 import {Pick,RowTile,Rows,useSelectionBar,usePicks,type SelectionAction} from './selection';
+import {usePageFilters} from './SearchFilters';
+import {MoreMarker,useMoreOnScroll} from './more';
 import {usePhotoURL} from './photoURL';
 import {reverting,requestID,sendDecisions,type Change} from './decisions';
 
 type ScreenshotItem=Asset&{day:string;name:string;state:string};
-export type ScreenshotPage={items:ScreenshotItem[];total:number;bytes:number;unreviewed:number;reviewed:number};
+export type ScreenshotPage={items:ScreenshotItem[];total:number;bytes:number;unreviewed:number;reviewed:number;stills:number;recordings:number};
 export type ScreenshotPlan={id:string;assetId:number;action:'keep'|'remove';state:string;created:string;files:{source:string;destination:string;size:number;hash:string;sidecar:boolean;phase:string}[];error?:string};
 function bytes(value:number){return value<1024**2?`${(value/1024).toFixed(1)} KB`:value<1024**3?`${(value/1024**2).toFixed(1)} MB`:`${(value/1024**3).toFixed(1)} GB`}
 function plural(count:number,one:string){return `${count.toLocaleString()} ${one}${count===1?'':'s'}`}
@@ -22,18 +24,40 @@ async function post<T>(path:string,body:unknown):Promise<T>{
   return result as T;
 }
 
-// Two filters, as in Lightroom: what has not been looked at yet, and what has
-// been kept. Keeping is a decision only; the file stays where it is.
-const REVIEWS:{key:string;label:string;count:(page:ScreenshotPage)=>number}[]=[
-  {key:'',label:'Not reviewed',count:page=>page.unreviewed},
-  {key:'reviewed',label:'Reviewed',count:page=>page.reviewed},
+// The filters live in the search bar: what has not been looked at yet and
+// what has been kept, as in Lightroom, and stills or screen recordings. Two
+// from one group show both, as none does. Keeping is a decision only; the
+// file stays where it is. The page opens on what is not reviewed.
+type FilterID='unreviewed'|'reviewed'|'image'|'video';
+const FILTERS:{id:FilterID;label:string;icon:'schedule'|'check_circle'|'image'|'videocam';group:string;words:string[];count:(page:ScreenshotPage)=>number}[]=[
+  {id:'unreviewed',label:'Not reviewed',icon:'schedule',group:'Review',words:['not reviewed','unreviewed','to review','waiting'],count:page=>page.unreviewed},
+  {id:'reviewed',label:'Reviewed',icon:'check_circle',group:'Review',words:['reviewed','kept','keep'],count:page=>page.reviewed},
+  {id:'image',label:'Stills',icon:'image',group:'Type',words:['stills','images','pictures','photos'],count:page=>page.stills},
+  {id:'video',label:'Recordings',icon:'videocam',group:'Type',words:['recordings','videos','screen recordings'],count:page=>page.recordings},
 ];
-const KINDS:[string,string][]=[['','Everything'],['image','Stills'],['video','Recordings']];
+function reviewFor(on:ReadonlySet<FilterID>){return on.has('unreviewed')===on.has('reviewed')?'all':on.has('reviewed')?'reviewed':''}
+function kindFor(on:ReadonlySet<FilterID>){return on.has('image')===on.has('video')?'':on.has('image')?'image':'video'}
+function filtersFrom(review:string,kind:string){
+  const on=new Set<FilterID>();
+  if(review==='')on.add('unreviewed');
+  if(review==='reviewed')on.add('reviewed');
+  if(kind==='image'||kind==='video')on.add(kind);
+  return on;
+}
+function query(review:string,kind:string,from:number){return `/api/screenshots?kind=${encodeURIComponent(kind)}&review=${review}&from=${from}`}
 
 type Undo={label:string;changes?:Change[];plans?:ScreenshotPlan[]};
 
-export function Screenshots({page,filter,review,from}:{page:ScreenshotPage;filter:string;review:string;from:number}){
+export function Screenshots({page,filter:initialKind,review:initialReview}:{page:ScreenshotPage;filter:string;review:string}){
   const [current,setCurrent]=useState(page);
+  // The filters as switched, which the search bar shows at once, and the
+  // filters of the list on the page, which follow when their list lands.
+  const [on,setOn]=useState<ReadonlySet<FilterID>>(()=>filtersFrom(initialReview,initialKind));
+  const [listed,setListed]=useState(()=>({review:reviewFor(on),kind:kindFor(on)}));
+  const {review,kind:filter}=listed;
+  // Bumped whenever the list changes under a read in flight, which then
+  // lands nowhere: its offset no longer points where it did.
+  const version=useRef(0);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
   const [error,setError]=useState('');
@@ -41,26 +65,57 @@ export function Screenshots({page,filter,review,from}:{page:ScreenshotPage;filte
   const {items,total,bytes:totalBytes}=current;
   const picks=usePicks(items,item=>item.id);
   const photo=usePhotoURL(id=>page.items.some(item=>String(item.id)===id));
-  const per=120,to=Math.min(total,from+items.length);
-  const href=(nextReview:string,kind:string,offset:number)=>`/screenshots?review=${nextReview}&show=${kind}&from=${offset}`;
 
-  // What was decided has left this filter, so reading the same offset again
-  // brings the next screenshots up instead of leaving a hole; past the last
-  // page, the one before it is shown.
-  async function refill(){
+  // Read at the length loaded: what was decided has already left the list
+  // here and on the server, so the offsets agree.
+  const more=useMoreOnScroll(`${review}/${filter}`,items.length<total,items.length,async()=>{
+    const asked=version.current;
+    const response=await fetch(query(review,filter,items.length));
+    if(!response.ok)throw new Error('more');
+    const next:ScreenshotPage=await response.json();
+    if(asked!==version.current)return;
+    setCurrent(value=>{
+      const have=new Set(value.items.map(item=>item.id));
+      return {...next,items:[...value.items,...next.items.filter(item=>!have.has(item.id))]};
+    });
+  });
+  async function choose(next:ReadonlySet<FilterID>){
+    setOn(next);
+    const nextReview=reviewFor(next),nextKind=kindFor(next);
+    const address=new URL(location.href);
+    address.search=new URLSearchParams({review:nextReview,show:nextKind}).toString();
+    history.replaceState(history.state,'',address);
+    const asked=++version.current;
+    picks.clear();setMessage('');setUndo(null);setError('');
     try{
-      const response=await fetch(`/api/screenshots?kind=${encodeURIComponent(filter)}&review=${review}&from=${from}`);
-      if(!response.ok)return;
-      const next:ScreenshotPage=await response.json();
-      if(next.items.length===0&&from>0){location.assign(href(review,filter,Math.max(0,from-per)));return}
-      setCurrent(next);
-    }catch{/* the list already dropped what was decided, it is only shorter */}
+      const response=await fetch(query(nextReview,nextKind,0));
+      if(!response.ok)throw new Error('The screenshots for these filters could not be read. Try again.');
+      const fresh:ScreenshotPage=await response.json();
+      if(asked!==version.current)return;
+      setCurrent(fresh);
+      setListed({review:nextReview,kind:nextKind});
+      window.scrollTo({top:0});
+    }catch(reason){if(asked===version.current)setError((reason as Error).message)}
   }
+  function toggle(id:FilterID){
+    const next=new Set(on);
+    if(next.has(id))next.delete(id);else next.add(id);
+    void choose(next);
+  }
+  usePageFilters(current.unreviewed+current.reviewed>0||on.size>0?{
+    options:FILTERS.map(({count,...option})=>({...option,on:on.has(option.id),count:count(current)})),
+    toggle:id=>toggle(id as FilterID),clear:()=>void choose(new Set()),
+  }:null);
+
+  /** Takes what left the list off it, and out of its counts. */
   function drop(ids:Set<number>,counts:{reviewed?:number;unreviewed?:number}){
+    version.current++;
     setCurrent(value=>{
       const gone=value.items.filter(item=>ids.has(item.id));
+      const videos=gone.filter(item=>item.kind==='video').length;
       return {...value,items:value.items.filter(item=>!ids.has(item.id)),total:value.total-gone.length,bytes:value.bytes-gone.reduce((sum,item)=>sum+item.size,0),
-        reviewed:value.reviewed+(counts.reviewed??0),unreviewed:value.unreviewed+(counts.unreviewed??0)};
+        reviewed:value.reviewed+(counts.reviewed??0),unreviewed:value.unreviewed+(counts.unreviewed??0),
+        stills:value.stills-(gone.length-videos),recordings:value.recordings-videos};
     });
   }
 
@@ -71,11 +126,18 @@ export function Screenshots({page,filter,review,from}:{page:ScreenshotPage;filte
     try{
       const saved=await sendDecisions(chosen.map(item=>({assetId:item.id,status,favourite:item.favourite,expectedRevision:item.revision,requestId:requestID()})));
       const moved=chosen.length,label=plural(moved,'screenshot');
-      drop(new Set(chosen.map(item=>item.id)),status==='keep'?{reviewed:moved,unreviewed:-moved}:{reviewed:-moved,unreviewed:moved});
+      const counts=status==='keep'?{reviewed:moved,unreviewed:-moved}:{reviewed:-moved,unreviewed:moved};
+      if(review==='all'){
+        // Showing both sides, a decision changes the tile, not the list.
+        const revisions=new Map(chosen.map((item,index)=>[item.id,saved[index].revision]));
+        setCurrent(value=>({...value,items:value.items.map(item=>revisions.has(item.id)?{...item,status,revision:revisions.get(item.id)!}:item),
+          reviewed:value.reviewed+counts.reviewed,unreviewed:value.unreviewed+counts.unreviewed}));
+      }else drop(new Set(chosen.map(item=>item.id)),counts);
       picks.clear();
       setUndo({label,changes:reverting(chosen,saved)});
-      setMessage(status==='keep'?`Kept ${label}. ${moved===1?'It is':'They are'} under Reviewed now; nothing moved on disk.`:`Put ${label} back under Not reviewed.`);
-      await refill();
+      setMessage(status==='keep'
+        ?`Kept ${label}. ${review==='all'?'Nothing':`${moved===1?'It is':'They are'} under Reviewed now; nothing`} moved on disk.`
+        :`Put ${label} back under Not reviewed.`);
     }catch(reason){setError((reason as Error).message)}finally{setBusy(false)}
   }
 
@@ -100,7 +162,6 @@ export function Screenshots({page,filter,review,from}:{page:ScreenshotPage;filte
       const label=plural(done.length,'screenshot');
       if(action==='remove'){setUndo({label,plans:done});setMessage(`Moved ${label} to the recoverable Bin.`)}
       else setMessage(done.length===1?`Copied ${chosen[0].name} into ${done[0].files[0].destination}.`:`Copied ${label} into the archive, each under the date in its name.`);
-      await refill();
     }
     setBusy(false);
   }
@@ -131,17 +192,19 @@ export function Screenshots({page,filter,review,from}:{page:ScreenshotPage;filte
     return false;
   }
 
+  // The actions follow what is selected: Keep for what is not reviewed yet,
+  // and for what was kept, taking it back or filing it in the archive.
   const chosen=items.filter(item=>picks.picked.has(item.id));
   const allShown=items.length>0&&items.every(item=>picks.picked.has(item.id));
-  const dated=chosen.filter(item=>item.day);
+  const waiting=chosen.filter(item=>item.status!=='keep'),kept=chosen.filter(item=>item.status==='keep');
+  const dated=kept.filter(item=>item.day);
   const actions:SelectionAction[]=[
     {label:allShown?'Deselect all':`Select all ${items.length} shown`,icon:'select_all',onClick:()=>allShown?picks.clear():picks.all()},
-    ...(review==='reviewed'
-      ?[
-        {label:'Mark not reviewed',icon:'undo',onClick:()=>void decide(chosen,'unreviewed')},
-        {label:dated.length===chosen.length?'Copy into the archive':`Copy the ${dated.length} dated into the archive`,icon:'drive_file_move',disabled:dated.length===0,onClick:()=>void run(dated,'keep')},
-      ] as SelectionAction[]
-      :[{label:'Keep',icon:'check',onClick:()=>void decide(chosen,'keep')}] as SelectionAction[]),
+    ...(waiting.length>0?[{label:waiting.length===chosen.length?'Keep':`Keep the ${waiting.length} not reviewed`,icon:'check',onClick:()=>void decide(waiting,'keep')}] as SelectionAction[]:[]),
+    ...(kept.length>0?[
+      {label:kept.length===chosen.length?'Mark not reviewed':`Mark the ${kept.length} kept not reviewed`,icon:'undo',onClick:()=>void decide(kept,'unreviewed')},
+      {label:dated.length===chosen.length?'Copy into the archive':`Copy the ${dated.length} kept and dated into the archive`,icon:'drive_file_move',disabled:dated.length===0,onClick:()=>void run(dated,'keep')},
+    ] as SelectionAction[]:[]),
     {label:'Move to Bin',icon:'delete',danger:true,onClick:()=>void run(chosen,'remove')},
   ];
   useSelectionBar({count:picks.picked.size,busy,clear:picks.clear,actions});
@@ -150,18 +213,14 @@ export function Screenshots({page,filter,review,from}:{page:ScreenshotPage;filte
   return <>
     <section className="dupehead">
       <h1>Screenshots</h1>
-      <p className="ysum"><b>{total.toLocaleString()}</b> {review==='reviewed'?'reviewed':'to review'} · <b>{bytes(totalBytes)}</b>{total>0&&<span className="dim"> · showing {(from+1).toLocaleString()}–{to.toLocaleString()}</span>}</p>
-      <div className="pager filters">
-        <span className="fgroup" role="group" aria-label="Review">{REVIEWS.map(entry=><a className={`btn small${review===entry.key?' on':''}`} aria-current={review===entry.key||undefined} href={href(entry.key,filter,0)} key={entry.label}>{entry.label} <span className="dim">{entry.count(current).toLocaleString()}</span></a>)}</span>
-        <span className="fgroup" role="group" aria-label="Kind">{KINDS.map(([kind,label])=><a className={`btn small${filter===kind?' on':''}`} aria-current={filter===kind||undefined} href={href(review,kind,0)} key={label}>{label}</a>)}</span>
-      </div>
+      <p className="ysum"><b>{total.toLocaleString()}</b> {review==='reviewed'?'reviewed':review===''?'to review':total===1?'screenshot':'screenshots'} · <b>{bytes(totalBytes)}</b></p>
       <p className="hint">Nothing here is in the archive yet. Click a screenshot to look at it; <b>k</b> keeps it and <b>x</b> moves it to the Bin. Tick the circle on a tile to select several, and the actions appear at the top.
         <strong> Keep</strong> moves it to Reviewed without touching the file; from there <strong>Copy into the archive</strong> files it under the date in its name. <strong>Move to Bin</strong> stays recoverable.</p>
     </section>
     {message&&<p className="flash" role="status">{message} {undo&&<button className="btn small" disabled={busy} onClick={()=>void revert()}>Undo</button>}</p>}
     {error&&<p className="note warn" role="alert">{error}</p>}
     {items.length===0
-      ? <p className="note">{review==='reviewed'?'Nothing kept yet. Keep a screenshot and it shows here.':current.unreviewed+current.reviewed===0?'The holding area is empty.':'Every screenshot here has been reviewed.'}</p>
+      ? <p className="note">{filter?'Nothing here matches these filters.':current.unreviewed+current.reviewed===0?'The holding area is empty.':review==='reviewed'?'Nothing kept yet. Keep a screenshot and it shows here.':'Every screenshot here has been reviewed.'}</p>
       : <Rows className="shots">{items.map((item,index)=>{
           const picked=picks.picked.has(item.id);
           const detail=[item.day||'undated',bytes(item.size)].join(' · ');
@@ -174,6 +233,6 @@ export function Screenshots({page,filter,review,from}:{page:ScreenshotPage;filte
           </RowTile>;
         })}</Rows>}
     {viewing!==null&&items.length>0&&<Viewer assets={items} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={decideInViewer} onPatch={()=>{}}/>}
-    {items.length>0&&(from>0||to<total)&&<p className="pager">{from>0&&<a className="btn small" href={href(review,filter,Math.max(0,from-per))}>← Previous</a>}{to<total&&<a className="btn small" href={href(review,filter,from+per)}>Next {per} →</a>}</p>}
+    <MoreMarker state={more} what="screenshots"/>
   </>;
 }
