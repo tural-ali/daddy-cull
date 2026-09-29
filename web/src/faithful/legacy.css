@@ -975,7 +975,6 @@ main.wide, main:has(.gal, .rows, .calendar) { max-width: 100%; }
   color: #f2f3f6; background: rgb(12 13 17 / 72%);
   border-radius: 4px; white-space: nowrap;
 }
-.bdg .b.dupe { background: color-mix(in oklab, var(--warn) 82%, #000); }
 .bdg .b.keep { background: color-mix(in oklab, var(--good) 78%, #000); }
 .bdg .b.new  { background: color-mix(in oklab, var(--dot) 88%, #000); color: #fff; }
 .bdg .b.pair { letter-spacing: .04em; }
