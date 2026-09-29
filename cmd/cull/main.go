@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -34,6 +35,8 @@ func main() {
 	screenshotsRoot := flag.String("screenshots-root", "", "guarded screenshot holding-area root")
 	upgradesRoot := flag.String("upgrades-root", "", "guarded read-only Takeout upgrade staging root")
 	takeoutInbox := flag.String("takeout-inbox", "", "read-only folder that Google Takeout exports of Google Photos are dropped into; both processes need it")
+	importDir := flag.String("import-dir", "", "folder new photos are dropped into; the writer files each under the day it was taken in -archive-root and catalogues it")
+	folderMode := flag.String("folder-mode", "0777", "octal mode the writer gives the day folders it makes; 0777 suits a shared NAS, 0755 a library only its owner uses")
 	binUpstream := flag.String("bin-upstream", "", "private Bin service URL")
 	checkWriter := flag.Bool("check-writer", false, "check local private Bin service")
 	db := flag.String("db", "state/scale.db", "isolated synthetic database")
@@ -226,6 +229,11 @@ func main() {
 		if len(secret) < 32 {
 			log.Fatal("private writer secret required")
 		}
+		mode, modeErr := strconv.ParseUint(*folderMode, 8, 32)
+		if modeErr != nil || mode > 0o777 || mode&0o700 != 0o700 {
+			log.Fatalf("-folder-mode %q: give an octal mode such as 0755 that lets the owner read, write and enter", *folderMode)
+		}
+		catalog.ArchiveFolderMode = os.FileMode(mode)
 		engine, e := catalog.NewBinEngine(s, *writerRoot)
 		if e != nil {
 			log.Fatal(e)
@@ -266,6 +274,21 @@ func main() {
 			}
 			defer googleWriter.Close()
 			mux.Handle("/google-photos/", googleWriter.Handler(secret))
+		}
+		if *importDir != "" {
+			dateTool := resolveTool(*rawTool)
+			if dateTool == "" {
+				log.Printf("without %q, photos in the import folder are dated by their names and modification times only", *rawTool)
+			}
+			intake, intakeErr := catalog.NewIntakeWriter(s, *importDir, *writerRoot, dateTool)
+			if intakeErr != nil {
+				log.Fatal(intakeErr)
+			}
+			defer intake.Close()
+			mux.Handle("/intake/", intake.Handler(secret))
+			go intake.Keep(ctx)
+		} else if forgetErr := s.ForgetIntake(ctx); forgetErr != nil {
+			log.Fatal(forgetErr)
 		}
 		// The Bin page acts on everything it lists at once, through the same
 		// engines as above; each source is still moved only by its own engine.
@@ -334,6 +357,7 @@ func main() {
 		s.Routes(apiMux)
 		s.MediaRoutes(apiMux, mediaRoots, *upstream, *socialPosters)
 		s.WriterRoutes(apiMux, *binUpstream, secret)
+		s.IntakeRoutes(apiMux, *binUpstream, secret)
 		photos.Routes(apiMux)
 		addons.Routes(apiMux)
 		s.EventRoutes(apiMux, addons.Changed)

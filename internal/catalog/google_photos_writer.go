@@ -298,9 +298,15 @@ func guardedDir(root *os.Root, dir string) (os.FileInfo, error) {
 	return info, nil
 }
 
-// mkdirShared makes the folders of dir that are missing, open to everyone
-// who uses the archive, as its other folders are: the writer's own umask
-// would otherwise leave them writable only by the writer.
+// ArchiveFolderMode is the mode the writer gives the day folders it makes.
+// The default opens them to everyone who uses the archive, as a shared NAS
+// needs; a library that only its owner uses can be given 0755 or 0700. It is
+// set once, before any writer starts.
+var ArchiveFolderMode os.FileMode = 0o777
+
+// mkdirShared makes the folders of dir that are missing with
+// ArchiveFolderMode, as the archive's other folders are: the writer's own
+// umask would otherwise decide.
 func mkdirShared(root *os.Root, dir string) error {
 	if !safeRelative(dir) {
 		return ErrInvalid
@@ -308,9 +314,9 @@ func mkdirShared(root *os.Root, dir string) error {
 	parts := strings.Split(dir, "/")
 	for i := range parts {
 		p := strings.Join(parts[:i+1], "/")
-		err := root.Mkdir(p, 0o777)
+		err := root.Mkdir(p, ArchiveFolderMode)
 		if err == nil {
-			if err = root.Chmod(p, 0o777); err != nil {
+			if err = root.Chmod(p, ArchiveFolderMode); err != nil {
 				return err
 			}
 			continue
