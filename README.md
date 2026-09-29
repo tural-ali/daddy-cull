@@ -155,7 +155,7 @@ Every page has a short guide at the top, and <kbd>?</kbd> lists every key.
 | **Addons** | Turn features on or off, or add your own. |
 | **Settings** | Folders, Immich, Jellyfin, the Bin's grace period, theme and version. |
 
-Built-in addons, each off until it is set up:
+Built-in addons, each off until it is set up unless the table says otherwise:
 
 | Addon | What it does | Set up in |
 |---|---|---|
@@ -163,6 +163,7 @@ Built-in addons, each off until it is set up:
 | Apple Photos | Carries removals and favourites across to the Photos app | The setup wizard |
 | Immich | Sets the favourites you choose in Immich too | Settings |
 | Jellyfin | Has Jellyfin scan again when files leave the library or come back | Settings |
+| Library totals | Shows in the sidebar how many photos and videos there are and how much space they take | On from the start |
 
 Screenshots, Saved from social, Takeout upgrades and Shadowed copies serve libraries moved from a NAS, where a report made there is imported first; see [how it works](docs/HOW-IT-WORKS.md#for-libraries-moved-from-a-nas).
 

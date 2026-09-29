@@ -631,7 +631,7 @@ func init() {
 		"daddy-cull/next/internal/catalog.Stats.ImmichRefused":              "ImmichRefused counts hearts Immich will not let Cull change, as the photo belongs to another Immich user; they are not tried again.",
 		"daddy-cull/next/internal/catalog.Stats.ImmichSynced":               "ImmichSynced counts hearts Immich shows as favourites.",
 		"daddy-cull/next/internal/catalog.Stats.LegacyBin":                  "LegacyBin counts files in the earlier app's Bin that are neither restored nor deleted, whether the Daddy Cull classic addon is on or not.",
-		"daddy-cull/next/internal/catalog.Stats.Library":                    "Library counts what the library holds, as photos and videos.",
+		"daddy-cull/next/internal/catalog.Stats.Library":                    "Library counts what the library holds, as photos and videos, while the Library totals addon is on, and is left out while it is off.",
 		"daddy-cull/next/internal/catalog.Stats.Marked":                     "Marked counts files removed while reviewing that are not in the Bin yet.",
 		"daddy-cull/next/internal/catalog.Stats.Notifications":              "Notifications counts unread notifications.",
 		"daddy-cull/next/internal/catalog.Stats.ReviewedDates":              "ReviewedDates counts calendar dates reviewed in every year filed under them.",

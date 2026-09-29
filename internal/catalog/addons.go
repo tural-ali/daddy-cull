@@ -25,6 +25,7 @@ const (
 	AddonGooglePhotos = "google-photos"
 	AddonImmich       = "immich"
 	AddonJellyfin     = "jellyfin"
+	AddonLibrary      = "library-totals"
 	AddonClassic      = "classic"
 )
 
@@ -101,8 +102,9 @@ type Stats struct {
 	VideoMuted bool `json:"videoMuted"`
 	// Notifications counts unread notifications.
 	Notifications int `json:"notifications"`
-	// Library counts what the library holds, as photos and videos.
-	Library LibraryStats `json:"library"`
+	// Library counts what the library holds, as photos and videos, while the
+	// Library totals addon is on, and is left out while it is off.
+	Library *LibraryStats `json:"library,omitempty"`
 }
 
 // LibraryStats counts the files in the library: the archive, less what is in
@@ -194,7 +196,12 @@ func (s *Store) Stats(ctx context.Context, loc *time.Location) (Stats, error) {
 	st.ReviewedToday = activity.Today
 	st.VideoMuted, _ = s.VideoMuted(ctx)
 	st.Notifications, _ = s.UnreadNotifications(ctx)
-	st.Library, _ = s.LibraryStats(ctx)
+	// The addon is on unless someone turned it off, as its Default is always.
+	if on, chosen, err := s.AddonChoice(ctx, AddonLibrary); err == nil && (on || !chosen) {
+		if library, err := s.LibraryStats(ctx); err == nil {
+			st.Library = &library
+		}
+	}
 	return st, nil
 }
 
@@ -572,6 +579,21 @@ func (s *Store) BuiltInAddons(needs AddonNeeds) []addon.BuiltIn {
 				return addon.Status{State: addon.Ready, Detail: "Jellyfin was last asked to scan at " + last.Local().Format("15:04 on 2 January") + "."}
 			},
 			Default: func(context.Context) bool { return needs.JellyfinConfigured },
+		},
+		{
+			Manifest: addon.Manifest{
+				ID: AddonLibrary, Name: "Library totals", Version: "1", Icon: "perm_media",
+				Summary:     "Show in the sidebar how many photos and videos the library holds and how much space they take.",
+				Description: "The sidebar counts the library's photos, RAW files included, and its videos under the review meter, with their sizes and a total. Files in the Bin or missing from disk are not counted.",
+			},
+			Status: func(ctx context.Context) addon.Status {
+				library, err := s.LibraryStats(ctx)
+				if err != nil {
+					return addon.Status{State: addon.Problem, Detail: "The library could not be counted."}
+				}
+				return addon.Status{State: addon.Ready, Detail: fmt.Sprintf("%s and %s.", counted(int(library.Photos.Files), "photo", "photos"), counted(int(library.Videos.Files), "video", "videos"))}
+			},
+			Default: always,
 		},
 		{
 			Manifest: addon.Manifest{

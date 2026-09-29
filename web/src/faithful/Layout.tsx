@@ -234,7 +234,7 @@ export function Layout({route,path,visit,binFiles,reviewed,library,streak,notifi
         <span className="meter" role="progressbar" aria-label="Calendar dates reviewed" aria-valuemin={0} aria-valuemax={reviewed.total} aria-valuenow={reviewed.done}><span style={{width:`${Math.min(100,share*100)}%`}}/></span>
         <span className="sideprogressfoot"><span className="sideprogressnote">{reviewed.done.toLocaleString()} of {reviewed.total.toLocaleString()} dates</span></span>
       </a>}
-      {library&&library.photos.files+library.videos.files>0&&<SideLibrary library={library} rail={rail}/>}
+      {library&&addons?.find(addon=>addon.id==='library-totals')?.on!==false&&library.photos.files+library.videos.files>0&&<SideLibrary library={library} rail={rail}/>}
       <nav className="sidefoot" aria-label="Settings">
         <a href="/addons" className={route==='addons'?'on':undefined} aria-current={route==='addons'?'page':undefined} {...(rail?tipProps('Addons'):{})}>
           <Icon name="extension" filled={route==='addons'}/><span className="sidelabel">Addons</span>

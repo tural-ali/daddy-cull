@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 )
 
 // The library's counts are its archive files as photos, RAW included, and
@@ -52,5 +53,18 @@ func TestLibraryStats(t *testing.T) {
 	}
 	if empty, err := testStore(t).LibraryStats(context.Background()); err != nil || empty != (LibraryStats{}) {
 		t.Fatalf("an empty library: %+v %v", empty, err)
+	}
+
+	// The counts come with the stats while the Library totals addon is on,
+	// which it is until someone turns it off.
+	stats, err := s.Stats(context.Background(), time.UTC)
+	if err != nil || stats.Library == nil || *stats.Library != want {
+		t.Fatalf("stats before any choice: %+v %v", stats.Library, err)
+	}
+	if _, err := s.write.Exec(`INSERT INTO settings(key,value) VALUES(?,'off')`, addonSetting(AddonLibrary)); err != nil {
+		t.Fatal(err)
+	}
+	if stats, err = s.Stats(context.Background(), time.UTC); err != nil || stats.Library != nil {
+		t.Fatalf("stats with the addon off: %+v %v", stats.Library, err)
 	}
 }
