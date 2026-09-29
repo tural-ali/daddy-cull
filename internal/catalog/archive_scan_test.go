@@ -11,7 +11,7 @@ import (
 
 func TestClassifyScreenshot(t *testing.T) {
 	for name, want := range map[string]string{
-		"/icloud/alex/2026/08/21/IMG_3793.PNG":           "png",
+		"/icloud/alex/2026/08/21/IMG_3793.PNG":            "png",
 		"/x/Screenshot 2026-08-21 at 10.00.00.jpg":        "name",
 		"/x/screen_shot.HEIC":                             "name",
 		"/x/SCREEN-RECORDING 1.mov":                       "name",
