@@ -63,6 +63,12 @@ Set `IMMICH_URL`, `IMMICH_KEY` and `IMMICH_PATH_PREFIX` in `examples/.env`.
 `IMMICH_PATH_PREFIX` is the library folder as Immich's external library sees it.
 The key needs the `asset.update` permission.
 
+## Jellyfin
+
+Set `JELLYFIN_URL` and `JELLYFIN_KEY` in `examples/.env`.
+Create the key in Jellyfin under Dashboard, API Keys.
+`JELLYFIN_URL` is Jellyfin's address as the container reaches it, which for a Jellyfin on the host network is the host's LAN address, not `localhost`.
+
 ## Security
 
 There is no login.

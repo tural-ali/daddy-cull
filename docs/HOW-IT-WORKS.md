@@ -97,6 +97,15 @@ Daddy Cull finds each photo by its path in Immich's external library and sends o
 Favourites wait in a queue while Immich is unreachable, and Settings shows how many are sent, waiting or failed.
 Set it up under Immich in Settings, or on a server with `IMMICH_URL`, `IMMICH_KEY` and `IMMICH_PATH_PREFIX`.
 
+## Jellyfin
+
+Jellyfin notices that a file has gone only when it next scans the library.
+So whenever files are moved to the Bin, put back, deleted from it or added, Daddy Cull asks Jellyfin to scan its libraries again.
+It waits until nothing has changed for a minute first, so emptying a Bin of a thousand files is one scan, and during a long change it still asks every ten minutes.
+The one request it sends is `POST /Library/Refresh`; Jellyfin's database is never opened.
+A request that fails is tried again after five minutes, then ten, up to once an hour, and the Addons page shows why.
+Set it up under Jellyfin in Settings, or on a server with `JELLYFIN_URL` and `JELLYFIN_KEY`.
+
 ## For libraries moved from a NAS
 
 Daddy Cull began on an Unraid server, and some addons serve a library moved from one.

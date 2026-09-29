@@ -2412,8 +2412,8 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
 .graceform input[aria-invalid="true"] { border-color: var(--bad); }
 .graceform .btn { margin-left: .3rem; }
 /* Immich's address, folder and key, one under another at a reading width. */
-.immichform { display: grid; gap: .9rem; max-width: 34rem; margin: .8rem 0 1rem; }
-.immichform .setupacts.inline { margin-top: .1rem; }
+.serviceform { display: grid; gap: .9rem; max-width: 34rem; margin: .8rem 0 1rem; }
+.serviceform .setupacts.inline { margin-top: .1rem; }
 .warntext { color: var(--warn); }
 /* On the Log the waiting files sit above the saved choices, at the same size. */
 .bingal.small { grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(156px * var(--zoom))), 1fr)); }

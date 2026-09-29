@@ -7,10 +7,10 @@ import {setAddon} from './addonList';
 import {navigate} from './router';
 import {bytes} from './Bin';
 
-export type SetupConfig={library:string;import:string;takeoutInbox:string;shared:boolean;icloud:{on:boolean;appleId:string;since:string};immich:{url:string;pathPrefix:string};done:boolean};
+export type SetupConfig={library:string;import:string;takeoutInbox:string;shared:boolean;icloud:{on:boolean;appleId:string;since:string};immich:{url:string;pathPrefix:string};jellyfin:{url:string};done:boolean};
 type SetupRun={signedIn:boolean;lastRun:string;ok:boolean;message:string};
 type SetupTool={name:string;found:boolean;for:string};
-export type SetupView={configurable:boolean;config:SetupConfig;immichKeySet:boolean;tools:SetupTool[];icloud:SetupRun;applePhotos:SetupRun;free:number;version?:string;restarting?:boolean};
+export type SetupView={configurable:boolean;config:SetupConfig;immichKeySet:boolean;jellyfinKeySet:boolean;tools:SetupTool[];icloud:SetupRun;applePhotos:SetupRun;free:number;version?:string;restarting?:boolean};
 
 // The steps, in the order they are taken. Each after Folders is optional.
 const steps=[
@@ -39,7 +39,7 @@ const same=(a:SetupConfig,b:SetupConfig)=>JSON.stringify(a)===JSON.stringify(b);
  * and is started again by launchd, to answer with it. The answer is compared
  * with the setup as saved, since folders and addresses are tidied as they are
  * saved. Null means Cull did not answer again within 30 seconds. */
-export async function saveSetup(change:{config:SetupConfig;immichKey?:string},onRestarting?:()=>void):Promise<SetupView|null>{
+export async function saveSetup(change:{config:SetupConfig;immichKey?:string;jellyfinKey?:string},onRestarting?:()=>void):Promise<SetupView|null>{
   const response=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(change)});
   if(!response.ok)throw new Error(await failure(response,'The setup could not be saved.'));
   const saved=(await response.json() as SetupView).config;

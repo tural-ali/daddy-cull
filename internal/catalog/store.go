@@ -437,6 +437,14 @@ CREATE TABLE IF NOT EXISTS catalogue_generation (id INTEGER PRIMARY KEY CHECK(id
 INSERT OR IGNORE INTO catalogue_generation VALUES(1,0);
 CREATE TRIGGER IF NOT EXISTS assets_added_to_catalogue AFTER INSERT ON assets BEGIN UPDATE catalogue_generation SET value=value+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS assets_removed_from_catalogue AFTER DELETE ON assets BEGIN UPDATE catalogue_generation SET value=value+1 WHERE id=1; END;
+-- Goes up whenever a file moves into the Bin, back out of it, or is deleted
+-- from it, whichever process does it, so a service reading the library's
+-- folders can be told they changed; see jellyfin.go.
+CREATE TABLE IF NOT EXISTS file_state_generation (id INTEGER PRIMARY KEY CHECK(id=1), value INTEGER NOT NULL);
+INSERT OR IGNORE INTO file_state_generation VALUES(1,0);
+CREATE TRIGGER IF NOT EXISTS file_state_added AFTER INSERT ON file_state BEGIN UPDATE file_state_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS file_state_changed AFTER UPDATE ON file_state BEGIN UPDATE file_state_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS file_state_removed AFTER DELETE ON file_state BEGIN UPDATE file_state_generation SET value=value+1 WHERE id=1; END;
 -- What reached the catalogue with nobody on a page to see it, for the bell,
 -- and the files each archive scan added; see notifications.go.
 CREATE TABLE IF NOT EXISTS notifications (

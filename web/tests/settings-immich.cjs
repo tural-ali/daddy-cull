@@ -14,8 +14,8 @@ const home='/Users/sam/Pictures/Daddy Cull';
 (async()=>{
   const state={
     configurable:true,
-    config:{library:`${home}/Library`,import:`${home}/Import`,takeoutInbox:'',shared:false,icloud:{on:false,appleId:'',since:''},immich:{url:'',pathPrefix:''},done:true},
-    immichKeySet:false,tools:[],
+    config:{library:`${home}/Library`,import:`${home}/Import`,takeoutInbox:'',shared:false,icloud:{on:false,appleId:'',since:''},immich:{url:'',pathPrefix:''},jellyfin:{url:''},done:true},
+    immichKeySet:false,jellyfinKeySet:false,tools:[],
     icloud:{signedIn:false,lastRun:'',ok:false,message:''},
     applePhotos:{signedIn:false,lastRun:'',ok:false,message:''},
     free:0,
@@ -61,7 +61,7 @@ const home='/Users/sam/Pictures/Daddy Cull';
   assert.equal(await page.getByText('Favourites in Immich').count(),0,'no sync counts before Immich is connected');
   assert.equal(await page.getByText('Files with imported evidence').count(),0,'an empty legacy count is not shown');
   assert.equal(await page.getByRole('heading',{name:'Google Takeout'}).count(),0,'no upgrades section without upgrades');
-  const save=page.locator('form.immichform').getByRole('button',{name:'Save'});
+  const save=page.locator('form:has(#immich-url)').getByRole('button',{name:'Save'});
   assert.equal(await save.isDisabled(),true,'nothing to save yet');
 
   await page.fill('#immich-url','http://immich.example.test:2283/');

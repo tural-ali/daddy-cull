@@ -153,7 +153,7 @@ Every page has a short guide at the top, and <kbd>?</kbd> lists every key.
 | **Log** | Every decision, newest first, each one reversible. |
 | **Bin** | Everything removed, restorable until the grace period set in Settings ends. |
 | **Addons** | Turn features on or off, or add your own. |
-| **Settings** | Folders, Immich, the Bin's grace period, theme and version. |
+| **Settings** | Folders, Immich, Jellyfin, the Bin's grace period, theme and version. |
 
 Built-in addons, each off until it is set up:
 
@@ -162,6 +162,7 @@ Built-in addons, each off until it is set up:
 | Google Photos | Adds what a Google Takeout export holds and the library lacks | The setup wizard |
 | Apple Photos | Carries removals and favourites across to the Photos app | The setup wizard |
 | Immich | Sets the favourites you choose in Immich too | Settings |
+| Jellyfin | Has Jellyfin scan again when files leave the library or come back | Settings |
 
 Screenshots, Saved from social, Takeout upgrades and Shadowed copies serve libraries moved from a NAS, where a report made there is imported first; see [how it works](docs/HOW-IT-WORKS.md#for-libraries-moved-from-a-nas).
 
@@ -217,6 +218,7 @@ The Google Photos page then shows what is new, what differs and what the library
 Daddy Cull needs nothing else to run.
 Because the library is plain folders, Immich, Jellyfin, Plex or Finder can all read it as an external library.
 If you use Immich, give its address and an API key with the `asset.update` permission under Immich in Settings, and favourites you set in Daddy Cull are set there too.
+If you use Jellyfin, give its address and an API key under Jellyfin in Settings, and Jellyfin scans again a minute after files are moved to the Bin, put back or deleted, so it stops showing videos that are gone.
 
 ## Safety
 

@@ -39,6 +39,8 @@ type SetupConfig struct {
 	ICloud SetupICloud `json:"icloud"`
 	// Immich is the Immich server favourites are mirrored to, if any.
 	Immich SetupImmich `json:"immich"`
+	// Jellyfin is the Jellyfin server asked to scan again when files leave or return to the library, if any.
+	Jellyfin SetupJellyfin `json:"jellyfin"`
 	// Done says the setup has been finished once, so Cull opens on Today rather than on Setup.
 	Done bool `json:"done"`
 }
@@ -61,12 +63,20 @@ type SetupImmich struct {
 	PathPrefix string `json:"pathPrefix"`
 }
 
+// SetupJellyfin is the Jellyfin server asked to scan again when files leave or return to the library.
+type SetupJellyfin struct {
+	// URL is the server's address, such as http://jellyfin.local:8096, or empty for none.
+	URL string `json:"url"`
+}
+
 // SetupChange is a new setup from the Setup page.
 type SetupChange struct {
 	// Config is the whole setup, as GET /api/setup gives it.
 	Config SetupConfig `json:"config"`
 	// ImmichKey replaces Immich's API key when given; it is kept apart from the config and never shown again.
 	ImmichKey *string `json:"immichKey,omitempty"`
+	// JellyfinKey replaces Jellyfin's API key when given; it is kept apart from the config and never shown again.
+	JellyfinKey *string `json:"jellyfinKey,omitempty"`
 }
 
 // SetupTool is a program Cull uses, and whether this computer has it.
@@ -99,6 +109,8 @@ type SetupView struct {
 	Config SetupConfig `json:"config"`
 	// ImmichKeySet says whether an Immich API key is kept.
 	ImmichKeySet bool `json:"immichKeySet"`
+	// JellyfinKeySet says whether a Jellyfin API key is kept.
+	JellyfinKeySet bool `json:"jellyfinKeySet"`
 	// Tools are the programs Cull uses.
 	Tools []SetupTool `json:"tools"`
 	// ICloud is what the iCloud download last did.
@@ -208,11 +220,14 @@ func (c SetupConfig) Check() error {
 			return errors.New("give the folder Immich reads the library from, such as /mnt/photos")
 		}
 	}
+	if c.Jellyfin.URL != "" && !strings.HasPrefix(c.Jellyfin.URL, "http://") && !strings.HasPrefix(c.Jellyfin.URL, "https://") {
+		return errors.New("Jellyfin's address starts with http:// or https://, such as http://jellyfin.local:8096")
+	}
 	return nil
 }
 
-// Save checks a setup, makes its folders, and writes it, with the Immich key
-// when one is given.
+// Save checks a setup, makes its folders, and writes it, with the Immich and
+// Jellyfin keys when they are given.
 func (s *Setup) Save(change SetupChange) error {
 	if s.file == "" {
 		return errors.New("Cull was started without a config file, so its folders are set where it is started")
@@ -220,6 +235,7 @@ func (s *Setup) Save(change SetupChange) error {
 	config := change.Config
 	config.ICloud.AppleID = strings.TrimSpace(config.ICloud.AppleID)
 	config.Immich.URL = strings.TrimRight(strings.TrimSpace(config.Immich.URL), "/")
+	config.Jellyfin.URL = strings.TrimRight(strings.TrimSpace(config.Jellyfin.URL), "/")
 	for _, folder := range []*string{&config.Library, &config.Import, &config.TakeoutInbox} {
 		*folder = strings.TrimSpace(*folder)
 		if *folder != "" {
@@ -244,29 +260,40 @@ func (s *Setup) Save(change SetupChange) error {
 	if err := writeQuietly(s.file, append(body, '\n')); err != nil {
 		return err
 	}
-	if change.ImmichKey != nil {
-		key := strings.TrimSpace(*change.ImmichKey)
-		if strings.ContainsAny(key, "\n\r\"'`$\\ ") {
-			return errors.New("an Immich API key is letters and digits only")
+	for _, secret := range []struct {
+		name, service string
+		value         *string
+	}{{"IMMICH_KEY", "Immich", change.ImmichKey}, {"JELLYFIN_KEY", "Jellyfin", change.JellyfinKey}} {
+		if secret.value == nil {
+			continue
 		}
-		secrets := filepath.Join(StateDir(s.file), "secrets.env")
-		// Every other line, the writer's key among them, stays as it was.
-		var lines []string
-		if body, err := os.ReadFile(secrets); err == nil {
-			for _, line := range strings.Split(strings.TrimRight(string(body), "\n"), "\n") {
-				if !strings.HasPrefix(strings.TrimSpace(line), "IMMICH_KEY=") {
-					lines = append(lines, line)
-				}
-			}
-		} else if !errors.Is(err, fs.ErrNotExist) {
-			return err
-		}
-		lines = append(lines, "IMMICH_KEY="+key)
-		if err := writeQuietly(secrets, []byte(strings.Join(lines, "\n")+"\n")); err != nil {
+		if err := s.keepSecret(secret.name, secret.service, *secret.value); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// keepSecret sets one key in secrets.env beside the config file, leaving
+// every other line, the writer's key among them, as it was.
+func (s *Setup) keepSecret(name, service, value string) error {
+	key := strings.TrimSpace(value)
+	if strings.ContainsAny(key, "\n\r\"'`$\\ ") {
+		return fmt.Errorf("%s's API key is letters and digits only", service)
+	}
+	secrets := filepath.Join(StateDir(s.file), "secrets.env")
+	var lines []string
+	if body, err := os.ReadFile(secrets); err == nil {
+		for _, line := range strings.Split(strings.TrimRight(string(body), "\n"), "\n") {
+			if !strings.HasPrefix(strings.TrimSpace(line), name+"=") {
+				lines = append(lines, line)
+			}
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	lines = append(lines, name+"="+key)
+	return writeQuietly(secrets, []byte(strings.Join(lines, "\n")+"\n"))
 }
 
 // writeQuietly replaces file whole, readable by its owner only.
@@ -294,7 +321,8 @@ func (s *Setup) View() SetupView {
 			view.Config = config
 		}
 		if body, err := os.ReadFile(filepath.Join(StateDir(s.file), "secrets.env")); err == nil {
-			view.ImmichKeySet = strings.Contains(string(body), "IMMICH_KEY=") && !strings.Contains(string(body), "IMMICH_KEY=\n")
+			view.ImmichKeySet = keptSecret(string(body), "IMMICH_KEY")
+			view.JellyfinKeySet = keptSecret(string(body), "JELLYFIN_KEY")
 		}
 		view.ICloud = readRun(filepath.Join(StateDir(s.file), "icloud-status.json"))
 		view.ApplePhotos = readRun(filepath.Join(StateDir(s.file), "apple-photos-status.json"))
@@ -316,6 +344,16 @@ func (s *Setup) View() SetupView {
 		}
 	}
 	return view
+}
+
+// keptSecret says whether secrets.env holds a value for name.
+func keptSecret(secrets, name string) bool {
+	for _, line := range strings.Split(secrets, "\n") {
+		if value, ok := strings.CutPrefix(strings.TrimSpace(line), name+"="); ok && value != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func readRun(file string) SetupRun {

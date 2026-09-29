@@ -15,7 +15,7 @@ function server({configurable=true}={}){
   const state={
     configurable,
     config:{library:`${home}/Library`,import:`${home}/Import`,takeoutInbox:'',shared:false,icloud:{on:false,appleId:'',since:''},immich:{url:'',pathPrefix:''},done:false},
-    immichKeySet:false,
+    immichKeySet:false,jellyfinKeySet:false,
     tools:[
       {name:'exiftool',found:true,for:'Reads when each photo was taken'},
       {name:'ffmpeg',found:true,for:'Makes previews of videos'},

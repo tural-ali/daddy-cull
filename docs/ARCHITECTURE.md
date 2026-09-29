@@ -89,7 +89,7 @@ A tool that is missing is logged once, and only the previews that need it are un
 4. Removed files go to `.culled` inside the library, on the same disk, and can be restored.
 5. Deletion happens only in the writer, only after the grace period set in Settings, and only for files in the Bin.
 6. A scan that fails part way marks nothing missing.
-7. Apple Photos and Immich are changed only through their own interfaces, never their databases.
+7. Apple Photos, Immich and Jellyfin are changed only through their own interfaces, never their databases.
 
 ## Addons and the API
 

@@ -81,6 +81,8 @@ func main() {
 	// does not appear in a process listing or in the container's command line.
 	immichURL := flag.String("immich-url", os.Getenv("IMMICH_URL"), "Immich base URL that archive favourites are mirrored to; empty disables the sync")
 	immichPrefix := flag.String("immich-path-prefix", os.Getenv("IMMICH_PATH_PREFIX"), "archive path as Immich's external library recorded it; needed with -immich-url")
+	// Like Immich's, the Jellyfin key comes from JELLYFIN_KEY only.
+	jellyfinURL := flag.String("jellyfin-url", os.Getenv("JELLYFIN_URL"), "Jellyfin base URL that is asked to scan again when files leave or return to the library; empty disables it")
 	flag.Parse()
 	if *showVersion {
 		fmt.Println(version)
@@ -348,7 +350,7 @@ func main() {
 		book := api.NewBook()
 		apiMux := api.NewMux(book)
 		apiMux.Guard(api.SameOrigin)
-		fixed := catalog.SetupConfig{Library: *archiveMedia, TakeoutInbox: *takeoutInbox, Immich: catalog.SetupImmich{URL: *immichURL, PathPrefix: *immichPrefix}}
+		fixed := catalog.SetupConfig{Library: *archiveMedia, TakeoutInbox: *takeoutInbox, Immich: catalog.SetupImmich{URL: *immichURL, PathPrefix: *immichPrefix}, Jellyfin: catalog.SetupJellyfin{URL: *jellyfinURL}}
 		if *configFile != "" {
 			fixed = setupConfig
 		}
@@ -373,6 +375,7 @@ func main() {
 		}
 		defer googlePhotos.Close()
 		immich := catalog.ImmichConfig{URL: *immichURL, Key: os.Getenv("IMMICH_KEY"), PathPrefix: *immichPrefix}
+		jellyfin := catalog.JellyfinConfig{URL: *jellyfinURL, Key: os.Getenv("JELLYFIN_KEY")}
 		if err := os.MkdirAll(*addonsDir, 0o755); err != nil {
 			log.Printf("addons folder %s could not be made, so only Cull's own addons are available: %v", *addonsDir, err)
 		}
@@ -381,6 +384,7 @@ func main() {
 			DisksMounted:       mediaRoots.Disks != "",
 			UpgradesMounted:    mediaRoots.Upgrades != "",
 			ImmichConfigured:   immich.URL != "" && immich.Key != "",
+			JellyfinConfigured: jellyfin.URL != "" && jellyfin.Key != "",
 			Photos:             photos,
 			GooglePhotos:       googlePhotos,
 		})...)
@@ -449,6 +453,7 @@ func main() {
 			go s.KeepHashes(ctx, mediaRoots)
 		}
 		startImmichSync(ctx, s, immich, addons)
+		startJellyfinRefresh(ctx, s, jellyfin, addons)
 	}
 	server := &http.Server{Addr: *addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 0, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}
 	go func() {
@@ -482,8 +487,8 @@ func besideCatalogue() {
 }
 
 // applyConfig fills every flag not given on the command line from the config
-// file, makes the folders it names, and takes the writer's key and Immich's
-// from secrets.env beside it when the environment has none.
+// file, makes the folders it names, and takes the writer's key, Immich's and
+// Jellyfin's from secrets.env beside it when the environment has none.
 func applyConfig(file string, writer bool, downloads *folderList) catalog.SetupConfig {
 	config, err := catalog.ReadSetup(file)
 	if err != nil {
@@ -506,6 +511,7 @@ func applyConfig(file string, writer bool, downloads *folderList) catalog.SetupC
 	use("takeout-inbox", config.TakeoutInbox)
 	use("immich-url", config.Immich.URL)
 	use("immich-path-prefix", config.Immich.PathPrefix)
+	use("jellyfin-url", config.Jellyfin.URL)
 	if writer {
 		use("listen", "127.0.0.1:8831")
 		use("archive-root", config.Library)
@@ -529,7 +535,7 @@ func applyConfig(file string, writer bool, downloads *folderList) catalog.SetupC
 	if body, err := os.ReadFile(filepath.Join(state, "secrets.env")); err == nil {
 		for _, line := range strings.Split(string(body), "\n") {
 			name, value, ok := strings.Cut(strings.TrimSpace(line), "=")
-			if ok && (name == "CULL_BIN_KEY" || name == "IMMICH_KEY") && os.Getenv(name) == "" && value != "" {
+			if ok && (name == "CULL_BIN_KEY" || name == "IMMICH_KEY" || name == "JELLYFIN_KEY") && os.Getenv(name) == "" && value != "" {
 				os.Setenv(name, value)
 			}
 		}
@@ -583,6 +589,23 @@ func startImmichSync(ctx context.Context, s *catalog.Store, cfg catalog.ImmichCo
 	// It runs only while the Immich addon is on; hearts given meanwhile wait
 	// in the queue and are sent once it is back on.
 	go addons.While(ctx, catalog.AddonImmich, sync.Run)
+}
+
+// startJellyfinRefresh starts asking Jellyfin to scan when it is configured.
+// A malformed address is reported once and leaves the review app running
+// without it.
+func startJellyfinRefresh(ctx context.Context, s *catalog.Store, cfg catalog.JellyfinConfig, addons *addon.Registry) {
+	refresh, err := catalog.NewJellyfinRefresh(s, cfg)
+	if err != nil {
+		log.Printf("Jellyfin scans disabled: %v", err)
+		return
+	}
+	if refresh == nil {
+		log.Print("Jellyfin scans disabled: JELLYFIN_URL or JELLYFIN_KEY is not set")
+		return
+	}
+	log.Printf("Jellyfin scans enabled for %s", cfg.URL)
+	go addons.While(ctx, catalog.AddonJellyfin, refresh.Run)
 }
 
 // filterScreenshots reads one path per line and writes "<path>\t<rule>" for

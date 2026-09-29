@@ -7,6 +7,7 @@ import {reloadPage} from './router';
 import {failure} from '../api';
 import {readSetup,saveSetup,type SetupView} from './Setup';
 import {hiddenGuides,showAllGuides} from './PageGuide';
+import {readAddons,useAddons} from './addonList';
 
 export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;videoMuted?:boolean;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number;immichRefused?:number;calendarDates?:number;reviewedDates?:number;streak?:number;reviewedToday?:boolean;notifications?:number};
 
@@ -237,7 +238,7 @@ function ImmichSettings({stats}:{stats:Stats}){
     {saved.url&&stats.immichSynced!==undefined&&<dl className="kv">
       <div><dt>Favourites in Immich</dt><dd>{stats.immichSynced.toLocaleString()} synced · {(stats.immichPending??0).toLocaleString()} waiting · {(stats.immichFailed??0).toLocaleString()} failed{(stats.immichRefused??0)>0&&<> · {stats.immichRefused!.toLocaleString()} belong to another Immich user</>}</dd></div>
     </dl>}
-    <form className="immichform" onSubmit={event=>{event.preventDefault();if(changed&&url.trim())void save({url:url.trim(),pathPrefix:prefix.trim()},key.trim()||undefined,'Saved. Favourites will be sent to Immich.')}}>
+    <form className="serviceform" onSubmit={event=>{event.preventDefault();if(changed&&url.trim())void save({url:url.trim(),pathPrefix:prefix.trim()},key.trim()||undefined,'Saved. Favourites will be sent to Immich.')}}>
       <div className="setupfield">
         <label htmlFor="immich-url">Address</label>
         <input id="immich-url" className="setupinput" type="url" inputMode="url" placeholder="http://immich.local:2283" value={url} disabled={!editable||busy} spellCheck={false} autoComplete="off" onChange={event=>setURL(event.target.value)}/>
@@ -257,6 +258,62 @@ function ImmichSettings({stats}:{stats:Stats}){
       <div className="setupacts inline">
         <button className="btn primary" disabled={!editable||busy||!changed||!url.trim()}>{busy?<Busy label="Saving…" state="working"/>:'Save'}</button>
         {saved.url&&<button type="button" className="btn" disabled={!editable||busy} onClick={()=>void save({url:'',pathPrefix:''},'','Immich is disconnected.')}>Disconnect</button>}
+      </div>
+    </form>
+  </>;
+}
+
+// JellyfinSettings connects a Jellyfin server that reads this library's
+// folders, so it scans again once files leave the library or come back rather
+// than going on showing videos that are gone. The key is sent once and never
+// shown again; saving starts Cull again to take it up.
+function JellyfinSettings(){
+  const addons=useAddons();
+  const [setup,setSetup]=useState<SetupView|null>(null);
+  const [url,setURL]=useState('');
+  const [key,setKey]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [message,setMessage]=useState('');
+  const [error,setError]=useState('');
+  const show=(view:SetupView)=>{setSetup(view);setURL(view.config.jellyfin.url);setKey('')};
+  useEffect(()=>{readSetup().then(show).catch(reason=>setError((reason as Error).message))},[]);
+  if(!setup)return null;
+  const saved=setup.config.jellyfin;
+  const editable=setup.configurable;
+  const changed=url.trim()!==saved.url||key.trim()!=='';
+  const status=addons?.find(addon=>addon.id==='jellyfin')?.status;
+  async function save(next:{url:string},newKey:string|undefined,done:string){
+    setBusy(true);setMessage('');setError('');
+    try{
+      const answer=await saveSetup({config:{...setup!.config,jellyfin:next},...(newKey===undefined?{}:{jellyfinKey:newKey})});
+      if(!answer){setError('Daddy Cull stopped to take the change up and has not come back. Run daddy-cull start in Terminal, then reload this page.');return}
+      show(answer);setMessage(done);
+      // Cull started again with the change, so its status is new too.
+      void readAddons();
+    }catch(reason){setError((reason as Error).message)}finally{setBusy(false)}
+  }
+  return <>
+    <h2 id="jellyfin">Jellyfin</h2>
+    <p className="hint">Optional. If <a href="https://jellyfin.org" target="_blank" rel="noreferrer">Jellyfin</a> reads this library, Cull asks it to scan again a minute after files are moved to the Bin, put back or deleted from it, so it stops showing videos that are gone. Nothing else is sent to it.</p>
+    {!editable&&<p className="note">This Daddy Cull was started with its settings given where it runs, such as in Docker, so Jellyfin is set there.</p>}
+    {(saved.url||!editable)&&status&&status.state!=='setup'&&<dl className="kv">
+      <div><dt>Scans</dt><dd>{status.detail}</dd></div>
+    </dl>}
+    <form className="serviceform" onSubmit={event=>{event.preventDefault();if(changed&&url.trim())void save({url:url.trim()},key.trim()||undefined,'Saved. Jellyfin will be asked to scan when files leave or come back.')}}>
+      <div className="setupfield">
+        <label htmlFor="jellyfin-url">Address</label>
+        <input id="jellyfin-url" className="setupinput" type="url" inputMode="url" placeholder="http://jellyfin.local:8096" value={url} disabled={!editable||busy} spellCheck={false} autoComplete="off" onChange={event=>setURL(event.target.value)}/>
+      </div>
+      <div className="setupfield">
+        <label htmlFor="jellyfin-key">API key</label>
+        <input id="jellyfin-key" className="setupinput" type="password" placeholder={setup.jellyfinKeySet?'Kept. Type a new one to replace it.':'From Jellyfin: Dashboard, API Keys'} value={key} disabled={!editable||busy} spellCheck={false} autoComplete="off" onChange={event=>setKey(event.target.value)}/>
+        <p className="hint">It is kept on this Mac only.</p>
+      </div>
+      {error&&<p className="note warn" role="alert">{error}</p>}
+      {message&&<p className="flash" role="status">{message}</p>}
+      <div className="setupacts inline">
+        <button className="btn primary" disabled={!editable||busy||!changed||!url.trim()}>{busy?<Busy label="Saving…" state="working"/>:'Save'}</button>
+        {saved.url&&<button type="button" className="btn" disabled={!editable||busy} onClick={()=>void save({url:''},'','Jellyfin is disconnected.')}>Disconnect</button>}
       </div>
     </form>
   </>;
@@ -312,6 +369,7 @@ export function Settings({stats}:{stats:Stats}){
       {stats.legacyBin>0&&<div><dt>Legacy Bin files</dt><dd>{stats.legacyBin.toLocaleString()}</dd></div>}
     </dl>
     <ImmichSettings stats={stats}/>
+    <JellyfinSettings/>
     <BinSettings/>
     <VideoSettings initial={stats.videoMuted!==false}/>
     <Appearance/>

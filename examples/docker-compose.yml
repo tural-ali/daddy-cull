@@ -39,6 +39,9 @@ services:
       IMMICH_URL: ${IMMICH_URL:-}
       IMMICH_KEY: ${IMMICH_KEY:-}
       IMMICH_PATH_PREFIX: ${IMMICH_PATH_PREFIX:-}
+      # Optional: Jellyfin scans again when files leave the library or come back.
+      JELLYFIN_URL: ${JELLYFIN_URL:-}
+      JELLYFIN_KEY: ${JELLYFIN_KEY:-}
     depends_on:
       writer:
         condition: service_healthy

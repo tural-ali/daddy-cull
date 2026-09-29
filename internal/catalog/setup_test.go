@@ -57,18 +57,19 @@ func TestSetupChecksTheFolders(t *testing.T) {
 		}
 	}
 	for name, change := range map[string]func(*SetupConfig){
-		"no library":        func(c *SetupConfig) { c.Library = "" },
-		"a relative folder": func(c *SetupConfig) { c.Import = "Pictures/Import" },
-		"import in library": func(c *SetupConfig) { c.Import = "/Users/sam/Pictures/Library/Import" },
-		"library in import": func(c *SetupConfig) { c.Library = "/Users/sam/Pictures/Import/Library" },
-		"the same folder":   func(c *SetupConfig) { c.Import = c.Library },
-		"takeout in import": func(c *SetupConfig) { c.TakeoutInbox = "/Users/sam/Pictures/Import/Takeout" },
-		"iCloud and no one": func(c *SetupConfig) { c.ICloud.On = true },
-		"two accounts":      func(c *SetupConfig) { c.ICloud.AppleID = "sam@example.comsam@example.com" },
-		"a shell command":   func(c *SetupConfig) { c.ICloud.AppleID = "sam@example.com; rm -rf ~" },
-		"a day that is not": func(c *SetupConfig) { c.ICloud.Since = "14/08/2019" },
-		"Immich, no scheme": func(c *SetupConfig) { c.Immich.URL = "immich.local:2283" },
-		"Immich, no folder": func(c *SetupConfig) { c.Immich.URL = "http://immich.local:2283" },
+		"no library":          func(c *SetupConfig) { c.Library = "" },
+		"a relative folder":   func(c *SetupConfig) { c.Import = "Pictures/Import" },
+		"import in library":   func(c *SetupConfig) { c.Import = "/Users/sam/Pictures/Library/Import" },
+		"library in import":   func(c *SetupConfig) { c.Library = "/Users/sam/Pictures/Import/Library" },
+		"the same folder":     func(c *SetupConfig) { c.Import = c.Library },
+		"takeout in import":   func(c *SetupConfig) { c.TakeoutInbox = "/Users/sam/Pictures/Import/Takeout" },
+		"iCloud and no one":   func(c *SetupConfig) { c.ICloud.On = true },
+		"two accounts":        func(c *SetupConfig) { c.ICloud.AppleID = "sam@example.comsam@example.com" },
+		"a shell command":     func(c *SetupConfig) { c.ICloud.AppleID = "sam@example.com; rm -rf ~" },
+		"a day that is not":   func(c *SetupConfig) { c.ICloud.Since = "14/08/2019" },
+		"Immich, no scheme":   func(c *SetupConfig) { c.Immich.URL = "immich.local:2283" },
+		"Immich, no folder":   func(c *SetupConfig) { c.Immich.URL = "http://immich.local:2283" },
+		"Jellyfin, no scheme": func(c *SetupConfig) { c.Jellyfin.URL = "jellyfin.local:8096" },
 	} {
 		config := good
 		change(&config)
@@ -81,7 +82,7 @@ func TestSetupChecksTheFolders(t *testing.T) {
 func TestSetupSavesAndRestarts(t *testing.T) {
 	setup, home, restarts := setupFixture(t)
 	handler := routeHandler(t, setup)
-	change := `{"config":{"library":"` + filepath.Join(home, "Photos") + `","import":"` + filepath.Join(home, "Drop here") + `","shared":false,"icloud":{"on":true,"appleId":" someone@example.com ","since":"2024-01-01"},"immich":{"url":"","pathPrefix":""},"done":true},"immichKey":"abc123"}`
+	change := `{"config":{"library":"` + filepath.Join(home, "Photos") + `","import":"` + filepath.Join(home, "Drop here") + `","shared":false,"icloud":{"on":true,"appleId":" someone@example.com ","since":"2024-01-01"},"immich":{"url":"","pathPrefix":""},"jellyfin":{"url":" http://jellyfin.local:8096/ "},"done":true},"immichKey":"abc123","jellyfinKey":"def456"}`
 	request := httptest.NewRequest("POST", "/api/setup", strings.NewReader(change))
 	request.Header.Set("Content-Type", "application/json")
 	answer := httptest.NewRecorder()
@@ -93,7 +94,7 @@ func TestSetupSavesAndRestarts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved.ICloud.AppleID != "someone@example.com" || !saved.Done || saved.Library != filepath.Join(home, "Photos") {
+	if saved.ICloud.AppleID != "someone@example.com" || !saved.Done || saved.Library != filepath.Join(home, "Photos") || saved.Jellyfin.URL != "http://jellyfin.local:8096" {
 		t.Fatalf("saved %+v", saved)
 	}
 	for _, folder := range []string{saved.Library, saved.Import} {
@@ -107,11 +108,11 @@ func TestSetupSavesAndRestarts(t *testing.T) {
 			t.Fatalf("%s: %v %v, want readable by its owner only", file, info.Mode(), err)
 		}
 	}
-	if strings.Contains(answer.Body.String(), "abc123") {
-		t.Fatal("the Immich key was shown")
+	if strings.Contains(answer.Body.String(), "abc123") || strings.Contains(answer.Body.String(), "def456") {
+		t.Fatal("a key was shown")
 	}
-	if secrets, _ := os.ReadFile(filepath.Join(StateDir(setup.file), "secrets.env")); string(secrets) != "# Daddy Cull\nCULL_BIN_KEY=synthetic-writer-key-for-tests-only-0123\nIMMICH_KEY=abc123\n" {
-		t.Fatalf("secrets.env became %q, want the writer's key kept and the Immich key replaced", secrets)
+	if secrets, _ := os.ReadFile(filepath.Join(StateDir(setup.file), "secrets.env")); string(secrets) != "# Daddy Cull\nCULL_BIN_KEY=synthetic-writer-key-for-tests-only-0123\nIMMICH_KEY=abc123\nJELLYFIN_KEY=def456\n" {
+		t.Fatalf("secrets.env became %q, want the writer's key kept and the Immich and Jellyfin keys replaced", secrets)
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for restarts.Load() == 0 && time.Now().Before(deadline) {
@@ -121,7 +122,7 @@ func TestSetupSavesAndRestarts(t *testing.T) {
 		t.Fatalf("restarted %d times", restarts.Load())
 	}
 	view := setup.View()
-	if !view.ImmichKeySet || !view.Configurable || view.Free <= 0 || view.Version != "0.1.0" {
+	if !view.ImmichKeySet || !view.JellyfinKeySet || !view.Configurable || view.Free <= 0 || view.Version != "0.1.0" {
 		t.Fatalf("view %+v", view)
 	}
 	if !view.Tools[0].Found || view.Tools[2].Found {

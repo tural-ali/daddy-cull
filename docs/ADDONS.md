@@ -1,7 +1,7 @@
 # Addons
 
 Everything in Cull beyond reviewing dates, finding duplicates and the Bin is an addon.
-Screenshots, Saved from social, Shadowed copies, Takeout upgrades, Apple Photos, Immich and Daddy Cull classic come with Cull and can each be turned off on the Addons page.
+Screenshots, Saved from social, Shadowed copies, Takeout upgrades, Apple Photos, Immich, Jellyfin and Daddy Cull classic come with Cull and can each be turned off on the Addons page.
 Anyone can add another as a folder holding an `addon.json`, written in any language, that works through the same API Cull's own pages use.
 
 Turning an addon off takes its pages out of the sidebar, stops its routes and its background work, and refuses its key.

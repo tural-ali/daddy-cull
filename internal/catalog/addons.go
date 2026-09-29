@@ -24,6 +24,7 @@ const (
 	AddonApplePhotos  = "apple-photos"
 	AddonGooglePhotos = "google-photos"
 	AddonImmich       = "immich"
+	AddonJellyfin     = "jellyfin"
 	AddonClassic      = "classic"
 )
 
@@ -323,6 +324,8 @@ type AddonNeeds struct {
 	UpgradesMounted bool
 	// ImmichConfigured says Immich's address and key are both set.
 	ImmichConfigured bool
+	// JellyfinConfigured says Jellyfin's address and key are both set.
+	JellyfinConfigured bool
 	// Photos is the Apple Photos helper's hub.
 	Photos *PhotosHub
 	// GooglePhotos reads the Takeout inbox, or is nil without one.
@@ -499,6 +502,29 @@ func (s *Store) BuiltInAddons(needs AddonNeeds) []addon.BuiltIn {
 				return addon.Status{State: addon.Ready, Detail: detail}
 			},
 			Default: func(context.Context) bool { return needs.ImmichConfigured },
+		},
+		{
+			Manifest: addon.Manifest{
+				ID: AddonJellyfin, Name: "Jellyfin", Version: "1", Icon: "videocam",
+				Summary:     "Have Jellyfin scan the library again whenever files leave it or come back.",
+				Description: "Jellyfin reads the library's folders as a media library, and on its own notices a video has gone only at its next scan. Once files have been moved to the Bin, put back, deleted from it or imported, and the library has held still for a minute, Cull asks Jellyfin to scan again through its API.",
+				Needs:       []string{"JELLYFIN_URL and JELLYFIN_KEY set in the environment, or Jellyfin's address and an API key in Settings"},
+				Work:        []string{"Asks Jellyfin to scan again after files leave or return to the library"},
+			},
+			Status: func(ctx context.Context) addon.Status {
+				if !needs.JellyfinConfigured {
+					return addon.Status{State: addon.Setup, Detail: "JELLYFIN_URL and JELLYFIN_KEY are not both set."}
+				}
+				last, problem := s.JellyfinStatus(ctx)
+				if problem != "" {
+					return addon.Status{State: addon.Problem, Detail: problem + ". Cull tries again on its own."}
+				}
+				if last.IsZero() {
+					return addon.Status{State: addon.Ready, Detail: "Jellyfin has not been asked to scan yet."}
+				}
+				return addon.Status{State: addon.Ready, Detail: "Jellyfin was last asked to scan at " + last.Local().Format("15:04 on 2 January") + "."}
+			},
+			Default: func(context.Context) bool { return needs.JellyfinConfigured },
 		},
 		{
 			Manifest: addon.Manifest{
