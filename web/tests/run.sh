@@ -12,16 +12,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 [ -f dist/index.html ] || { echo "Build the app first: npm run build" >&2; exit 1; }
 
-# The review-queue prototype's tests need the old prototype server on 8840.
-prototype=" bin-flow decision-flow group-flow group-recovery keep-latency logo-navigation related-flow "
-names=()
-if [ $# -gt 0 ]; then
-  names=("$@")
-else
-  for file in tests/*.cjs; do
-    name=$(basename "$file" .cjs)
-    case "$prototype" in *" $name "*) ;; *) names+=("$name") ;; esac
-  done
+names=("$@")
+if [ $# -eq 0 ]; then
+  for file in tests/*.cjs; do names+=("$(basename "$file" .cjs)"); done
 fi
 
 logs=$(mktemp -d "${TMPDIR:-/tmp}/cull-browser-tests.XXXXXX")

@@ -9,5 +9,5 @@ export default defineConfig({
   plugins:[{name:'no-api-in-preview',configurePreviewServer(server){
     server.middlewares.use('/api',(_request,response)=>{response.statusCode=502;response.end()});
   }}],
-  build:{rollupOptions:{input:{app:new URL('index.html',import.meta.url).pathname,queue:new URL('queue.html',import.meta.url).pathname}}},
+  build:{rollupOptions:{input:{app:new URL('index.html',import.meta.url).pathname}}},
 });

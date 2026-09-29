@@ -13,7 +13,7 @@ func TestWebAppNeverServesAStalePage(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for name, body := range map[string]string{"index.html": "app", "queue.html": "queue", "assets/app-abc123.js": "js", "manifest.json": "{}"} {
+	for name, body := range map[string]string{"index.html": "app", "assets/app-abc123.js": "js", "manifest.json": "{}"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -26,7 +26,6 @@ func TestWebAppNeverServesAStalePage(t *testing.T) {
 		{"/day/2020-09-23", "app", "no-cache"},
 		{"/on/09-23/photo/42", "app", "no-cache"},
 		{"/bin/photo/shot%3A7", "app", "no-cache"},
-		{"/queue.html", "queue", "no-cache"},
 		{"/manifest.json", "{}", "no-cache"},
 		{"/assets/app-abc123.js", "js", "public, max-age=31536000, immutable"},
 	} {
