@@ -68,7 +68,7 @@ func main() {
 	upgradesMedia := flag.String("upgrades-media", "", "read-only mount of the Takeout upgrade staging area, served for previews")
 	disksMedia := flag.String("disks-media", "", "read-only mount holding the physical disk roots behind the share, served for Shadowed previews")
 	reviewMedia := flag.String("review-media", "", "flat directory of hardlinks named by asset id, for files the share cannot expose under their own names")
-	previewCache := flag.String("preview-cache", "state/preview-cache", "writable directory for generated gallery thumbnails; never inside a media mount")
+	previewCache := flag.String("preview-cache", "state/preview-cache", "writable directory for generated gallery thumbnails; never inside a media mount (default: preview-cache beside -db)")
 	frameTool := flag.String("frame-tool", "ffmpeg", "frame extractor used for videos with no captured poster; empty disables video previews")
 	rawTool := flag.String("raw-tool", "exiftool", "reader for the JPEG a camera embeds in a RAW file; empty disables RAW previews")
 	seed := flag.Int("seed", 0, "seed an empty catalogue with synthetic metadata, then exit")
@@ -76,7 +76,7 @@ func main() {
 	demoNetwork := flag.Bool("demo-network", false, "allow private-network access; media access uses fixed read-only proxy routes")
 	check := flag.Bool("check", false, "check a running local prototype and exit")
 	web := flag.String("web", "web/dist", "compiled React directory")
-	addonsDir := flag.String("addons-dir", "state/addons", "folder of addons of your own, one folder each holding an addon.json; created if missing")
+	addonsDir := flag.String("addons-dir", "state/addons", "folder of addons of your own, one folder each holding an addon.json; created if missing (default: addons beside -db)")
 	// The Immich key is taken from IMMICH_KEY only, never from a flag, so it
 	// does not appear in a process listing or in the container's command line.
 	immichURL := flag.String("immich-url", os.Getenv("IMMICH_URL"), "Immich base URL that archive favourites are mirrored to; empty disables the sync")
@@ -90,6 +90,7 @@ func main() {
 	if *configFile != "" {
 		setupConfig = applyConfig(*configFile, *writer, &downloadDirs)
 	}
+	besideCatalogue()
 	imports := 0
 	for _, value := range []string{*importFile, *importEvidence, *importLegacy, *importScreenshots, *importUpgrades, *importSocial, *scanArchive, *phoneDeletions} {
 		if value != "" {
@@ -456,9 +457,27 @@ func main() {
 		defer cancel()
 		server.Shutdown(c)
 	}()
-	log.Printf("review app: http://%s", *addr)
+	role := "Daddy Cull " + version
+	if *writer {
+		role += ", writer,"
+	}
+	log.Printf("%s listening on http://%s", role, *addr)
 	if err = server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
+	}
+}
+
+// besideCatalogue puts the preview cache and the addons folder next to the
+// catalogue when neither is given, rather than under the working directory,
+// which a container may not be able to write.
+func besideCatalogue() {
+	given := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	state := filepath.Dir(flag.Lookup("db").Value.String())
+	for name, folder := range map[string]string{"preview-cache": "preview-cache", "addons-dir": "addons"} {
+		if !given[name] {
+			_ = flag.Set(name, filepath.Join(state, folder))
+		}
 	}
 }
 
