@@ -880,10 +880,9 @@ main.wide, main:has(.gal, .rows, .calendar) { max-width: 100%; }
   --row: calc(232px * var(--zoom));
 
   position: relative;
-  display: flex; flex-direction: column;
   gap: 4px;
 }
-.jgrid .jrow { display: flex; gap: inherit; }
+.jgrid > [data-shape] { position: absolute; }
 .jgrid .jruler { position: absolute; top: 0; left: 0; width: 0; height: var(--row); visibility: hidden; pointer-events: none; }
 .jgrid .mo { container: tile / inline-size; flex: none; aspect-ratio: auto; border-radius: 0; }
 .jgrid .mo.seen::after, .jgrid .mo.sel::after { border-radius: 0; }

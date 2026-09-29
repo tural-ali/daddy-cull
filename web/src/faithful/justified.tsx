@@ -11,7 +11,8 @@ import {useEffect,useLayoutEffect,useMemo,useRef,useState,type CSSProperties,typ
 /** One tile's shape, width over height, if known before it loads, and the
  * quarter turns it is shown at, which swap a picture's sides when odd. */
 export type JustifiedItem={key:string|number;ratio?:number;turn?:number};
-export type Box={width:number;height:number};
+/** Where a tile sits in the grid and how big it is, in pixels. */
+export type Box={width:number;height:number;left:number;top:number};
 
 /** A picture wider than this, or narrower than its inverse, is shown cropped
  * to it, so a panorama cannot take a row to itself at a sliver's height. */
@@ -128,11 +129,25 @@ export function Justified({items,className='',render}:{items:JustifiedItem[];cla
     return clamp((item.turn??0)%2?1/own:own);
   }),[items,measured]);
   const rows=useMemo(()=>layout(ratios,size.width,size.target,size.gap),[ratios,size]);
-  return <div ref={grid} className={`jgrid ${className}`}>
+  // The tiles are placed, not wrapped in an element per row, so a tile that
+  // moves to another row when the size changes is the same element: it keeps
+  // its picture and focus, and the zoom can hold it in place.
+  const placed=useMemo(()=>{
+    const boxes:{index:number;box:Box}[]=[];
+    let top=0;
+    for(const row of rows){
+      let left=0;
+      for(const tile of row.tiles){
+        boxes.push({index:tile.index,box:{width:tile.width,height:row.height,left,top}});
+        left+=tile.width+size.gap;
+      }
+      top+=row.height+size.gap;
+    }
+    return {boxes,height:rows.length?top-size.gap:0};
+  },[rows,size.gap]);
+  return <div ref={grid} className={`jgrid ${className}`} style={{height:placed.height}}>
     <span ref={ruler} className="jruler" aria-hidden="true"/>
-    {rows.map(row=><div className="jrow" key={items[row.tiles[0].index].key} style={{height:row.height}}>
-      {row.tiles.map(tile=>render(tile.index,{width:tile.width,height:row.height}))}
-    </div>)}
+    {placed.boxes.map(({index,box})=>render(index,box))}
   </div>;
 }
 
@@ -147,5 +162,5 @@ export function shapeOf(asset:{width?:number;height?:number}){
 export function shapeProps(item:JustifiedItem,box:Box){
   const turn=item.turn??0;
   return {'data-key':String(item.key),'data-shape':item.ratio&&item.ratio>0?'known':'unknown',...(turn?{'data-turn':turn}:{}),
-    style:{width:box.width,height:box.height,...(turn?{'--tile-w':`${box.width}px`,'--tile-h':`${box.height}px`}:{})} as CSSProperties};
+    style:{width:box.width,height:box.height,left:box.left,top:box.top,...(turn?{'--tile-w':`${box.width}px`,'--tile-h':`${box.height}px`}:{})} as CSSProperties};
 }

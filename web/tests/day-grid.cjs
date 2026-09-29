@@ -34,7 +34,7 @@ const square='<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><re
   const settled=()=>page.evaluate(()=>new Promise(resolve=>{
     let last='',still=0;
     const look=()=>{
-      const now=[...document.querySelectorAll('main .jrow')].map(row=>row.getBoundingClientRect().height).join();
+      const now=[...document.querySelectorAll('main .jgrid > figure')].map(tile=>{const box=tile.getBoundingClientRect();return `${box.top},${box.height}`}).join();
       still=now===last?still+1:0;last=now;
       if(still>=3)resolve();else requestAnimationFrame(look);
     };
@@ -44,14 +44,14 @@ const square='<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><re
     const grid=section.querySelector('.jgrid');
     const width=grid.getBoundingClientRect().width;
     const target=grid.querySelector('.jruler').getBoundingClientRect().height;
-    return {year:section.querySelector('h2').firstChild.textContent,width,target,rows:[...grid.querySelectorAll('.jrow')].map(row=>{
-      const tiles=[...row.children].map(tile=>{const box=tile.getBoundingClientRect(),img=tile.querySelector('img');return {id:tile.dataset.asset,width:box.width,height:box.height,left:box.left,natural:img.naturalWidth/img.naturalHeight}});
-      return {height:row.getBoundingClientRect().height,tiles};
-    })};
+    return {year:section.querySelector('h2').firstChild.textContent,width,target,rows:Object.values(Object.groupBy([...grid.querySelectorAll(':scope > figure')].map(tile=>{
+      const box=tile.getBoundingClientRect(),img=tile.querySelector('img');
+      return {id:tile.dataset.asset,width:box.width,height:box.height,left:box.left,top:Math.round(box.top),natural:img.naturalWidth/img.naturalHeight};
+    }),tile=>tile.top)).toSorted((a,b)=>a[0].top-b[0].top).map(tiles=>({height:tiles[0].height,tiles}))};
   }));
 
   await page.goto(`${base}/on/09-07`);
-  await page.locator('main .jrow').first().waitFor();
+  await page.locator('main .jgrid > figure').first().waitFor();
   await page.waitForFunction(()=>[...document.querySelectorAll('main .jgrid img')].every(img=>img.complete&&img.naturalWidth>0));
   await settled();
   let [first,second]=await grids();

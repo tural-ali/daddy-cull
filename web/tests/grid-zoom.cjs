@@ -46,7 +46,7 @@ const svg='<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect
   const width=async()=>page.evaluate(()=>new Promise(resolve=>{
     let last=-1,still=0;
     const look=()=>{
-      const height=document.querySelector('main .jrow').getBoundingClientRect().height;
+      const height=document.querySelector('main .jgrid > figure').getBoundingClientRect().height;
       still=height===last?still+1:0;last=height;
       if(still>=3)resolve(height);else requestAnimationFrame(look);
     };
