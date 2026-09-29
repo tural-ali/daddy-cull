@@ -16,6 +16,7 @@ import {Photos} from './Photos';
 import {GooglePhotos,type GooglePhotosPage} from './GooglePhotos';
 import {Addons} from './Addons';
 import {Developers} from './Developers';
+import {Setup,readSetup} from './Setup';
 import {AddonFrame,AddonMissing} from './AddonFrame';
 import {currentAddons,framePage,ownerOf,readAddons,useAddons} from './addonList';
 import {recoverPending} from '../recoverPending';
@@ -24,7 +25,7 @@ import {pagePath} from './photoURL';
 import {Busy} from '../Busy';
 import {Snacks} from './Snacks';
 import {CATALOGUE_CHANGED,catalogueGeneration,quietEnough,watchCatalogue} from './catalogueWatch';
-import {NAVIGATED,RELOAD_PAGE,currentVisit,followLinks,reloadPage,savedScroll} from './router';
+import {NAVIGATED,RELOAD_PAGE,currentVisit,followLinks,navigate,reloadPage,savedScroll} from './router';
 import {settled} from '../saving';
 
 type PageState={route:LegacyRoute;content:ReactNode};
@@ -55,6 +56,7 @@ function routeFor(path:string):LegacyRoute{
   if(path==='/settings')return 'settings';
   if(path==='/addons')return 'addons';
   if(path==='/developers')return 'developers';
+  if(path==='/setup')return 'setup';
   if(path.startsWith('/addons/'))return 'frame';
   return 'today';
 }
@@ -62,7 +64,7 @@ function routeFor(path:string):LegacyRoute{
 // Cull's own pages that belong to an addon.
 const addonPaths=new Set(['/screenshots','/social','/shadows','/upgrades','/photos','/google-photos']);
 
-const routeTitles:Record<LegacyRoute,string>={today:'Today',year:'Year',dupes:'Duplicates',upgrades:'Upgrades',shadows:'Shadowed',shots:'Screenshots',social:'Saved from social',photos:'Apple Photos',google:'Google Photos',log:'Log',bin:'Bin',settings:'Settings',addons:'Addons',developers:'Developers',frame:'Addon'};
+const routeTitles:Record<LegacyRoute,string>={today:'Today',year:'Year',dupes:'Duplicates',upgrades:'Upgrades',shadows:'Shadowed',shots:'Screenshots',social:'Saved from social',photos:'Apple Photos',google:'Google Photos',log:'Log',bin:'Bin',settings:'Settings',addons:'Addons',developers:'Developers',setup:'Set up',frame:'Addon'};
 
 /** The browser tab names the page, and the date for a day, so several open
  * tabs can be told apart. */
@@ -165,6 +167,7 @@ export function App(){
       }
       if(path==='/addons')return {route,content:<Addons/>};
       if(path==='/developers')return {route,content:<Developers/>};
+      if(path==='/setup')return {route,content:<Setup initial={await readSetup()}/>};
       if(path.startsWith('/on/')){
         const md=path.slice(4);
         const data=await json<TodayData>(`/api/today/${md}`);
@@ -222,8 +225,14 @@ export function App(){
       // page was a fresh load.
       if(moving){await settled();await recoverPending();void readStats()}
       // The generation is read before the page, so a change that lands while
-      // the page loads is caught at the next check rather than missed.
-      const next=await catalogueGeneration();
+      // the page loads is caught at the next check rather than missed. A Cull
+      // set up from a config file that has not been through setup opens on
+      // it, from whichever address it was opened at.
+      const [next,setup]=await Promise.all([catalogueGeneration(),!moving&&place.path!=='/setup'?readSetup().catch(()=>null):null]);
+      if(setup?.configurable&&!setup.config.done){
+        if(active){history.replaceState(history.state,'','/setup');navigate('/setup')}
+        return;
+      }
       generation.current=next;
       const result=await load();
       if(!active)return;

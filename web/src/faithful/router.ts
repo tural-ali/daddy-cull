@@ -33,7 +33,7 @@ export function savedScroll(){return entry()?.scroll}
 
 // Every address the app draws itself; anything else, such as a file under
 // /api, is left to the browser.
-const APP=/^\/(?:(?:on\/\d\d-\d\d|day\/\d{4}-\d\d-\d\d|year|duplicates|upgrades|shadows|screenshots|social|photos|google-photos|log|bin|settings)?(?:\/photo\/[^/]+)?|addons|developers|addons\/[a-z0-9][a-z0-9-]{1,39}\/[a-z0-9][a-z0-9-]{1,39})\/?$/;
+const APP=/^\/(?:(?:on\/\d\d-\d\d|day\/\d{4}-\d\d-\d\d|year|duplicates|upgrades|shadows|screenshots|social|photos|google-photos|log|bin|settings)?(?:\/photo\/[^/]+)?|addons|developers|setup|addons\/[a-z0-9][a-z0-9-]{1,39}\/[a-z0-9][a-z0-9-]{1,39})\/?$/;
 
 export function isAppPath(path:string){return APP.test(path)}
 

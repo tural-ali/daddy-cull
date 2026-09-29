@@ -10,7 +10,7 @@ export type SetupAgent={online:boolean;access?:string;outdated?:boolean};
 // http on the tailnet or the LAN, where browsers do not offer the Clipboard API
 // at all, so the older copy command on a selection is the fallback. Either way
 // the command is left selected, so Command-C still works if both are refused.
-async function copy(text:string,from:HTMLElement|null):Promise<boolean>{
+export async function copy(text:string,from:HTMLElement|null):Promise<boolean>{
   const select=()=>{
     if(!from)return;
     const range=document.createRange();range.selectNodeContents(from);

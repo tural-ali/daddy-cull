@@ -418,7 +418,7 @@ func main() {
 		})
 		book.Tag("Reference", "The API described by itself.")
 		mux.Handle("/api/", apiMux)
-		mux.Handle("/", webApp(*web, []string{"/year", "/duplicates", "/upgrades", "/shadows", "/screenshots", "/social", "/log", "/bin", "/photos", "/google-photos", "/settings", "/addons", "/developers", "/addons/{id}/{page}"}))
+		mux.Handle("/", webApp(*web, []string{"/year", "/duplicates", "/upgrades", "/shadows", "/screenshots", "/social", "/log", "/bin", "/photos", "/google-photos", "/settings", "/addons", "/developers", "/setup", "/addons/{id}/{page}"}))
 		// Photos is checked again by itself while Cull Sync is online, so the
 		// Apple Photos page never shows a stale answer.
 		go addons.While(ctx, catalog.AddonApplePhotos, photos.KeepChecking)

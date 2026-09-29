@@ -14,7 +14,7 @@ import {GridZoom} from './gridZoom';
 import {FilterButton,FilterMenu,FilterPills,PageFiltersProvider,matchFilters,unusualSort,type PageFilters,type Suggestion} from './SearchFilters';
 import {Kbd,Tips,tipProps,useShortcut} from './keys';
 
-export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'google'|'log'|'bin'|'settings'|'addons'|'developers'|'frame';
+export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'google'|'log'|'bin'|'settings'|'addons'|'developers'|'setup'|'frame';
 type Item={href:string;route?:LegacyRoute;label:string;icon:IconName};
 type Section={title?:string;items:Item[]};
 

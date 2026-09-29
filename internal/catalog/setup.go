@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -159,6 +160,10 @@ func (c SetupConfig) FolderMode() os.FileMode {
 	return 0o755
 }
 
+// appleAccount is an Apple Account's name: an email address or a phone
+// number. It is handed to icloudpd, so nothing else gets through.
+var appleAccount = regexp.MustCompile(`^(?:[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+|\+?[0-9(][0-9 ()-]{5,}[0-9])$`)
+
 // Check says what is wrong with a setup, or nil.
 func (c SetupConfig) Check() error {
 	folders := []struct{ name, path string }{{"library", c.Library}, {"Import folder", c.Import}}
@@ -181,8 +186,10 @@ func (c SetupConfig) Check() error {
 			}
 		}
 	}
-	if c.ICloud.On && strings.TrimSpace(c.ICloud.AppleID) == "" {
+	if account := strings.TrimSpace(c.ICloud.AppleID); c.ICloud.On && account == "" {
 		return errors.New("give the Apple Account to download from, or turn the iCloud download off")
+	} else if account != "" && !appleAccount.MatchString(account) {
+		return errors.New("the Apple Account is the email address or phone number you sign in to iCloud with, such as sam@example.com")
 	}
 	if c.ICloud.Since != "" {
 		if _, err := time.Parse("2006-01-02", c.ICloud.Since); err != nil {
@@ -359,7 +366,7 @@ func (s *Setup) Routes(m *api.Mux) {
 			return
 		}
 		if err := s.Save(change); err != nil {
-			api.Fail(w, 400, err.Error())
+			api.Fail(w, 400, sentence(err.Error()))
 			return
 		}
 		view := s.View()

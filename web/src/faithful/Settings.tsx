@@ -5,6 +5,7 @@ import {bytes,longDate,readDeleting,type DeletingReport} from './Bin';
 import {clearSessionSound,setVideoSoundPreference} from '../SessionVideo';
 import {reloadPage} from './router';
 import {failure} from '../api';
+import {readSetup,type SetupView} from './Setup';
 
 export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;videoMuted?:boolean;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number;immichRefused?:number;calendarDates?:number;reviewedDates?:number;streak?:number;reviewedToday?:boolean;notifications?:number};
 
@@ -139,6 +140,69 @@ function VideoSettings({initial}:{initial:boolean}){
   </>;
 }
 
+type IntakeStatus={folder:string;lastRun:string;filed:number;filedTotal:number;duplicates:number;waiting:number;unsupported:number;problem?:string};
+type IntakeView={configured:boolean;status:IntakeStatus|null};
+
+async function readIntake():Promise<IntakeView>{
+  const response=await fetch('/api/intake',{cache:'no-store'});
+  if(!response.ok)throw new Error(await failure(response,'The Import folder could not be read.'));
+  return response.json() as Promise<IntakeView>;
+}
+
+// FolderSettings shows where the library and the Import folder are, what the
+// writer last found in the Import folder, and how each download last went.
+function FolderSettings(){
+  const [setup,setSetup]=useState<SetupView|null>(null);
+  const [intake,setIntake]=useState<IntakeView|null>(null);
+  const [busy,setBusy]=useState(false);
+  const [message,setMessage]=useState('');
+  const [error,setError]=useState('');
+  useEffect(()=>{
+    readSetup().then(setSetup).catch(reason=>setError((reason as Error).message));
+    readIntake().then(setIntake).catch(reason=>setError((reason as Error).message));
+  },[]);
+  async function look(){
+    setBusy(true);setMessage('');setError('');
+    try{
+      const response=await fetch('/api/intake/run',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+      if(!response.ok)throw new Error(await failure(response,'The Import folder could not be looked at.'));
+      const status:IntakeStatus=await response.json();
+      setIntake({configured:true,status});
+      setMessage(status.filed>0?`Filed ${status.filed.toLocaleString()} photo${status.filed===1?'':'s'}.`:'Nothing new to file.');
+    }catch(reason){setError((reason as Error).message)}finally{setBusy(false)}
+  }
+  const status=intake?.status??null;
+  const config=setup?.config;
+  return <>
+    <h2 id="folders">Folders</h2>
+    {!setup&&!error&&<p className="hint"><Busy label="Reading the folders…"/></p>}
+    {config&&<dl className="kv">
+      <div><dt>Library</dt><dd>{config.library||'Not chosen'}</dd></div>
+      <div><dt>Import folder</dt><dd>{config.import||'None'}</dd></div>
+      <div><dt>iCloud Photos</dt><dd>{config.icloud.on?<>{config.icloud.appleId}{setup.icloud.lastRun?<>, last run {ago(setup.icloud.lastRun)}</>:', not run yet'}</>:'Off'}</dd></div>
+      <div><dt>Google Takeout folder</dt><dd>{config.takeoutInbox||'None'}</dd></div>
+    </dl>}
+    {setup?.config.icloud.on&&setup.icloud.lastRun&&!setup.icloud.ok&&<p className="note warn">iCloud: {setup.icloud.message||'the last download did not finish.'} <a href="/setup?step=icloud">Sign in again</a></p>}
+    {status&&<>
+      <p className="hint">The Import folder is looked at every minute. Each photo is filed under the day it was taken; one the library already has is moved into <b>Already in the library</b> inside the Import folder, never deleted.</p>
+      <dl className="kv">
+        <div><dt>Last looked</dt><dd>{status.lastRun?ago(status.lastRun):'Not yet'}</dd></div>
+        <div><dt>Filed</dt><dd>{status.filed.toLocaleString()} last time · {status.filedTotal.toLocaleString()} since Cull started</dd></div>
+        <div><dt>Already in the library</dt><dd>{status.duplicates.toLocaleString()}</dd></div>
+        <div><dt>Still arriving</dt><dd>{status.waiting.toLocaleString()}</dd></div>
+        <div><dt>Not photos or videos</dt><dd>{status.unsupported.toLocaleString()}, left where they are</dd></div>
+      </dl>
+      {status.problem&&<p className="note warn">{status.problem}</p>}
+    </>}
+    {message&&<p className="flash" role="status">{message}</p>}
+    {error&&<p className="note warn" role="alert">{error}</p>}
+    <div className="setupacts inline">
+      {intake?.configured&&<button type="button" className="btn primary" disabled={busy} onClick={()=>void look()}>{busy?<Busy label="Looking…" state="working"/>:'Look at the Import folder now'}</button>}
+      {setup&&<a className="btn" href="/setup?step=folders">{setup.configurable?'Change in setup':'Open setup'}</a>}
+    </div>
+  </>;
+}
+
 export function Settings({stats}:{stats:Stats}){
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
@@ -155,6 +219,7 @@ export function Settings({stats}:{stats:Stats}){
   return <section className="settings">
     <h1>Settings</h1>
     {message&&<p className="flash" role="status">{busy?<Busy label={message} state="solving"/>:message}</p>}
+    <FolderSettings/>
     <h2>Index</h2>
     <p className="hint">The catalogue refresh reads metadata already imported into this service. It does not alter an original file.</p>
     <dl className="kv">

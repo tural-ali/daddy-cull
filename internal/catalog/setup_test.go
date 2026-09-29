@@ -45,6 +45,13 @@ func TestSetupChecksTheFolders(t *testing.T) {
 	if err := good.Check(); err != nil {
 		t.Fatal(err)
 	}
+	for _, account := range []string{"sam@example.com", "sam.o'neil+photos@mail.example.co.uk", "+44 7700 900123", "(555) 010-9999"} {
+		config := good
+		config.ICloud = SetupICloud{On: true, AppleID: account}
+		if err := config.Check(); err != nil {
+			t.Errorf("%s: %v", account, err)
+		}
+	}
 	for name, change := range map[string]func(*SetupConfig){
 		"no library":        func(c *SetupConfig) { c.Library = "" },
 		"a relative folder": func(c *SetupConfig) { c.Import = "Pictures/Import" },
@@ -53,6 +60,8 @@ func TestSetupChecksTheFolders(t *testing.T) {
 		"the same folder":   func(c *SetupConfig) { c.Import = c.Library },
 		"takeout in import": func(c *SetupConfig) { c.TakeoutInbox = "/Users/sam/Pictures/Import/Takeout" },
 		"iCloud and no one": func(c *SetupConfig) { c.ICloud.On = true },
+		"two accounts":      func(c *SetupConfig) { c.ICloud.AppleID = "sam@example.comsam@example.com" },
+		"a shell command":   func(c *SetupConfig) { c.ICloud.AppleID = "sam@example.com; rm -rf ~" },
 		"a day that is not": func(c *SetupConfig) { c.ICloud.Since = "14/08/2019" },
 		"Immich, no scheme": func(c *SetupConfig) { c.Immich.URL = "immich.local:2283" },
 		"Immich, no folder": func(c *SetupConfig) { c.Immich.URL = "http://immich.local:2283" },

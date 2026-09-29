@@ -2797,3 +2797,106 @@ ul.answers { margin: 0; padding: 0; list-style: none; display: grid; gap: .5rem;
 .rt .gfav .icon svg { width: 18px; height: 18px; fill: currentcolor; }
 .lb .rvbot .greason { flex: 1 1 18rem; min-width: 0; color: #d9dbe0; font-size: 13px; line-height: 1.45; }
 .lb .rvbot .greason a { color: #9ec1ff; }
+
+/* ------------------------------------------------------------------ setup --
+   The first run: a row of steps, the step itself at a reading measure, and
+   Back and Continue under it, where the eye ends up. */
+
+.setup { max-width: 44rem; }
+.setup h1 { margin: 0 0 1rem; font-size: 22px; }
+.setup h1:focus { outline: none; }
+.setuprail { display: flex; flex-wrap: wrap; gap: .25rem; margin: 0 0 1.4rem; padding: 0; list-style: none; }
+.setuprail button {
+  display: inline-flex; align-items: center; gap: .45rem; height: 32px; padding: 0 .75rem 0 .3rem;
+  font: inherit; font-size: 13px; white-space: nowrap; color: var(--muted); background: none;
+  border: 1px solid transparent; border-radius: 16px; cursor: pointer;
+}
+.setuprail button:hover:not(:disabled) { color: var(--text); background: var(--bg-3); }
+.setuprail button:disabled { cursor: default; opacity: .5; }
+.setuprail button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.setupnum {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--muted); background: var(--bg-3); border: 1px solid var(--line-2);
+}
+.setupnum .icon { font-size: 15px; }
+.setuprail li.past .setupnum { color: var(--on-accent); background: color-mix(in oklab, var(--accent) 70%, var(--bg-3)); border-color: transparent; }
+.setuprail li.on button { color: var(--text); background: var(--bg-2); border-color: var(--line); }
+.setuprail li.on .setupnum { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.setupbody { display: grid; gap: .9rem; }
+.setupbody > :not(dialog) { margin: 0; }
+.setupbody h2 { margin: .4rem 0 0; font-size: 16px; }
+.setupbody .setupstep { margin: 0; font-size: 13px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+.setuplead { font-size: 15.5px; line-height: 1.55; color: var(--text); text-wrap: pretty; }
+.setupflow { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; padding: 0; list-style: none; counter-reset: none; }
+.setupflow li {
+  display: grid; gap: .3rem; align-content: start; padding: .85rem .9rem;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.setupflow .icon { color: var(--accent); font-size: 22px; }
+.setupflow b { font-size: 14px; }
+.setupflow span { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.setup .kv dt { flex-basis: 9rem; }
+.setup .kv dd { min-width: 0; overflow-wrap: anywhere; }
+.setuptools dd { display: grid; gap: .15rem; flex: 1; min-width: 0; }
+.setuptools dd .setupcmd { margin-top: .25rem; }
+.oktext { display: inline-flex; align-items: center; gap: .2rem; color: var(--good); }
+.oktext .icon { font-size: 16px; }
+.setupfield { display: grid; gap: .35rem; }
+.setupfield > label, .setuplabel { font-size: 13.5px; font-weight: 500; color: var(--text); }
+.setupfield .segmented { justify-self: start; margin: 0; }
+.setupfield .hint { margin: 0; line-height: 1.45; }
+.setupinput {
+  box-sizing: border-box; width: 100%; padding: .5rem .65rem;
+  font: inherit; font-size: 14px; font-family: ui-monospace, Menlo, monospace;
+  color: var(--text); background: var(--bg-3);
+  border: 1px solid var(--line-2); border-radius: var(--radius-sm);
+}
+.setupinput[inputmode="email"] { font-family: inherit; }
+.setupinput.short { width: auto; font-family: inherit; justify-self: start; }
+.setupinput:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.setupinput:disabled { color: var(--muted); background: var(--bg-2); }
+.setuptree {
+  margin: .15rem 0 0; padding: .6rem .8rem; overflow-x: auto;
+  font-size: 12.5px; line-height: 1.5; color: var(--muted);
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm);
+}
+.setupcheck { display: grid; grid-template-columns: auto 1fr; align-items: start; gap: .15rem .55rem; cursor: pointer; line-height: 1.45; }
+.setupcheck input { grid-row: span 2; margin: .2rem 0 0; accent-color: var(--accent); width: 16px; height: 16px; }
+.setupcheck b { font-weight: 500; }
+.setupcheck .hint { grid-column: 2; }
+.setupsteps { display: grid; gap: .6rem; padding: .9rem 1rem; background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); }
+.setupsteps > :not(dialog) { margin: 0; }
+.setupsteps h2 { margin: 0; font-size: 15px; }
+.setupsteps ol { display: grid; gap: .7rem; margin: 0; padding-left: 1.2rem; }
+.setupsteps li::marker { color: var(--text); font-weight: 600; }
+.setupsteps .note { margin: 0; }
+.setupsteps .btn { justify-self: start; }
+.setuplist { display: grid; gap: .45rem; margin: 0; padding-left: 1.2rem; line-height: 1.5; }
+.setupcmd { display: flex; align-items: flex-start; gap: .5rem; margin-top: .4rem; }
+.setupcmd code {
+  flex: 1 1 auto; min-width: 0; padding: .45rem .65rem;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  color: var(--text); font-size: 12.5px; line-height: 1.45;
+  white-space: pre-wrap; overflow-wrap: anywhere; user-select: all;
+}
+.setupcmd .btn { flex: none; min-width: 5rem; margin-top: .1rem; }
+.setupcmd .hint { flex-basis: 100%; }
+.setupacts { display: flex; gap: .6rem; margin-top: 1.6rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.setupgap { flex: 1; }
+@media (width <= 620px) {
+  .setupflow { grid-template-columns: 1fr; }
+  .setuprail { flex-wrap: nowrap; gap: 0; }
+  .setuprail li:not(.on) .setupname { display: none; }
+  .setuprail button { padding: 0 .55rem 0 .2rem; }
+  .setuprail li:not(.on) button { padding: 0 .2rem; }
+  .setupcmd { flex-direction: column; align-items: stretch; }
+}
+/* The browser draws the date field's calendar button black whatever the
+   colour scheme says, so at night it is lightened to match the words. */
+.setupinput::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .75; }
+:root:not([data-theme="day"]) .setupinput::-webkit-calendar-picker-indicator { filter: invert(1); }
+.setupok { display: flex; align-items: flex-start; gap: .45rem; }
+.setupok .icon { flex: none; font-size: 18px; margin-top: .05rem; }
+.setuptext { color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.setupacts.inline { margin-top: .6rem; padding-top: 0; border-top: 0; }
