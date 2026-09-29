@@ -183,8 +183,8 @@ function RouteView({reference,route,addonName,addonOn}:{reference:Reference;rout
       <code className="rpath">{route.path}</code>
       <span className="rsum">{op.summary}</span>
       <span className="rchips">
-        {permission!=='read'&&<span className={`rchip perm ${permission}`} title={`Needs the ${permission} permission`}>{permission}</span>}
-        {addonName&&<span className={`rchip addon${addonOn===false?' off':''}`} title={addonOn===false?`${addonName} is turned off, so this answers 404`:`Part of ${addonName}`}>{addonName}{addonOn===false?' · off':''}</span>}
+        {permission!=='read'&&<span className="rchip perm" data-permission={permission} title={`Needs the ${permission} permission`}>{permission}</span>}
+        {addonName&&<span className={`rchip part${addonOn===false?' off':''}`} title={addonOn===false?`${addonName} is turned off, so this answers 404`:`Part of ${addonName}`}>{addonName}{addonOn===false?' · off':''}</span>}
         {op['x-cull-internal']&&<span className="rchip internal" title="For one of Cull's own helpers">internal</span>}
       </span>
     </summary>

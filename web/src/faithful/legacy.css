@@ -2714,7 +2714,7 @@ dialog.confirm .addonperms { margin: .6rem 0 .8rem; font-size: 13.5px; }
 .route + .route { border-top: 1px solid var(--line); }
 .route > summary {
   display: grid; grid-template-columns: 4.2rem minmax(0, auto) minmax(0, 1fr) auto; align-items: center; gap: 12px;
-  padding: 10px 14px; cursor: pointer; list-style: none;
+  padding: 10px 14px; line-height: 20px; cursor: pointer; list-style: none;
 }
 .route > summary::-webkit-details-marker { display: none; }
 .route > summary:hover { background: var(--hover); }
@@ -2727,12 +2727,12 @@ dialog.confirm .addonperms { margin: .6rem 0 .8rem; font-size: 13.5px; }
 .method.delete { background: color-mix(in oklab, var(--bad) 16%, transparent); color: var(--bad); }
 .rpath { padding: 0; background: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .rsum { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13.5px; }
-.rchips { display: flex; gap: 6px; }
-.rchip { padding: 1px 8px; border-radius: 10px; font-size: 11.5px; font-weight: 500; white-space: nowrap; background: var(--bg-3); color: var(--muted); }
+.rchips { display: flex; align-items: center; gap: 6px; }
+.rchip { padding: 1px 8px; line-height: 18px; border-radius: 10px; font-size: 11.5px; font-weight: 500; white-space: nowrap; background: var(--bg-3); color: var(--muted); }
 .rchip.perm { background: color-mix(in oklab, var(--warn) 14%, transparent); color: var(--warn); }
-.rchip.perm.delete { background: color-mix(in oklab, var(--bad) 14%, transparent); color: var(--bad); }
-.rchip.addon { background: var(--pill); color: var(--pill-ink); }
-.rchip.addon.off { background: var(--bg-3); color: var(--faint); }
+.rchip.perm[data-permission="delete"] { background: color-mix(in oklab, var(--bad) 14%, transparent); color: var(--bad); }
+.rchip.part { background: var(--pill); color: var(--pill-ink); }
+.rchip.part.off { background: var(--bg-3); color: var(--faint); }
 .rbody { padding: 4px 16px 16px; font-size: 13.5px; }
 .rbody h4 { margin: 1.1rem 0 .4rem; color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
 .rdoc { max-width: 76ch; margin: .8rem 0 0; line-height: 1.55; }

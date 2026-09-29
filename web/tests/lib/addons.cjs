@@ -45,6 +45,8 @@ const reference={
     '/api/screenshots/remove':{post:{operationId:'postScreenshotsRemove',summary:'Move screenshots to the Bin',tags:['Screenshots'],'x-cull-permission':'bin','x-cull-addon':'social',
       requestBody:{required:true,content:{'application/json':{schema:{type:'object',required:['ids'],properties:{ids:{type:'array',items:{type:'integer'},description:'The files.'}}}}}},
       responses:{202:{description:'Queued as a task.'}}}},
+    '/api/settings/video':{post:{operationId:'postSettingsVideo',summary:'Set whether videos start muted',tags:['Library'],'x-cull-permission':'settings',
+      responses:{204:{description:'Saved.'}}}},
     '/api/events':{get:{operationId:'getEvents',summary:'Follow what happens',tags:['Events'],
       responses:{200:{description:'A stream of server-sent events.',content:{'text/event-stream':{schema:{type:'string'}}}}}}},
   },

@@ -33,8 +33,8 @@ const shots=process.env.SHOTS;
   const box=await asset.boundingBox();
   assert.ok(box.y>=0&&box.y<400,'the route is in view');
   assert.equal(await page.title(),'Developers · Daddy, Cull!');
-  assert.match(await page.locator('.developers .ysum').innerText(),/Version 1, 4 routes\.$/);
-  assert.deepEqual(await page.locator('.devnav a').allInnerTexts(),['Start here','Build an addon','Permissions','openapi.json','Library\n2','Screenshots\n1','Events\n1']);
+  assert.match(await page.locator('.developers .ysum').innerText(),/Version 1, 5 routes\.$/);
+  assert.deepEqual(await page.locator('.devnav a').allInnerTexts(),['Start here','Build an addon','Permissions','openapi.json','Library\n3','Screenshots\n1','Events\n1']);
 
   // A path parameter has to be filled in before it can be sent.
   const send=asset.getByRole('button',{name:'Send'});
@@ -74,7 +74,10 @@ const shots=process.env.SHOTS;
   // things says which permission it needs.
   const remove=page.locator('#op-postScreenshotsRemove summary');
   assert.equal(await remove.locator('.rchip.perm').innerText(),'bin');
-  assert.equal(await remove.locator('.rchip.addon').innerText(),'Saved from social · off');
+  assert.equal(await remove.locator('.rchip.part').innerText(),'Saved from social · off');
+  assert.equal(await page.locator('#op-postSettingsVideo .rchip.perm').innerText(),'settings');
+  const heights=await page.locator('.route:not([open]) > summary').evaluateAll(rows=>[...new Set(rows.map(row=>Math.round(row.getBoundingClientRect().height)))]);
+  assert.equal(heights.length,1,`every closed route's row is the same height, chips or not: ${heights}`);
   await remove.click();
   const removeBody=page.locator('#op-postScreenshotsRemove .rbody');
   await removeBody.waitFor();
@@ -90,7 +93,7 @@ const shots=process.env.SHOTS;
   await find.fill('nothing like this');
   await page.getByText('No route matches “nothing like this”.').waitFor();
   await find.fill('');
-  await page.waitForFunction(()=>document.querySelectorAll('.route').length===4);
+  await page.waitForFunction(()=>document.querySelectorAll('.route').length===5);
 
   // Nothing runs off the side, even with a long answer open, and on a phone.
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no sideways scroll');
