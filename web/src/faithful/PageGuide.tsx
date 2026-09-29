@@ -24,7 +24,7 @@ const guides:Partial<Record<LegacyRoute,Guide>>={
     <>Every photo taken on this date, in every year, grouped by year. Click a photo, or press <K keys="Enter"/>, to open it.</>,
     <>In a photo, <K keys="K"/> keeps, <K keys="X"/> removes and <K keys="F"/> favourites. Keep and remove move on to the next photo; <K keys="ArrowLeft"/> and <K keys="ArrowRight"/> step through. <K keys="?"/> lists every key.</>,
     <>On the grid, the round tick in a photo’s corner selects it, and Shift-click selects everything up to it. The bar at the top then acts on the whole selection.</>,
-    <><K keys="Mod+Z"/> undoes and <K keys="Shift+Mod+Z"/> redoes. Removed photos wait in the Bin: nothing is deleted from here.</>,
+    <><K keys="Mod+Z"/> undoes and <K keys="Mod+U"/> redoes. Removed photos wait in the Bin: nothing is deleted from here.</>,
     <>When the day is done, mark it reviewed with <K keys="Shift+R"/>. Press <K keys="/"/> and type a date, such as 14 Aug 2019, to go to another.</>,
   ]},
   year:{title:'How the calendar works',points:[
