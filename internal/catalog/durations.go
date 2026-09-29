@@ -28,7 +28,8 @@ const durationWorkers = 4
 // with no index is scanned to its end, which on a slow disk takes seconds.
 const durationTimeout = 60 * time.Second
 
-// durationEvery is how often files added since the last pass are looked for.
+// durationEvery is the longest a new clip waits for its duration; a changed
+// catalogue starts a pass sooner.
 const durationEvery = 15 * time.Minute
 
 // KeepDurations fills in running times now and then again every so often,
@@ -41,16 +42,15 @@ func (s *Store) KeepDurations(ctx context.Context, roots MediaRoots) {
 	}
 	for {
 		started := time.Now()
+		seen, _ := s.CatalogueGeneration(ctx)
 		read, err := s.FillDurations(ctx, roots, probe)
 		if err != nil && ctx.Err() == nil {
 			log.Printf("video durations: %v", err)
 		} else if read > 0 {
 			log.Printf("video durations: read %d in %s", read, time.Since(started).Round(time.Second))
 		}
-		select {
-		case <-ctx.Done():
+		if !s.waitForChange(ctx, seen, durationEvery) {
 			return
-		case <-time.After(durationEvery):
 		}
 	}
 }

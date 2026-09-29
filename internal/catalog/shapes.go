@@ -27,7 +27,8 @@ const shapeWorkers = 4
 // shapeTimeout bounds one read.
 const shapeTimeout = 30 * time.Second
 
-// shapeEvery is how often files added since the last pass are looked for.
+// shapeEvery is the longest a new file waits for its shape; a changed
+// catalogue starts a pass sooner.
 const shapeEvery = 15 * time.Minute
 
 // KeepShapes fills in shapes now and then again every so often, until ctx
@@ -39,16 +40,15 @@ func (s *Store) KeepShapes(ctx context.Context, roots MediaRoots) {
 	}
 	for {
 		started := time.Now()
+		seen, _ := s.CatalogueGeneration(ctx)
 		read, err := s.FillShapes(ctx, roots)
 		if err != nil && ctx.Err() == nil {
 			log.Printf("photo shapes: %v", err)
 		} else if read > 0 {
 			log.Printf("photo shapes: read %d in %s", read, time.Since(started).Round(time.Second))
 		}
-		select {
-		case <-ctx.Done():
+		if !s.waitForChange(ctx, seen, shapeEvery) {
 			return
-		case <-time.After(shapeEvery):
 		}
 	}
 }
