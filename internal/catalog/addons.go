@@ -17,13 +17,14 @@ import (
 
 // The ids of Cull's own addons.
 const (
-	AddonScreenshots = "screenshots"
-	AddonSocial      = "social"
-	AddonShadows     = "shadows"
-	AddonUpgrades    = "upgrades"
-	AddonApplePhotos = "apple-photos"
-	AddonImmich      = "immich"
-	AddonClassic     = "classic"
+	AddonScreenshots  = "screenshots"
+	AddonSocial       = "social"
+	AddonShadows      = "shadows"
+	AddonUpgrades     = "upgrades"
+	AddonApplePhotos  = "apple-photos"
+	AddonGooglePhotos = "google-photos"
+	AddonImmich       = "immich"
+	AddonClassic      = "classic"
 )
 
 // Stats is what the frame of the app shows about the library.
@@ -324,6 +325,8 @@ type AddonNeeds struct {
 	ImmichConfigured bool
 	// Photos is the Apple Photos helper's hub.
 	Photos *PhotosHub
+	// GooglePhotos reads the Takeout inbox, or is nil without one.
+	GooglePhotos *GooglePhotos
 }
 
 func counted(n int, one, many string) string {
@@ -450,6 +453,31 @@ func (s *Store) BuiltInAddons(needs AddonNeeds) []addon.BuiltIn {
 				return addon.Status{State: addon.Ready, Detail: "Cull Sync is set up."}
 			},
 			Default: always,
+		},
+		{
+			Manifest: addon.Manifest{
+				ID: AddonGooglePhotos, Name: "Google Photos", Version: "1", Icon: "photo_library",
+				Summary:     "Bring into the library the photos Google Photos has and it does not.",
+				Description: "Google no longer lets an app download a whole Google Photos library, so the photos come through Google Takeout: export Google Photos as .zip files and drop them into the inbox. Cull reads them where they are, checks each photo against the library, and adds the ones you choose under the day they were taken. The exports are only read, and nothing already in the archive is moved or replaced.",
+				Pages:       []addon.Page{{ID: "google-photos", Label: "Google Photos", Icon: "photo_library", Section: addon.Sync, Path: "/google-photos"}},
+				Needs:       []string{"A Takeout inbox folder, given with -takeout-inbox, mounted read-only"},
+				Work:        []string{"Reads the inbox every five minutes and checks new photos against the library"},
+			},
+			Status: func(ctx context.Context) addon.Status {
+				g := needs.GooglePhotos
+				if !g.Configured() {
+					return addon.Status{State: addon.Setup, Detail: "No Takeout inbox is set up. Its page says how to add one."}
+				}
+				if _, _, problem := g.status(); problem != "" {
+					return addon.Status{State: addon.Problem, Detail: problem}
+				}
+				missing := countQuery(ctx, s.read, "SELECT count(*) FROM takeout_items i WHERE i.state='waiting' AND i.outcome IN ('missing','alternative') AND "+inInbox+" AND NOT "+takeoutQueued)
+				if missing == 0 {
+					return addon.Status{State: addon.Ready, Detail: "Nothing in the inbox is missing from the library."}
+				}
+				return addon.Status{State: addon.Ready, Detail: counted(missing, "photo in the inbox is", "photos in the inbox are") + " not in the library yet."}
+			},
+			Default: func(context.Context) bool { return needs.GooglePhotos.Configured() },
 		},
 		{
 			Manifest: addon.Manifest{

@@ -84,8 +84,8 @@ type Manifest struct {
 	// any.
 	Pages []Page `json:"pages,omitempty"`
 	// Permissions are what the addon's key may do beyond reading: review,
-	// bin, delete or settings. Cull's own addons are part of Cull and ask
-	// for none.
+	// import, bin, delete or settings. Cull's own addons are part of Cull
+	// and ask for none.
 	Permissions []string `json:"permissions,omitempty"`
 	// Needs lists what it needs to work, in words.
 	Needs []string `json:"needs,omitempty"`
@@ -259,7 +259,7 @@ func validManifest(m Manifest, builtIn bool) error {
 			return errors.New("Cull's own addons are part of Cull and ask for no permissions")
 		}
 		if p == api.Read || !api.ValidPermission(p) {
-			return fmt.Errorf("permission %q should be one of review, bin, delete or settings; every addon may read", p)
+			return fmt.Errorf("permission %q should be one of review, import, bin, delete or settings; every addon may read", p)
 		}
 	}
 	return nil

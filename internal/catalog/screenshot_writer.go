@@ -459,7 +459,7 @@ func (w *ScreenshotWriter) copyToArchive(ctx context.Context, plan *ScreenshotPl
 	if err := verifyPlanFile(ctx, w.shots, file.Source, file, false); err != nil {
 		return err
 	}
-	if err := w.archive.MkdirAll(path.Dir(file.Destination), 0755); err != nil {
+	if err := mkdirShared(w.archive, path.Dir(file.Destination)); err != nil {
 		return err
 	}
 	temp := path.Join(path.Dir(file.Destination), ".daddy-cull-"+plan.ID+fmt.Sprintf("-%04d.tmp", index))

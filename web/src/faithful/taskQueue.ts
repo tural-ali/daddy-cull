@@ -122,3 +122,8 @@ export function waitForTask(id:string):Promise<Task>{
     void read(true);
   });
 }
+
+/** Queues photos from Google Photos to be added to the library. */
+export function queueGooglePhotos(ids:number[]){
+  return send('/api/google-photos/add',{ids},'The photos could not be queued to add to the library.');
+}

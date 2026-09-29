@@ -21,7 +21,7 @@ func init() {
 		"daddy-cull/next/internal/addon.Manifest.Name":        "Name is how the addon is called on the Addons page, in the reference and in error messages.",
 		"daddy-cull/next/internal/addon.Manifest.Needs":       "Needs lists what it needs to work, in words.",
 		"daddy-cull/next/internal/addon.Manifest.Pages":       "Pages are the pages the addon adds to the sidebar while it is on, if any.",
-		"daddy-cull/next/internal/addon.Manifest.Permissions": "Permissions are what the addon's key may do beyond reading: review, bin, delete or settings. Cull's own addons are part of Cull and ask for none.",
+		"daddy-cull/next/internal/addon.Manifest.Permissions": "Permissions are what the addon's key may do beyond reading: review, import, bin, delete or settings. Cull's own addons are part of Cull and ask for none.",
 		"daddy-cull/next/internal/addon.Manifest.Summary":     "Summary says in one sentence what it is for.",
 		"daddy-cull/next/internal/addon.Manifest.Version":     "Version is the addon's own version, in any form it likes. It is required, and Cull does not compare it.",
 		"daddy-cull/next/internal/addon.Manifest.Work":        "Work lists what it does in the background while it is on, in words.",

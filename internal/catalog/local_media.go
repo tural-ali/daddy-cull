@@ -37,6 +37,8 @@ type MediaRoots struct {
 	Screenshots string // "/screenshots/..." the flat screenshot holding area
 	Upgrades    string // "/upgrades/..."  read-only Takeout upgrade staging
 	Disks       string // "/disks/<disk>/..." physical disk roots behind the share
+	Takeout     string // "/takeout/..."   the read-only Google Photos inbox
+	Unpacked    string // "/takeout-unpacked/..." photos unpacked from an inbox zip to be shown
 	Review      string // flat hardlink farm, one entry per asset id, for trees with no mount
 	Posters     string // stills captured during social detection
 	Cache       string // writable directory for generated gallery thumbnails
@@ -70,6 +72,8 @@ func (m MediaRoots) root(relative string, id int64) (string, string, bool) {
 		{"/screenshots/", m.Screenshots},
 		{"/upgrades/", m.Upgrades},
 		{"/disks/", m.Disks},
+		{"/takeout/", m.Takeout},
+		{"/takeout-unpacked/", m.Unpacked},
 	} {
 		if strings.HasPrefix(relative, entry.prefix) {
 			if entry.root == "" {

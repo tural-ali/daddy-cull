@@ -13,6 +13,7 @@ import {Shadows} from './Shadows';
 import {Social,type SocialPage} from './Social';
 import {Upgrades,type UpgradePage} from './Upgrades';
 import {Photos} from './Photos';
+import {GooglePhotos,type GooglePhotosPage} from './GooglePhotos';
 import {Addons} from './Addons';
 import {Developers} from './Developers';
 import {AddonFrame,AddonMissing} from './AddonFrame';
@@ -48,6 +49,7 @@ function routeFor(path:string):LegacyRoute{
   if(path==='/screenshots')return 'shots';
   if(path==='/social')return 'social';
   if(path==='/photos')return 'photos';
+  if(path==='/google-photos')return 'google';
   if(path==='/log')return 'log';
   if(path==='/bin')return 'bin';
   if(path==='/settings')return 'settings';
@@ -58,9 +60,9 @@ function routeFor(path:string):LegacyRoute{
 }
 
 // Cull's own pages that belong to an addon.
-const addonPaths=new Set(['/screenshots','/social','/shadows','/upgrades','/photos']);
+const addonPaths=new Set(['/screenshots','/social','/shadows','/upgrades','/photos','/google-photos']);
 
-const routeTitles:Record<LegacyRoute,string>={today:'Today',year:'Year',dupes:'Duplicates',upgrades:'Upgrades',shadows:'Shadowed',shots:'Screenshots',social:'Saved from social',photos:'Apple Photos',log:'Log',bin:'Bin',settings:'Settings',addons:'Addons',developers:'Developers',frame:'Addon'};
+const routeTitles:Record<LegacyRoute,string>={today:'Today',year:'Year',dupes:'Duplicates',upgrades:'Upgrades',shadows:'Shadowed',shots:'Screenshots',social:'Saved from social',photos:'Apple Photos',google:'Google Photos',log:'Log',bin:'Bin',settings:'Settings',addons:'Addons',developers:'Developers',frame:'Addon'};
 
 /** The browser tab names the page, and the date for a day, so several open
  * tabs can be told apart. */
@@ -182,6 +184,10 @@ export function App(){
       if(path==='/upgrades')return {route,content:<Upgrades initial={await json<UpgradePage>('/api/upgrades')}/>};
       if(path==='/log')return {route,content:<Log initial={await json<HistoryEvent[]>(`/api/log?limit=${logPage}`)}/>};
       if(path==='/photos')return {route,content:<Photos/>};
+      if(path==='/google-photos'){
+        const tab=new URLSearchParams(location.search).get('tab')||'missing';
+        return {route,content:<GooglePhotos initial={await json<GooglePhotosPage>(`/api/google-photos?tab=${encodeURIComponent(tab)}&from=0`)}/>};
+      }
       if(path==='/bin')return {route,content:<Bin onCount={count=>setStats(current=>current&&{...current,bin:count})}/>};
       if(path==='/settings')return {route,content:<Settings stats={await json<Stats>(`/api/stats?tz=${zone}`)}/>};
       if(path==='/shadows')return {route,content:<Shadows groups={await json<Parameters<typeof Shadows>[0]['groups']>('/api/shadows')}/>};

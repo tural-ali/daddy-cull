@@ -341,6 +341,64 @@ CREATE TABLE IF NOT EXISTS phone_deletions (
  handled_at TEXT NOT NULL,
  PRIMARY KEY(zone,rel_path,size_bytes)
 );
+-- Google Takeout exports dropped into the inbox, the files in them, and the
+-- photos those files are, each once however many exports hold it; see
+-- google_photos.go. The exports are only ever read.
+CREATE TABLE IF NOT EXISTS takeout_archives (
+ id INTEGER PRIMARY KEY,
+ name TEXT NOT NULL UNIQUE,
+ kind TEXT NOT NULL CHECK(kind IN ('zip','folder','unsupported')),
+ size_bytes INTEGER NOT NULL,
+ modified INTEGER NOT NULL,
+ media INTEGER NOT NULL DEFAULT 0,
+ scanned_at TEXT NOT NULL,
+ error TEXT NOT NULL DEFAULT '',
+ present INTEGER NOT NULL DEFAULT 1 CHECK(present IN (0,1))
+);
+CREATE TABLE IF NOT EXISTS takeout_items (
+ id INTEGER PRIMARY KEY,
+ name TEXT NOT NULL,
+ size_bytes INTEGER NOT NULL,
+ kind TEXT NOT NULL CHECK(kind IN ('image','raw','video')),
+ taken_at INTEGER,
+ local_at INTEGER,
+ taken_from TEXT NOT NULL DEFAULT '' CHECK(taken_from IN ('','google','name')),
+ facts TEXT NOT NULL DEFAULT '{}',
+ outcome TEXT NOT NULL DEFAULT 'pending' CHECK(outcome IN ('pending','missing','alternative','uncertain','represented','removed')),
+ reason TEXT NOT NULL DEFAULT '',
+ match_asset_id INTEGER REFERENCES assets(id) ON DELETE SET NULL,
+ state TEXT NOT NULL DEFAULT 'waiting' CHECK(state IN ('waiting','added','skipped')),
+ added_as TEXT NOT NULL DEFAULT '',
+ added_at TEXT,
+ first_seen TEXT NOT NULL,
+ UNIQUE(name,size_bytes)
+);
+CREATE INDEX IF NOT EXISTS takeout_items_tab ON takeout_items(state,outcome,local_at,id);
+CREATE TABLE IF NOT EXISTS takeout_entries (
+ archive_id INTEGER NOT NULL REFERENCES takeout_archives(id) ON DELETE CASCADE,
+ path TEXT NOT NULL,
+ inner_dir TEXT NOT NULL,
+ name TEXT NOT NULL,
+ kind TEXT NOT NULL CHECK(kind IN ('media','sidecar')),
+ size_bytes INTEGER NOT NULL,
+ crc32 INTEGER,
+ facts TEXT NOT NULL DEFAULT '',
+ item_id INTEGER REFERENCES takeout_items(id),
+ PRIMARY KEY(archive_id,path)
+);
+CREATE INDEX IF NOT EXISTS takeout_entries_item ON takeout_entries(item_id);
+CREATE TABLE IF NOT EXISTS takeout_compared (
+ item_id INTEGER NOT NULL REFERENCES takeout_items(id) ON DELETE CASCADE,
+ asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+ asset_size INTEGER NOT NULL,
+ same INTEGER NOT NULL CHECK(same IN (0,1)),
+ PRIMARY KEY(item_id,asset_id)
+);
+CREATE TABLE IF NOT EXISTS takeout_plans (
+ id TEXT PRIMARY KEY,
+ item_id INTEGER NOT NULL REFERENCES takeout_items(id),
+ body TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS stats (id INTEGER PRIMARY KEY CHECK(id=1), total INTEGER NOT NULL);
 INSERT OR IGNORE INTO stats VALUES(1,0);

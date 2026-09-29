@@ -28,7 +28,11 @@ func fullMux(t *testing.T, s *Store, upstream string, photos *PhotosHub) (*api.M
 	if photos == nil {
 		photos = NewPhotosHub(s, "")
 	}
-	addons, err := addon.NewRegistry(s, book, t.TempDir(), s.BuiltInAddons(AddonNeeds{Photos: photos})...)
+	google, err := s.NewGooglePhotos("", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addons, err := addon.NewRegistry(s, book, t.TempDir(), s.BuiltInAddons(AddonNeeds{Photos: photos, GooglePhotos: google})...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +44,9 @@ func fullMux(t *testing.T, s *Store, upstream string, photos *PhotosHub) (*api.M
 	photos.Routes(m)
 	addons.Routes(m)
 	s.EventRoutes(m, addons.Changed)
-	s.NewTaskRunner(upstream, testWriterSecret).Routes(m)
+	tasks := s.NewTaskRunner(upstream, testWriterSecret)
+	tasks.Routes(m)
+	google.Routes(m, tasks, MediaRoots{Archive: dir, Cache: dir})
 	m.HandleFunc(api.Route{
 		Method: "GET", Path: "/api/openapi.json", Tag: "Reference", Needs: api.Read,
 		Summary: "Get this reference", Doc: "This document.", Returns: map[string]any{},

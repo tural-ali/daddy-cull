@@ -14,13 +14,13 @@ import {GridZoom} from './gridZoom';
 import {FilterButton,FilterMenu,FilterPills,PageFiltersProvider,matchFilters,unusualSort,type PageFilters,type Suggestion} from './SearchFilters';
 import {Kbd,Tips,tipProps,useShortcut} from './keys';
 
-export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'log'|'bin'|'settings'|'addons'|'developers'|'frame';
+export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'google'|'log'|'bin'|'settings'|'addons'|'developers'|'frame';
 type Item={href:string;route?:LegacyRoute;label:string;icon:IconName};
 type Section={title?:string;items:Item[]};
 
 // Cull's own addons' pages, where the app draws them, in the order the
 // sidebar lists them.
-const addonRoutes:Record<string,LegacyRoute>={'/shadows':'shadows','/screenshots':'shots','/social':'social','/upgrades':'upgrades','/photos':'photos'};
+const addonRoutes:Record<string,LegacyRoute>={'/shadows':'shadows','/screenshots':'shots','/social':'social','/upgrades':'upgrades','/photos':'photos','/google-photos':'google'};
 const addonOrder=Object.keys(addonRoutes);
 // Before the addons are read, or if they cannot be, the sidebar offers what
 // it always has.

@@ -231,7 +231,7 @@ func (w *UpgradeWriter) Run(ctx context.Context, id string) (result *UpgradePlan
 			if !errors.Is(destinationErr, os.ErrNotExist) {
 				return plan, destinationErr
 			}
-			if err = w.archive.MkdirAll(path.Dir(plan.Destination), 0755); err != nil {
+			if err = mkdirShared(w.archive, path.Dir(plan.Destination)); err != nil {
 				return plan, err
 			}
 			_ = w.archive.Remove(temp)

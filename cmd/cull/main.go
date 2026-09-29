@@ -33,6 +33,7 @@ func main() {
 	disksRoot := flag.String("disks-root", "", "guarded physical-disk root for imported legacy Bin records")
 	screenshotsRoot := flag.String("screenshots-root", "", "guarded screenshot holding-area root")
 	upgradesRoot := flag.String("upgrades-root", "", "guarded read-only Takeout upgrade staging root")
+	takeoutInbox := flag.String("takeout-inbox", "", "read-only folder that Google Takeout exports of Google Photos are dropped into; both processes need it")
 	binUpstream := flag.String("bin-upstream", "", "private Bin service URL")
 	checkWriter := flag.Bool("check-writer", false, "check local private Bin service")
 	db := flag.String("db", "state/scale.db", "isolated synthetic database")
@@ -252,6 +253,14 @@ func main() {
 			defer upgradeWriter.Close()
 			mux.Handle("/upgrade/", upgradeWriter.Handler(secret))
 		}
+		if *takeoutInbox != "" {
+			googleWriter, googleErr := catalog.NewGooglePhotosWriter(s, *takeoutInbox, *writerRoot)
+			if googleErr != nil {
+				log.Fatal(googleErr)
+			}
+			defer googleWriter.Close()
+			mux.Handle("/google-photos/", googleWriter.Handler(secret))
+		}
 		// The Bin page acts on everything it lists at once, through the same
 		// engines as above; each source is still moved only by its own engine.
 		trash := catalog.NewTrashWriter(s, engine, legacyEngine, screenshotWriter)
@@ -295,6 +304,11 @@ func main() {
 		} else if !photos.Enabled() {
 			log.Print("Apple Photos helper not set up yet: the Apple Photos page offers the setup command")
 		}
+		googlePhotos, err := s.NewGooglePhotos(*takeoutInbox, mediaRoots.Archive, *previewCache)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer googlePhotos.Close()
 		immich := catalog.ImmichConfig{URL: *immichURL, Key: os.Getenv("IMMICH_KEY"), PathPrefix: *immichPrefix}
 		if err := os.MkdirAll(*addonsDir, 0o755); err != nil {
 			log.Printf("addons folder %s could not be made, so only Cull's own addons are available: %v", *addonsDir, err)
@@ -305,6 +319,7 @@ func main() {
 			UpgradesMounted:    mediaRoots.Upgrades != "",
 			ImmichConfigured:   immich.URL != "" && immich.Key != "",
 			Photos:             photos,
+			GooglePhotos:       googlePhotos,
 		})...)
 		if err != nil {
 			log.Fatal(err)
@@ -321,6 +336,20 @@ func main() {
 		// through the private writer, so a page never waits on them.
 		tasks := s.NewTaskRunner(*binUpstream, secret)
 		tasks.Routes(apiMux)
+		googlePhotos.Routes(apiMux, tasks, mediaRoots)
+		// What a task added from Google Photos is catalogued as soon as it
+		// ends, rather than at the next scan of the archive.
+		tasks.OnFinished(catalog.TaskGooglePhotosAdd, func(ctx context.Context) {
+			if mediaRoots.Archive == "" {
+				return
+			}
+			if result, scanErr := s.ScanArchive(ctx, mediaRoots.Archive); scanErr != nil {
+				log.Printf("google photos: cataloguing what was added: %v", scanErr)
+			} else {
+				log.Printf("google photos: catalogued %d new files", result.Added)
+			}
+			googlePhotos.Wake()
+		})
 		go tasks.Run(ctx)
 		apiMux.HandleFunc(api.Route{
 			Method: "GET", Path: "/api/openapi.json", Tag: "Reference", Needs: api.Read,
@@ -335,10 +364,12 @@ func main() {
 		})
 		book.Tag("Reference", "The API described by itself.")
 		mux.Handle("/api/", apiMux)
-		mux.Handle("/", webApp(*web, []string{"/year", "/duplicates", "/upgrades", "/shadows", "/screenshots", "/social", "/log", "/bin", "/photos", "/settings", "/addons", "/developers", "/addons/{id}/{page}"}))
+		mux.Handle("/", webApp(*web, []string{"/year", "/duplicates", "/upgrades", "/shadows", "/screenshots", "/social", "/log", "/bin", "/photos", "/google-photos", "/settings", "/addons", "/developers", "/addons/{id}/{page}"}))
 		// Photos is checked again by itself while Cull Sync is online, so the
 		// Apple Photos page never shows a stale answer.
 		go addons.While(ctx, catalog.AddonApplePhotos, photos.KeepChecking)
+		// The Takeout inbox is read every few minutes while its addon is on.
+		go addons.While(ctx, catalog.AddonGooglePhotos, googlePhotos.Keep)
 		// Favourites are saved by this process, so the worker that mirrors them
 		// to Immich runs here too; the private writer has no reason to reach it.
 		// Video tiles show how long each clip runs, read once per file.

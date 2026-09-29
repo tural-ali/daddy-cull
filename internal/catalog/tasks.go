@@ -35,6 +35,7 @@ const (
 	TaskBinRestore         = "bin.restore"
 	TaskBinDelete          = "bin.delete"
 	TaskBinPurge           = "bin.purge-now"
+	TaskGooglePhotosAdd    = "google-photos.add"
 )
 
 // The states of a task, and of each file in it.
@@ -58,7 +59,8 @@ type Task struct {
 	// ID names the task in the routes below.
 	ID string `json:"id"`
 	// Kind is what the task does: screenshots.remove, screenshots.keep,
-	// screenshots.restore, bin.restore, bin.delete or bin.purge-now.
+	// screenshots.restore, bin.restore, bin.delete, bin.purge-now or
+	// google-photos.add.
 	Kind string `json:"kind"`
 	// Label says what the task does in words, such as Move 12 screenshots to
 	// the Bin.
@@ -442,6 +444,8 @@ func retryLabel(kind string, n int) string {
 		return "Restore " + counted(n, "file", "files") + " from the Bin"
 	case TaskBinPurge:
 		return "Delete " + counted(n, "file", "files") + " now"
+	case TaskGooglePhotosAdd:
+		return "Add " + counted(n, "photo", "photos") + " from Google Photos to the library"
 	default:
 		return "Delete " + counted(n, "file", "files") + " from the Bin"
 	}
@@ -627,8 +631,9 @@ type TaskRunner struct {
 	// again; it doubles up to a minute.
 	pause time.Duration
 
-	mu      sync.Mutex
-	changed chan struct{}
+	mu       sync.Mutex
+	changed  chan struct{}
+	finished map[string]func(context.Context)
 }
 
 // NewTaskRunner runs tasks through the private writer at upstream.
@@ -645,6 +650,17 @@ func (t *TaskRunner) Wake() {
 	default:
 	}
 	t.announce()
+}
+
+// OnFinished has done called each time a task of this kind ends, however it
+// ended, such as to catalogue the files a task added to the archive.
+func (t *TaskRunner) OnFinished(kind string, done func(context.Context)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.finished == nil {
+		t.finished = map[string]func(context.Context){}
+	}
+	t.finished[kind] = done
 }
 
 // Changed is closed the next time a task moves on.
@@ -699,6 +715,13 @@ func (t *TaskRunner) run(ctx context.Context, id string) {
 		err := t.s.read.QueryRowContext(ctx, "SELECT min(chunk) FROM task_items WHERE task_id=? AND state='queued' HAVING count(*)>0", id).Scan(&chunk)
 		if errors.Is(err, sql.ErrNoRows) {
 			t.finish(ctx, id)
+			t.mu.Lock()
+			done := t.finished[kind]
+			t.mu.Unlock()
+			if done != nil {
+				done(ctx)
+				t.announce()
+			}
 			return
 		}
 		if err != nil {
@@ -808,6 +831,27 @@ func (t *TaskRunner) step(ctx context.Context, kind string, items []taskItem) (s
 			if refused != "" {
 				outcome.failed[i] = refused
 			}
+		}
+	case TaskGooglePhotosAdd:
+		for i, item := range items {
+			id, ok := takeoutTaskID(item.key)
+			if !ok {
+				outcome.failed[i] = "This photo is not one from Google Photos."
+				continue
+			}
+			var plan GooglePhotosPlan
+			refused, err := t.post(ctx, "/google-photos/preview", GooglePhotosChoice{ItemID: id}, &plan)
+			if err == nil && refused == "" {
+				refused, err = t.post(ctx, "/google-photos/execute", PlanRef{ID: plan.ID}, &plan)
+			}
+			if err != nil {
+				return outcome, err
+			}
+			if refused != "" {
+				outcome.failed[i] = refused
+				continue
+			}
+			outcome.plans[i] = plan.ID
 		}
 	case TaskBinRestore, TaskBinDelete, TaskBinPurge:
 		route := map[string]string{TaskBinRestore: "/trash/restore", TaskBinDelete: "/trash/delete", TaskBinPurge: "/trash/purge-now"}[kind]

@@ -174,13 +174,13 @@ func (s *Store) WriterRoutes(m *api.Mux, upstream, secret string) {
 
 	upgrades := UpgradeGateway(upstream, secret)
 	m.Handle(api.Route{
-		Method: "POST", Path: "/api/upgrade-actions/preview", Addon: AddonUpgrades, Tag: "Takeout upgrades", Needs: api.Bin,
+		Method: "POST", Path: "/api/upgrade-actions/preview", Addon: AddonUpgrades, Tag: "Takeout upgrades", Needs: api.Import,
 		Summary: "Plan adding a better copy",
 		Doc:     "Checks that the pair is a known upgrade not already added, that both files are still there, and fingerprints the Takeout copy. Answers where the copy would go, beside the archive photo as NAME (hi-res).ext. Nothing is copied until the plan is carried out.",
 		Body:    UpgradeChoice{}, Returns: UpgradePlan{}, Errors: moveErrors,
 	}, upgrades)
 	m.Handle(api.Route{
-		Method: "POST", Path: "/api/upgrade-actions/execute", Addon: AddonUpgrades, Tag: "Takeout upgrades", Needs: api.Bin,
+		Method: "POST", Path: "/api/upgrade-actions/execute", Addon: AddonUpgrades, Tag: "Takeout upgrades", Needs: api.Import,
 		Summary: "Carry out an upgrade plan",
 		Doc:     "Copies the Takeout file into the archive beside the old one, checks the copy and records it as added. Neither the archive photo nor the Takeout file is moved or deleted. A plan cut short is finished by asking again.",
 		Body:    PlanRef{}, Returns: UpgradePlan{}, Errors: moveErrors,

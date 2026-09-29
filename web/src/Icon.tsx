@@ -119,6 +119,14 @@ import Link from '@material-symbols/svg-400/outlined/link.svg?raw';
 import LinkFill from '@material-symbols/svg-400/outlined/link-fill.svg?raw';
 import Tune from '@material-symbols/svg-400/outlined/tune.svg?raw';
 import TuneFill from '@material-symbols/svg-400/outlined/tune-fill.svg?raw';
+import PhotoLibrary from '@material-symbols/svg-400/outlined/photo_library.svg?raw';
+import PhotoLibraryFill from '@material-symbols/svg-400/outlined/photo_library-fill.svg?raw';
+import LibraryAdd from '@material-symbols/svg-400/outlined/library_add.svg?raw';
+import LibraryAddFill from '@material-symbols/svg-400/outlined/library_add-fill.svg?raw';
+import VisibilityOff from '@material-symbols/svg-400/outlined/visibility_off.svg?raw';
+import VisibilityOffFill from '@material-symbols/svg-400/outlined/visibility_off-fill.svg?raw';
+import Refresh from '@material-symbols/svg-400/outlined/refresh.svg?raw';
+import RefreshFill from '@material-symbols/svg-400/outlined/refresh-fill.svg?raw';
 
 const icons={
   photo:[Photo,PhotoFill],
@@ -180,6 +188,10 @@ const icons={
   chevron_right:[ChevronRight,ChevronRightFill],
   link:[Link,LinkFill],
   tune:[Tune,TuneFill],
+  photo_library:[PhotoLibrary,PhotoLibraryFill],
+  library_add:[LibraryAdd,LibraryAddFill],
+  visibility_off:[VisibilityOff,VisibilityOffFill],
+  refresh:[Refresh,RefreshFill],
 } as const;
 
 export type IconName=keyof typeof icons;

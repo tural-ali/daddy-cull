@@ -53,7 +53,7 @@ An addon edited or taken out is followed the same way.
 | `homepage` | no | Where to read more. |
 | `icon` | no | A Material Symbols name from the set Cull ships. Any other is drawn as a puzzle piece. |
 | `pages` | no | Pages it adds to the sidebar while it is on. |
-| `permissions` | no | What its key may do beyond reading: `review`, `bin`, `delete` or `settings`. |
+| `permissions` | no | What its key may do beyond reading: `review`, `import`, `bin`, `delete` or `settings`. |
 | `needs` | no | What it needs to work, in words, listed on the Addons page. |
 | `work` | no | What it does in the background while it is on, in words. |
 
@@ -98,6 +98,7 @@ Anything more is asked for in `permissions`, listed on the Addons page, shown ag
 | Permission | What it allows |
 | --- | --- |
 | `review` | Save choices: keep or remove, favourites, turns and reviewed dates. |
+| `import` | Add files to the library from outside it, such as Google Photos or better copies from Takeout. |
 | `bin` | Move files into the Bin and put them back. |
 | `delete` | Delete files in the Bin for good. |
 | `settings` | Change settings and turn addons on and off. |

@@ -158,6 +158,46 @@ The install endpoint refuses while Cull Sync is applying changes, so a reinstall
 `mac/CullSync/install.sh` installs from a checkout with the same script and keeps the key already in `sync.conf`.
 `mac/CullSync/test.sh` runs the matching tests without touching Photos.
 
+## Google Photos
+
+The Google Photos page adds what a Google Photos library holds and the archive lacks.
+There is no icloudpd for Google Photos: since 31 March 2025 the Google Photos Library API only reads what an app uploaded itself, so no app can download a whole library through it.
+Google Takeout is the one supported way out, so Cull reads Takeout exports dropped into an inbox folder given with `-takeout-inbox`.
+Browser automation such as gphotos-cdp can also pull a library, but it drives a signed-in Chrome session and breaks when Google changes its pages, so Cull does not ship it.
+
+The page carries the steps for making an export: only Google Photos ticked, `.zip`, 50 GB parts, once or every two months for a year.
+Every part is downloaded into the inbox as it is; an export already unpacked into a folder is read the same way.
+The web process reads the inbox every five minutes while the addon is on, and on Read the inbox now.
+It never changes the exports.
+It pairs each photo with its JSON sidecar for the date taken, description, people and favourite, and checks it against the catalogue by name, size, day and bytes.
+
+| Tab | What it holds |
+|---|---|
+| Not in the library | The archive has no copy; these can be added. |
+| Different copies | The archive holds a file of the same name and day, but not these bytes; these can be added beside it. |
+| Unsure | No date from Google, or a file like it could not be compared; these cannot be added. |
+| Already in the library | The archive holds these bytes, under this name or another. |
+| Removed in Cull | The archive's copy was removed in Cull, so the photo is not offered again. |
+| Added | Added from this page. |
+| Skipped | Set aside; Offer again brings them back. |
+
+Add to the library queues a `google-photos.add` task under Tasks, and the photos leave the page at once.
+The writer copies each one to `YYYY/YYYY-MM/YYYY-MM-DD/<name>` under the day it was taken, or beside the archive's copy as `<name> (Google Photos).<ext>` for a different copy.
+It refuses a file whose bytes are already in that day's folder, never overwrites, writes through a temporary file it checks by SHA-256 before linking it into place, dates the file to when it was taken, and creates new folders with mode 777.
+When the task finishes, the web process scans the archive so the new files join the catalogue.
+Photos inside a zip are unpacked for viewing into `preview-cache/takeout-unpacked`, one file of at most 1 GB at a time, trimmed back to 2 GB once it passes 4 GB.
+What was read, the outcome for each photo and every copy made are kept in the `takeout_archives`, `takeout_items` and `takeout_plans` tables.
+
+To turn it on, mount one inbox folder read-only into both containers at the same path and give both the flag:
+
+```yaml
+volumes:
+  - /mnt/user/takeout-inbox:/takeout-inbox:ro
+command: [..., "-takeout-inbox", "/takeout-inbox"]
+```
+
+Adding needs the `import` permission, which the writer's own routes for Takeout upgrades now ask for too.
+
 ## Tower deployment
 
 Source checkout: `/mnt/user/appdata/tower-cull-next-repo`.

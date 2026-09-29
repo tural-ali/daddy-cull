@@ -33,6 +33,9 @@ const (
 	Read = "read"
 	// Review saves choices: keep or remove, favourites, turns, reviewed dates.
 	Review = "review"
+	// Import adds files to the library from outside it, such as Google
+	// Photos.
+	Import = "import"
 	// Bin moves files into the Bin and back out of it.
 	Bin = "bin"
 	// Delete deletes files from the Bin for good.
@@ -46,6 +49,7 @@ const (
 var Permissions = []struct{ Name, Doc string }{
 	{Read, "See your library, its dates, choices and settings"},
 	{Review, "Save choices: keep or remove, favourites, turns and reviewed dates"},
+	{Import, "Add files to the library from outside it, such as Google Photos"},
 	{Bin, "Move files into the Bin and put them back"},
 	{Delete, "Delete files in the Bin for good"},
 	{Settings, "Change settings and turn addons on and off"},
