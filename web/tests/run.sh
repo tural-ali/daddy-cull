@@ -24,7 +24,7 @@ else
   done
 fi
 
-logs=$(mktemp -d -t cull-browser-tests)
+logs=$(mktemp -d "${TMPDIR:-/tmp}/cull-browser-tests.XXXXXX")
 npx vite preview --host 127.0.0.1 --port 8842 --strictPort >"$logs/preview.log" 2>&1 &
 preview=$!
 trap 'kill "$preview" 2>/dev/null || true; rm -rf "$logs"' EXIT
