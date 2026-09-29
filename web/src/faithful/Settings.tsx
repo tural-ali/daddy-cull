@@ -5,7 +5,7 @@ import {bytes,longDate,readDeleting,type DeletingReport} from './Bin';
 import {clearSessionSound,setVideoSoundPreference} from '../SessionVideo';
 import {reloadPage} from './router';
 import {failure} from '../api';
-import {readSetup,type SetupView} from './Setup';
+import {readSetup,saveSetup,type SetupView} from './Setup';
 import {hiddenGuides,showAllGuides} from './PageGuide';
 
 export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;videoMuted?:boolean;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number;immichRefused?:number;calendarDates?:number;reviewedDates?:number;streak?:number;reviewedToday?:boolean;notifications?:number};
@@ -205,6 +205,63 @@ function FolderSettings(){
   </>;
 }
 
+// ImmichSettings connects an Immich server that reads this library as an
+// external library, so favourites set here are set there too. The key is sent
+// once and never shown again; saving starts Cull again to take it up.
+function ImmichSettings({stats}:{stats:Stats}){
+  const [setup,setSetup]=useState<SetupView|null>(null);
+  const [url,setURL]=useState('');
+  const [prefix,setPrefix]=useState('');
+  const [key,setKey]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [message,setMessage]=useState('');
+  const [error,setError]=useState('');
+  const show=(view:SetupView)=>{setSetup(view);setURL(view.config.immich.url);setPrefix(view.config.immich.pathPrefix);setKey('')};
+  useEffect(()=>{readSetup().then(show).catch(reason=>setError((reason as Error).message))},[]);
+  if(!setup)return null;
+  const saved=setup.config.immich;
+  const editable=setup.configurable;
+  const changed=url.trim()!==saved.url||prefix.trim()!==saved.pathPrefix||key.trim()!=='';
+  async function save(next:{url:string;pathPrefix:string},newKey:string|undefined,done:string){
+    setBusy(true);setMessage('');setError('');
+    try{
+      const answer=await saveSetup({config:{...setup!.config,immich:next},...(newKey===undefined?{}:{immichKey:newKey})});
+      if(!answer){setError('Daddy Cull stopped to take the change up and has not come back. Run daddy-cull start in Terminal, then reload this page.');return}
+      show(answer);setMessage(done);
+    }catch(reason){setError((reason as Error).message)}finally{setBusy(false)}
+  }
+  return <>
+    <h2 id="immich">Immich</h2>
+    <p className="hint">Optional. If <a href="https://immich.app" target="_blank" rel="noreferrer">Immich</a> reads this library as an external library, favourites you set here are set there too. Nothing else is sent to it.</p>
+    {!editable&&<p className="note">This Daddy Cull was started with its settings given where it runs, such as in Docker, so Immich is set there.</p>}
+    {saved.url&&stats.immichSynced!==undefined&&<dl className="kv">
+      <div><dt>Favourites in Immich</dt><dd>{stats.immichSynced.toLocaleString()} synced · {(stats.immichPending??0).toLocaleString()} waiting · {(stats.immichFailed??0).toLocaleString()} failed{(stats.immichRefused??0)>0&&<> · {stats.immichRefused!.toLocaleString()} belong to another Immich user</>}</dd></div>
+    </dl>}
+    <form className="immichform" onSubmit={event=>{event.preventDefault();if(changed&&url.trim())void save({url:url.trim(),pathPrefix:prefix.trim()},key.trim()||undefined,'Saved. Favourites will be sent to Immich.')}}>
+      <div className="setupfield">
+        <label htmlFor="immich-url">Address</label>
+        <input id="immich-url" className="setupinput" type="url" inputMode="url" placeholder="http://immich.local:2283" value={url} disabled={!editable||busy} spellCheck={false} autoComplete="off" onChange={event=>setURL(event.target.value)}/>
+      </div>
+      <div className="setupfield">
+        <label htmlFor="immich-prefix">Library folder, as Immich sees it</label>
+        <input id="immich-prefix" className="setupinput" placeholder="/mnt/photos" value={prefix} disabled={!editable||busy} spellCheck={false} autoComplete="off" onChange={event=>setPrefix(event.target.value)}/>
+        <p className="hint">The folder given to Immich's external library, which may differ from the library's folder on this Mac.</p>
+      </div>
+      <div className="setupfield">
+        <label htmlFor="immich-key">API key</label>
+        <input id="immich-key" className="setupinput" type="password" placeholder={setup.immichKeySet?'Kept. Type a new one to replace it.':'From Immich: Account Settings, API Keys'} value={key} disabled={!editable||busy} spellCheck={false} autoComplete="off" onChange={event=>setKey(event.target.value)}/>
+        <p className="hint">It needs the <code>asset.update</code> permission, and is kept on this Mac only.</p>
+      </div>
+      {error&&<p className="note warn" role="alert">{error}</p>}
+      {message&&<p className="flash" role="status">{message}</p>}
+      <div className="setupacts inline">
+        <button className="btn primary" disabled={!editable||busy||!changed||!url.trim()}>{busy?<Busy label="Saving…" state="working"/>:'Save'}</button>
+        {saved.url&&<button type="button" className="btn" disabled={!editable||busy} onClick={()=>void save({url:'',pathPrefix:''},'','Immich is disconnected.')}>Disconnect</button>}
+      </div>
+    </form>
+  </>;
+}
+
 // Guides brings back the guide at the top of each page, once hidden.
 function Guides(){
   const [hidden,setHidden]=useState(hiddenGuides);
@@ -246,22 +303,23 @@ export function Settings({stats}:{stats:Stats}){
     <button className="btn primary" disabled={busy} onClick={()=>void reindex()}>Refresh the catalogue index</button>
     <h2>Derived data</h2>
     <dl className="kv">
-      <div><dt>Files with imported evidence</dt><dd>{stats.evidence.toLocaleString()}</dd></div>
       <div><dt>Files fully hashed for duplicates</dt><dd>{stats.fullHashes.toLocaleString()}</dd></div>
       <div><dt>Favourites marked</dt><dd>{stats.favourites.toLocaleString()}</dd></div>
-      {stats.immichSynced!==undefined&&<div><dt>Favourites in Immich</dt><dd>{stats.immichSynced.toLocaleString()} synced · {(stats.immichPending??0).toLocaleString()} waiting · {(stats.immichFailed??0).toLocaleString()} failed{(stats.immichRefused??0)>0&&<> · {stats.immichRefused!.toLocaleString()} belong to another Immich user</>}</dd></div>}
       <div><dt>Review decisions</dt><dd>{stats.decisions.toLocaleString()}</dd></div>
-      <div><dt>Shadow groups</dt><dd>{stats.shadowGroups.toLocaleString()}</dd></div>
-      <div><dt>Screenshots waiting</dt><dd>{stats.screenshots.toLocaleString()}</dd></div>
-      <div><dt>Accepted upgrades</dt><dd>{stats.upgradesAccepted.toLocaleString()}</dd></div>
-      <div><dt>Legacy Bin files</dt><dd>{stats.legacyBin.toLocaleString()}</dd></div>
+      {stats.shadowGroups>0&&<div><dt>Shadow groups</dt><dd>{stats.shadowGroups.toLocaleString()}</dd></div>}
+      {stats.screenshots>0&&<div><dt>Screenshots waiting</dt><dd>{stats.screenshots.toLocaleString()}</dd></div>}
+      {stats.upgradesAccepted>0&&<div><dt>Accepted upgrades</dt><dd>{stats.upgradesAccepted.toLocaleString()}</dd></div>}
+      {stats.legacyBin>0&&<div><dt>Legacy Bin files</dt><dd>{stats.legacyBin.toLocaleString()}</dd></div>}
     </dl>
+    <ImmichSettings stats={stats}/>
     <BinSettings/>
     <VideoSettings initial={stats.videoMuted!==false}/>
     <Appearance/>
     <Guides/>
-    <h2>Google Takeout</h2>
-    <p><a href="/upgrades">Review upgrades</a> · {stats.upgradeCandidates.toLocaleString()} archive photos have confirmed higher-resolution Takeout matches. They appear beside the archive original, not as a separate collection.</p>
+    {stats.upgradeCandidates>0&&<>
+      <h2>Google Takeout</h2>
+      <p><a href="/upgrades">Review upgrades</a> · {stats.upgradeCandidates.toLocaleString()} archive photos have confirmed higher-resolution Takeout matches. They appear beside the archive original, not as a separate collection.</p>
+    </>}
     <h2>Safety</h2>
     <p className="hint">The browser saves review intent only. Files marked for culling stay in the archive until they are moved to the Bin, and everything in the Bin can be restored. Deleting from the Bin asks for confirmation first, and keeps the files for the grace period above before they are gone.</p>
   </section>;

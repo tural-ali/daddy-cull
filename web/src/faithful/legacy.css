@@ -2409,6 +2409,9 @@ dialog.confirm .confirmacts { display: flex; justify-content: flex-end; gap: .5r
 .graceform input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .graceform input[aria-invalid="true"] { border-color: var(--bad); }
 .graceform .btn { margin-left: .3rem; }
+/* Immich's address, folder and key, one under another at a reading width. */
+.immichform { display: grid; gap: .9rem; max-width: 34rem; margin: .8rem 0 1rem; }
+.immichform .setupacts.inline { margin-top: .1rem; }
 .warntext { color: var(--warn); }
 /* On the Log the waiting files sit above the saved choices, at the same size. */
 .bingal.small { grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(156px * var(--zoom))), 1fr)); }
@@ -2876,6 +2879,8 @@ ul.answers { margin: 0; padding: 0; list-style: none; display: grid; gap: .5rem;
 .setupinput.short { width: auto; font-family: inherit; justify-self: start; }
 .setupinput:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .setupinput:disabled { color: var(--muted); background: var(--bg-2); }
+/* A hint in the box is words, not a path or a key, so it reads as the page does. */
+.setupinput::placeholder { font-family: var(--font); }
 .setuptree {
   margin: .15rem 0 0; padding: .6rem .8rem; overflow-x: auto;
   font-size: 12.5px; line-height: 1.5; color: var(--muted);
