@@ -443,6 +443,10 @@ func main() {
 		if mediaRoots.Archive != "" && mediaRoots.RawTool != "" {
 			go s.KeepShapes(ctx, mediaRoots)
 		}
+		// Files that share a size are hashed until Duplicates can prove copies.
+		if mediaRoots.Archive != "" {
+			go s.KeepHashes(ctx, mediaRoots)
+		}
 		startImmichSync(ctx, s, immich, addons)
 	}
 	server := &http.Server{Addr: *addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 0, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}
