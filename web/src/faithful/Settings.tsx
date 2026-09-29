@@ -12,7 +12,7 @@ export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:n
 
 function localDate(value:string){
   if(!value)return 'never';
-  return new Date(/[zZ]|[+-]\d\d:\d\d$/.test(value)?value:`${value}Z`).toLocaleString();
+  return new Date(/[zZ]|[+-]\d\d:\d\d$/.test(value)?value:`${value}Z`).toLocaleString('en-GB',{dateStyle:'long',timeStyle:'short'});
 }
 
 function ago(value:string){

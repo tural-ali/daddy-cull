@@ -23,7 +23,7 @@ const home='/Users/sam/Pictures/Daddy Cull';
   const saves=[];
   let down=0;
   const browser=await chromium.launch({channel:'chrome',headless:true});
-  const page=await browser.newPage({viewport:{width:1280,height:860}});
+  const page=await browser.newPage({viewport:{width:1280,height:860},timezoneId:'Europe/London'});
   await page.addInitScript(()=>{
     const now=new Date();
     localStorage.setItem('cull.streak-intro',`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`);
@@ -46,7 +46,7 @@ const home='/Users/sam/Pictures/Daddy Cull';
       down=2;
       return route.fulfill({status:202,json:{...state,restarting:true}});
     }
-    if(url.pathname==='/api/stats')return route.fulfill({json:{total:10,synthetic:false,snapshotAt:'',candidates:0,calendarDays:1,reviewedDays:0,decisions:0,favourites:3,evidence:0,fullHashes:0,marked:0,legacyBin:0,shadowGroups:0,screenshots:0,social:0,upgradesAccepted:0,upgradeCandidates:0,bin:0,notifications:0,immichSynced:2,immichPending:1,immichFailed:0}});
+    if(url.pathname==='/api/stats')return route.fulfill({json:{total:10,synthetic:false,snapshotAt:'2026-09-06 01:49:00',candidates:0,calendarDays:1,reviewedDays:0,decisions:0,favourites:3,evidence:0,fullHashes:0,marked:0,legacyBin:0,shadowGroups:0,screenshots:0,social:0,upgradesAccepted:0,upgradeCandidates:0,bin:0,notifications:0,immichSynced:2,immichPending:1,immichFailed:0}});
     if(url.pathname==='/api/intake')return route.fulfill({json:{configured:true,status:null}});
     if(url.pathname==='/api/trash/deleting')return route.fulfill({json:{graceDays:30,items:[],lastRun:'',lastDeleted:0,lastError:'',checkIntervalMinutes:15}});
     if(url.pathname==='/api/addons')return route.fulfill({json:builtIns()});
@@ -57,6 +57,7 @@ const home='/Users/sam/Pictures/Daddy Cull';
 
   await page.goto(`${base}/settings`);
   await page.waitForSelector('#immich-url');
+  assert.equal((await page.locator('.kv div',{hasText:'Last refreshed'}).locator('dd').textContent()).trim(),'6 September 2026 at 02:49','the index date is written out in full, in the viewer\'s time');
   assert.equal(await page.getByText('Favourites in Immich').count(),0,'no sync counts before Immich is connected');
   assert.equal(await page.getByText('Files with imported evidence').count(),0,'an empty legacy count is not shown');
   assert.equal(await page.getByRole('heading',{name:'Google Takeout'}).count(),0,'no upgrades section without upgrades');
