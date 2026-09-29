@@ -96,6 +96,15 @@ const home='/Users/sam/Pictures/Daddy Cull';
   assert.equal(await page.getByRole('button',{name:'Disconnect'}).count(),0);
   assert.equal(await page.getByText('Favourites in Immich').count(),0);
 
+  // Only a Cull started from its own setup downloads from iCloud; one started
+  // with flags, as in Docker, cannot tell whether something else does.
+  const icloud=page.locator('.kv div',{hasText:'iCloud Photos'}).locator('dd');
+  assert.equal((await icloud.textContent()).trim(),'Off');
+  state.configurable=false;
+  await page.reload();
+  await icloud.waitFor();
+  assert.equal((await icloud.textContent()).trim(),'Not downloaded by Daddy Cull');
+
   assert.deepEqual(errors,[]);
   await browser.close();
 })().catch(error=>{console.error(error);process.exit(1)});
