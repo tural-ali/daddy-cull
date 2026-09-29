@@ -1,245 +1,291 @@
-# Daddy, Cull! next
+# Daddy, Cull!
 
-A Go + React foundation for a growing family media library, hosted on Unraid Tower.
-Read [the architecture](docs/ARCHITECTURE.md) for native media workers, Takeout intake, growth limits and the filesystem safety contract.
+[![Go](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/go.yml/badge.svg)](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/go.yml)
+[![Web](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/web.yml/badge.svg)](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/web.yml)
+[![Mac](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/mac.yml/badge.svg)](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/mac.yml)
+[![Docker](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/docker.yml/badge.svg)](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/docker.yml)
+[![Release](https://img.shields.io/github/v/release/tural-ali/daddy-cull-oss?include_prereleases&sort=semver)](https://github.com/tural-ali/daddy-cull-oss/releases)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
-## Real-library preview
+One place on your Mac to bring every photo in, file it by the day it was taken, and throw out the rest a few minutes a day.
 
-The application now supports importing the real archive catalogue and showing real previews through fixed read-only routes to the existing media service.
-See [the real-library preview contract](docs/REAL-LIBRARY-PREVIEW.md) for deployment boundaries and unfinished work.
-The Tower compose configuration now opens `/state/library.db`; the synthetic seed instructions below remain for isolated tests only.
-Do not seed the real database or follow the old synthetic deployment sequence for this configuration.
+![A day in Daddy Cull: every photo taken on 29 September, in every year](docs/images/today.webp)
 
-## Current implementation
+## Why
 
-The deployed app browses a real archive snapshot and saves reversible review intent.
-Related-file grouping, comparison, pending-save recovery and an explicit Bin workflow are connected.
-The private writer supports selected quarantine, restore and separately confirmed purge.
-This is still an incomplete replacement; see [delivered and remaining work](docs/RELEASE-1-STATUS.md).
+### What?
 
-- Go API backed by the native SQLite C library, with four bounded readers and one writer.
-- Indexed, bounded cursor pagination, with source and media filters.
-- Keep, Later, Favourite and Mark for culling, with explicit save acknowledgements.
-- Idempotency keys, stale-revision protection and an append-only decision ledger.
-- Session undo and bounded batches of 40 group representatives in React.
-- Non-root, resource-limited web and writer containers, with archive write access isolated to the writer.
+I had 20 years of photos and videos, around 60,000 files, that needed cleaning up: duplicates of every kind, and plain trash.
 
-Undo controls and session progress currently last for the browser session.
-The underlying decisions and event history survive application/container restarts.
-Same-browser queue resumption and pending-save recovery are implemented.
-A durable history UI and cross-device session synchronisation remain unfinished.
+### And what?
 
-## Saved from social
+Every time our family of four came back from an event, there were hundreds of new photos, taken on different devices: iPhones, DSLR cameras and more.
+Cleaning them up meant a number of different applications, one for each job.
 
-A separate page lists archive videos that look like they were saved from Instagram or a similar app rather than recorded on a camera.
+### So what?
 
-Detection reads container headers and six greyscale thumbnails per video.
-It never decodes a whole file, never writes to the archive, and uses no model, so it costs nothing per video beyond disk reads.
-The signals are the filename shapes only a download tool produces, the absence of `com.apple.quicktime.make`/`model`, non-capture resolutions, bits per pixel per frame, exact whole-second durations, and the Story letterbox: rows that are flat left to right and unchanged across all six frames, above and below a moving middle.
+Daddy Cull is the one and only place to organise photos, before anything else is done with them.
 
-The result is a score, not a rule, because single signals overlap.
-What a high score proves is narrow and worth stating plainly: the file carries no camera fingerprint and a download-shaped name, so it left an app rather than a lens.
-Whether that app was Instagram is a separate question the headers cannot answer.
-In a 60-file sample of the band at or above 10, about half also showed visible Story furniture in the still - letterbox, stickers, burned-in captions, account handles - and the rest were plain clips that still had no capture metadata.
-The Story letterbox is the strongest visual signal and ran about nine in ten true when the 121 hits were inspected, so it has its own filter.
-Filenames are normalised before matching, so `Copy of X.mp4`, `X (2).mov` and `X (2022-04-07).mov` are recognised as one download.
+1. **Clean up the old library every day.** Today shows every photo taken on this date, in every year, so 20 years become 365 short sessions.
+2. **Import the photos taken day by day, and set a regular time to cull them.** Drop in a camera card, or let iCloud, Apple Photos and Google Photos fill the Import folder.
+3. **Organise everything by date.** Every photo lands in `YYYY/YYYY-MM/YYYY-MM-DD`, in plain folders.
 
-Reviewing is a multi-select pass.
-Tick a still or click it, shift-click to extend the run, or select every candidate on the page, then choose one of two actions.
-**Keep** records the file as not a social video: it leaves this list and nothing on disk is touched.
-**Move to Bin** records it for removal, which is the same decision every other page in this app writes: the file moves only when the Bin is run by the separate writer process, which re-verifies size and hash first, and the move stays recoverable afterwards.
+Above all, the library is local.
+It is vendor agnostic, in a layout any app can read, and if one of the clouds vanishes some day, the files are still here.
 
-Both actions write decisions and nothing else, so the page itself never touches the archive.
-A decided candidate disappears from the list, and the header keeps a running count of what has been kept and what is marked.
-Each batch offers an Undo that restores the previous state, and any decision can also be reversed later from the Log.
-Decisions go out twenty at a time, the server's batch limit, so a large selection is sent as several requests in order; if one fails, the message says how many were already saved.
+## How it works
+
+```mermaid
+flowchart LR
+  subgraph Sources
+    cam[Camera card or phone export]
+    icl[iCloud Photos<br/>via icloudpd]
+    aph[Apple Photos on this Mac<br/>via osxphotos]
+    gtk[Google Takeout]
+  end
+  cam --> imp[(Import folder)]
+  icl --> imp
+  aph --> imp
+  gtk -->|Google Photos page| lib
+  imp -->|filed by date taken,<br/>never overwritten| lib[(Library<br/>YYYY/YYYY-MM/YYYY-MM-DD)]
+  lib --> rev{Review}
+  rev -->|keep, favourite| lib
+  rev -->|remove| bin[(Bin<br/>restorable)]
+  bin -->|after the days set in Settings| gone[Deleted]
+```
+
+The library is a plain folder tree, the same shape as a family archive on a NAS:
+
+```text
+Library/
+├── 2013/
+│   └── 2013-09/
+│       └── 2013-09-29/
+│           ├── IMG_0412.JPG
+│           └── IMG_0412.MOV      ← Live Photo halves stay together
+└── 2025/
+    └── 2025-09/
+        ├── 2025-09-28/
+        └── 2025-09-29/
+            ├── DSC_1180.NEF
+            └── IMG_5531.HEIC
+```
+
+Photos are never overwritten: a file the library already holds, byte for byte, is set aside in `Import/Already in the library` for you to check.
+Removing a photo moves it to the Bin, and it can be restored from the Bin or the Log until the Bin's grace period ends.
+
+## Requirements
+
+| | Minimum |
+|---|---|
+| macOS | 13 Ventura or newer |
+| Processor | Apple silicon or Intel |
+| Memory | 4 GB |
+| Free space | 2 GB for the app, plus room for your photos |
+| Network | Internet during installation (github.com) |
+| Port | 8830 free on this Mac (set `DADDY_CULL_PORT` to use another) |
+| Account | Your own user, not `sudo` |
+
+The installer checks all of these first and changes nothing if one fails.
+You do not need Docker, Homebrew, Python or anything else: the installer brings what is missing.
+
+## Install
+
+Paste this into Terminal:
 
 ```bash
-go run ./cmd/cull -db state/preview.db -import-social social-report.tsv
-go run ./cmd/cull -db state/preview.db -web web/dist -social-posters state/social-posters -archive-media /Volumes/family-archive
+curl -fsSL https://raw.githubusercontent.com/tural-ali/daddy-cull-oss/main/install.sh | bash
 ```
 
-`-social-archive-prefix` maps the host paths in the report onto the catalogue's archive root, and `-social-posters` is a read-only directory of stills captured during detection.
-`-archive-media` points at a mounted copy of the archive and is what makes previews and video playback work without a separate media service.
-The request carries nothing but a catalogue ID, the path comes from the database, and the handler opens files through `os.Root`, so it cannot read outside that mount even through a symlink, and it answers GET and HEAD only.
-Byte ranges are served, which is what lets a browser seek within a video rather than pulling the whole file first.
-Without the flag the media routes are simply not mounted and every card keeps its honest "preview unavailable" state.
-A candidate already in the catalogue is linked to that asset so its decisions survive a re-import.
+It will:
 
-Each tree the catalogue names has its own mount, so a preview can never be drawn from the wrong file: `-archive-media`, `-screenshots-media`, `-upgrades-media` and `-disks-media`.
-A tree with no mount answers 404 rather than reaching into another one.
-The one exception is deliberate: the cache half of a shadowed pair is the copy the user share already resolves that path to, so it is served from the archive mount when no disk mount exists.
+1. Check this Mac against the requirements above.
+2. Install Homebrew if it is missing, then exiftool and ffmpeg (dates, RAW previews, video frames) and uv.
+3. Download the latest release and check its checksum.
+4. Ask whether to install icloudpd (iCloud) and osxphotos (Apple Photos). Both are optional.
+5. Start Daddy Cull in the background with launchd, and open the setup wizard at [http://127.0.0.1:8830/setup](http://127.0.0.1:8830/setup).
 
-`-review-media` is the last resort for files the share cannot expose under their own names.
-The physically shadowed copies sit at paths the merged share resolves to the other copy, and some pairs differ only by letter case, which a case-insensitive client folds together, so neither half can be addressed by name.
-It points at a flat directory of hardlinks named by asset id, where a collision cannot occur by construction and the name is exactly what the request already carries.
-A real mount for the tree always wins over it.
-
-The Bin's own files are served the same way, through `/api/bin-media/{id}`.
-A culled file has not left the archive share, it has moved to a `.culled` folder inside it, so it can still be looked at: deciding whether to restore or permanently delete a photograph from its filename alone is not a real choice.
-With `-disks-media` mounted, the recorded disk-qualified path names the exact file and is served as it stands, provided the file is still there.
-Unraid's mover migrates the cache onto the array, so a file recorded on the cache may since have moved to a disk.
-In that case, or without the disk mount, the path is rewritten to the one the merged share uses, and the rewrite is refused when another file still in the Bin has that same path on a different disk, since the share exposes only one of the two and nothing here can tell which.
-
-Previews are generated rather than proxied, into the directory given by `-preview-cache`, keyed by file, size and modification time.
-The catalogue and the imported Bin history each number from one, so the key carries which of the two it counts in and their small integers cannot collide in the one shared cache directory.
-A gallery tile is a downscaled JPEG, which took a 13 MB screenshot from 13,193,991 bytes to 21,206.
-`-frame-tool` (default `ffmpeg`) decodes a frame for video and for HEIC, and `-raw-tool` (default `exiftool`) reads the full-size JPEG a camera embeds in a RAW file, which is around nine times faster than demosaicing it.
-Both are handed the already-validated file descriptor rather than a path, so no second path lookup can resolve anywhere else.
-A tool that is not installed is logged once at startup and the previews that needed it stay unavailable; nothing else is affected.
-
-## Local development
-
-Requires Go 1.27.1 with a C compiler, and Node 22.12+ or Node 24.
-
-```sh
-cd next
-mkdir -p state
-go test -race ./...
-go run ./cmd/cull -db state/scale.db -seed 100000
-cd web
-npm ci
-npm run build
-cd ..
-go run ./cmd/cull -db state/scale.db
-```
-
-Open [the local preview](http://127.0.0.1:8830).
-Seeding refuses non-empty databases.
-Use a new filename to create another synthetic fixture.
-The server binds to loopback by default.
-`-demo-network` permits private-network binding; it is not authentication.
-Do not expose the deployed service publicly.
-
-## Immich favourites
-
-Hearting an archive photo also marks it as a favourite in Immich, one way only.
-Removing the heart clears Immich's favourite only when Cull set it; a photo already favourited in Immich keeps its favourite.
-Only the favourite flag is sent, through `POST /api/search/metadata` to find the asset and `PUT /api/assets` to set the flag, with a key that needs `asset.update`.
-Hearts are queued in the `immich_favourites` table in the same transaction as the decision, so a save never waits on Immich.
-The preview drains the queue in the background, retrying from 30 seconds up to hourly while Immich is down, and queues existing favourites at start-up.
-A path Immich has no single exact match for is recorded as failed and retried daily and at restart.
-Settings shows how many favourites are synced, waiting and failed.
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `IMMICH_URL` | `http://192.168.1.10:2283` in compose | Immich base URL; empty disables the mirror |
-| `IMMICH_KEY` | *(unset)* | Immich API key, read from the environment only and never logged; empty disables the mirror |
-| `IMMICH_PATH_PREFIX` | `/mnt/family-archive` | the archive path as Immich's external library recorded it |
-
-## Apple Photos
-
-The Apple Photos page carries removals and favourites over to the Photos library on the Mac.
-The browser never touches Photos: Cull Sync, a menu-bar helper in `mac/CullSync`, does the work through PhotoKit and connects out to the preview.
-Check Photos asks the helper to find each item by normalised name, extension and day, with one day of tolerance only when the name and extension are unique in the library.
-The page shows the archive file beside what the helper found, and nothing changes until Apply in Photos is pressed.
-Favourites are set first, then one deletion request moves the chosen photographs to Recently Deleted after the person confirms on the Mac.
-The helper reads every change back, and only what Photos really made is recorded in the `photos_sync` table.
-A removal is never offered while the archive still holds another live copy of the photograph.
-If something deleted from Photos is later restored in Cull, the page says to recover it from Recently Deleted.
-Job state and preview thumbnails live in the preview's memory and are lost on restart, which only means checking again.
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `PHOTOS_AGENT_KEY` | *(unset)* | optional fixed key for the helper, sent in `X-Photos-Agent-Key`; 32 or more printable characters without spaces, never logged; when unset, keys are generated by the setup command |
-
-Cull Sync is set up from the Apple Photos page, which opens a setup dialog by itself whenever the helper is not connected.
-The dialog shows one command to paste into Terminal on the Mac: `curl -fsSL http://<the address the page was opened at>/api/photos/install/<code> | bash`.
-The code is random, works once and expires after 15 minutes.
-Fetching it returns `mac/CullSync/setup.sh` with the preview's address, a fresh key and the helper's sources, which are compiled into the preview's binary, put in front of it.
-The script writes `~/.config/daddy-cull/sync.conf` with mode 600, builds the app on the Mac with Apple's Command Line Tools, installs it in `~/Applications` and loads the LaunchAgent `~/Library/LaunchAgents/net.example.cullsync.plist` with `launchctl bootstrap`.
-The LaunchAgent starts Cull Sync at login and after a crash, but not after Quit in its menu.
-Running a new command again is how the helper is updated.
-The first launch asks for full access to Photos, and someone at the Mac has to click Allow.
-
-Without `PHOTOS_AGENT_KEY`, the preview keeps only the SHA-256 of the key it last handed out, in the `settings` table as `photos_agent_key_sha256`, so a copy of the catalogue lets no helper in.
-Each setup command replaces the key, and the previous one stops working at once.
-The install endpoint refuses while Cull Sync is applying changes, so a reinstall cannot cut an apply short.
-`mac/CullSync/install.sh` installs from a checkout with the same script and keeps the key already in `sync.conf`.
-`mac/CullSync/test.sh` runs the matching tests without touching Photos.
-
-## Google Photos
-
-The Google Photos page adds what a Google Photos library holds and the archive lacks.
-There is no icloudpd for Google Photos: since 31 March 2025 the Google Photos Library API only reads what an app uploaded itself, so no app can download a whole library through it.
-Google Takeout is the one supported way out, so Cull reads Takeout exports dropped into an inbox folder given with `-takeout-inbox`.
-Browser automation such as gphotos-cdp can also pull a library, but it drives a signed-in Chrome session and breaks when Google changes its pages, so Cull does not ship it.
-
-The page carries the steps for making an export: only Google Photos ticked, `.zip`, 50 GB parts, once or every two months for a year.
-Every part is downloaded into the inbox as it is; an export already unpacked into a folder is read the same way.
-The web process reads the inbox every five minutes while the addon is on, and on Read the inbox now.
-It never changes the exports.
-It pairs each photo with its JSON sidecar for the date taken, description, people and favourite, and checks it against the catalogue by name, size, day and bytes.
-
-| Tab | What it holds |
+| Option | What it does |
 |---|---|
-| Not in the library | The archive has no copy; these can be added. |
-| Different copies | The archive holds a file of the same name and day, but not these bytes; these can be added beside it. |
-| Unsure | No date from Google, or a file like it could not be compared; these cannot be added. |
-| Already in the library | The archive holds these bytes, under this name or another. |
-| Removed in Cull | The archive's copy was removed in Cull, so the photo is not offered again. |
-| Added | Added from this page. |
-| Skipped | Set aside; Offer again brings them back. |
+| `--with-icloud` / `--without-icloud` | Install icloudpd, or skip it without asking |
+| `--with-apple-photos` / `--without-apple-photos` | Install osxphotos, or skip it without asking |
+| `--library DIR` | The library folder (default `~/Pictures/Daddy Cull/Library`) |
+| `--import DIR` | The Import folder (default `~/Pictures/Daddy Cull/Import`) |
+| `--release VERSION` | Install a specific release, such as `0.72.0` |
+| `--yes` | Ask nothing; iCloud and Apple Photos stay off unless asked for |
+| `--no-open` | Do not open the browser at the end |
+| `--update` | Keep the settings and install the new version |
 
-Add to the library queues a `google-photos.add` task under Tasks, and the photos leave the page at once.
-The writer copies each one to `YYYY/YYYY-MM/YYYY-MM-DD/<name>` under the day it was taken, or beside the archive's copy as `<name> (Google Photos).<ext>` for a different copy.
-It refuses a file whose bytes are already in that day's folder, never overwrites, writes through a temporary file it checks by SHA-256 before linking it into place, dates the file to when it was taken, and creates new folders with mode 777.
-When the task finishes, the web process scans the archive so the new files join the catalogue.
-Photos inside a zip are unpacked for viewing into `preview-cache/takeout-unpacked`, one file of at most 1 GB at a time, trimmed back to 2 GB once it passes 4 GB.
-What was read, the outcome for each photo and every copy made are kept in the `takeout_archives`, `takeout_items` and `takeout_plans` tables.
+Pass options after `bash -s --`, for example:
 
-To turn it on, mount one inbox folder read-only into both containers at the same path and give both the flag:
-
-```yaml
-volumes:
-  - /mnt/user/takeout-inbox:/takeout-inbox:ro
-command: [..., "-takeout-inbox", "/takeout-inbox"]
+```bash
+curl -fsSL https://raw.githubusercontent.com/tural-ali/daddy-cull-oss/main/install.sh | bash -s -- --library "/Volumes/Photos/Library" --with-icloud
 ```
 
-Adding needs the `import` permission, which the writer's own routes for Takeout upgrades now ask for too.
+### The setup wizard
 
-## Tower deployment
+The wizard runs in the browser and can be reopened any time from Settings.
 
-Source checkout: `/mnt/user/appdata/tower-cull-next-repo`.
-Database: `/mnt/cache/appdata/tower-cull-next/library.db` on Tower's local cache filesystem.
-Containers: `tower-cull-next` and private `tower-cull-writer`, running as UID 99, GID 100.
-Preview ports: LAN and Tailscale on 8830.
-The preview container serves media itself from read-only mounts of the archive, the screenshot holding area, both physical disks and the review hardlink farm, and writes generated tiles to `state/preview-cache`.
-The image carries ffmpeg and exiftool for video frames, HEIC and RAW.
-Social posters live in `state/social-posters`.
-The writer requires its private `CULL_BIN_KEY` in the deployment `.env`.
-The preview mirrors archive favourites to Immich when `IMMICH_KEY` is in the same `.env`; without it the mirror is off and the service still starts.
-The Apple Photos helper needs no `.env` entry: it is set up from the Apple Photos page, and `PHOTOS_AGENT_KEY` in the `.env` pins a fixed key instead.
-The existing state directory and SQLite files must be owned by UID 99, GID 100; back up the stopped catalogue before any ownership or schema migration.
+![The setup wizard's first step, checking what this Mac has installed](docs/images/setup.webp)
 
-```sh
-cd /mnt/user/appdata/tower-cull-next-repo
-docker compose build preview
-docker compose up -d writer preview
-docker compose ps
+| Step | What you choose |
+|---|---|
+| Welcome | Checks exiftool, ffmpeg, icloudpd, osxphotos and free space |
+| Folders | Where the library and the Import folder live, and whether other users of this Mac may open them |
+| iCloud | Whether to download iCloud Photos every six hours, from which Apple ID and since when |
+| Apple Photos | Whether to copy photos from the Photos app on this Mac into Import |
+| Google Photos | A folder for Google Takeout exports |
+| Done | What runs from now on |
+
+## Every day
+
+Open [http://127.0.0.1:8830](http://127.0.0.1:8830), or run `daddy-cull open`.
+Every page has a short guide at the top, and <kbd>?</kbd> lists every key.
+
+![The guide on the Today page, in the day theme](docs/images/guide.webp)
+
+| Page | What it is for |
+|---|---|
+| **Today** | Every photo taken on this date, in every year. <kbd>K</kbd> keeps, <kbd>X</kbd> removes, <kbd>F</kbd> favourites, <kbd>⌘Z</kbd> undoes. Mark the day reviewed when done. |
+| **Year** | A calendar of every day with photos, how far you have got, and a red dot on days with new arrivals. |
+| **Duplicates** | Byte-identical copies across folders. Pick the one to keep; the rest go to the Bin. |
+| **Apple Photos** | Carries what you removed across to the Photos app, so iCloud drops it too. Optional. |
+| **Log** | Every decision, newest first, each one reversible. |
+| **Bin** | Everything removed, restorable until the grace period set in Settings ends. |
+| **Addons** | Turn features on or off, or add your own. |
+| **Settings** | Folders, Immich, the Bin's grace period, theme and version. |
+
+Built-in addons, each off until it is set up:
+
+| Addon | What it does | Set up in |
+|---|---|---|
+| Google Photos | Adds what a Google Takeout export holds and the library lacks | The setup wizard |
+| Apple Photos | Carries removals and favourites across to the Photos app | The setup wizard |
+| Immich | Sets the favourites you choose in Immich too | Settings |
+
+Screenshots, Saved from social, Takeout upgrades and Shadowed copies serve libraries moved from a NAS, where a report made there is imported first; see [how it works](docs/HOW-IT-WORKS.md#for-libraries-moved-from-a-nas).
+
+![Duplicates: two proven groups and the space they free](docs/images/duplicates.webp)
+
+<details>
+<summary>More screenshots</summary>
+
+![The Year calendar](docs/images/year.webp)
+![A photo open in the viewer](docs/images/viewer.webp)
+![The iCloud step of the setup wizard](docs/images/setup-icloud.webp)
+
+</details>
+
+## The `daddy-cull` command
+
+| Command | What it does |
+|---|---|
+| `daddy-cull status` | What is running, where the folders are, what is installed |
+| `daddy-cull open [page]` | Open Daddy Cull in the browser, such as `daddy-cull open setup` |
+| `daddy-cull start`, `stop`, `restart` | Control the background services |
+| `daddy-cull logs` | Follow what the services write |
+| `daddy-cull icloud install` | Install icloudpd |
+| `daddy-cull icloud sign-in` | Sign in to iCloud in this Terminal, with two-factor code |
+| `daddy-cull icloud run` | Download new photos now (it also runs every six hours) |
+| `daddy-cull apple-photos install` | Install osxphotos |
+| `daddy-cull apple-photos import` | Copy new photos from Apple Photos into Import |
+| `daddy-cull update` | Install the latest release |
+| `daddy-cull uninstall` | Remove the app; your photos and catalogue stay |
+
+## Photo sources
+
+**Camera cards and phones.**
+Copy the files into the Import folder.
+Within a minute each one is filed under the day it was taken: from its metadata, read by exiftool, or else its name or file date.
+
+**iCloud Photos.**
+Turn it on in the wizard's iCloud step, then run `daddy-cull icloud sign-in` once.
+Apple asks you to sign in again about every two months; the setup's iCloud step and Settings say when.
+Photos stay in iCloud: this is a copy you own.
+
+**Apple Photos on this Mac.**
+Turn it on in the wizard's Apple Photos step, or run `daddy-cull apple-photos import`.
+macOS asks once for permission to read the Photos library.
+
+**Google Photos.**
+Google offers no API to download a whole library, so Daddy Cull reads [Google Takeout](https://takeout.google.com) exports.
+Choose only Google Photos, `.zip`, 50 GB parts, and save the parts in the folder chosen in the wizard.
+The Google Photos page then shows what is new, what differs and what the library already has.
+
+## Optional: Immich, Jellyfin and friends
+
+Daddy Cull needs nothing else to run.
+Because the library is plain folders, Immich, Jellyfin, Plex or Finder can all read it as an external library.
+If you use Immich, give its address and an API key with the `asset.update` permission under Immich in Settings, and favourites you set in Daddy Cull are set there too.
+
+## Safety
+
+- Only the private writer process changes the library; the web process only reads it.
+- Nothing is overwritten, and nothing is deleted without passing through the Bin.
+- The Bin fingerprints every file again with SHA-256 before it moves it.
+- Daddy Cull listens on `127.0.0.1` only and has no login, so it is for the person at this Mac.
+
+## Architecture
+
+```mermaid
+flowchart TB
+  browser[Browser] -->|127.0.0.1:8830| web
+  subgraph launchd
+    web[cull web<br/>pages, previews, catalogue reads]
+    writer[cull writer<br/>Import, Bin, restores]
+    icloudpd[icloudpd<br/>every six hours]
+  end
+  web -->|requests with a private key| writer
+  web --> db[(library.db<br/>SQLite)]
+  writer --> db
+  web -.->|read only| lib[(Library)]
+  writer --> lib
+  writer --> imp[(Import)]
+  icloudpd --> dl[(iCloud downloads)]
+  writer -->|files| dl
+  osx[osxphotos] --> imp
 ```
 
-Never seed or replace the deployed real catalogue.
-Use `docker compose stop preview` to stop the preview without removing its state.
-The web container mounts Takeout read-only and its dedicated state read-write, with no archive, Docker socket or legacy database mount.
-Only the writer receives the writable archive mount.
-Deployment backups exist; a verified recurring catalogue/receipt backup and restore schedule is still required.
+The app is one Go binary with a React interface, run as two launchd services.
+Settings live in `~/Library/Application Support/Daddy Cull`.
+Read [how it works](docs/HOW-IT-WORKS.md) for the details, [the architecture](docs/ARCHITECTURE.md) for the design, and [addons](docs/ADDONS.md) to write your own.
+To run it on a server or NAS with Docker instead, see [docs/SERVER.md](docs/SERVER.md).
 
-## Scale test
+## Troubleshooting
 
-```sh
-go run ./cmd/scale -assets 1000000 -requests 2000 -workers 8
+| Problem | Fix |
+|---|---|
+| The page does not open | `daddy-cull status`, then `daddy-cull restart` |
+| Nothing is filed from Import | Check the Import folder on the Settings page; files still being copied wait until they stop changing |
+| A library on an external drive shows nothing | Add `~/Library/Application Support/Daddy Cull/app/current/bin/cull` to Full Disk Access in System Settings, Privacy & Security, then `daddy-cull restart` |
+| The library is in Downloads, Desktop or Documents | macOS guards those folders; choose another, such as `~/Pictures` |
+| iCloud stopped downloading | `daddy-cull icloud sign-in` |
+| Port 8830 is taken | Reinstall with `DADDY_CULL_PORT=8860` in front of `bash` |
+
+Logs are in `~/Library/Application Support/Daddy Cull/logs`, and `daddy-cull logs` follows them.
+
+## Development
+
+You need Go 1.27 with a C compiler and Node 24.
+
+```bash
+go test ./...
+cd web && npm ci && npm run build && npm test
 ```
 
-The test creates and removes its own temporary synthetic database.
-It measures in-process HTTP routing, indexed queries and JSON encoding at distributed positions in the catalogue.
-It excludes real media, network latency, browser rendering and cold-disk performance.
-Go heap output excludes SQLite/native allocations.
-Record container RSS separately when testing on Tower.
+`go run ./cmd/cull -db state/scale.db -seed 100000` makes a synthetic catalogue to try the interface on.
+Versions are counted from the history by `tools/version.sh`: each `feat:` commit raises the minor version and each `fix:` the patch.
+A green `main` is released automatically as a beta.
 
-## Production migration
+## Credits
 
-Follow the ordered gates in the architecture document.
-Incremental ingestion, native decoder jobs, full duplicate matching, Takeout reconciliation and legacy history/receipt migration remain before the old service can be retired.
-The target keeps Takeout read-only, imports by verified copy and never couples source cleanup to culling.
-The target archive writer may only quarantine explicitly selected files and restore them safely.
+Daddy Cull stands on the shoulders of these projects:
+
+- [icloud_photos_downloader](https://github.com/icloud-photos-downloader/icloud_photos_downloader) (icloudpd) downloads iCloud Photos.
+- [osxphotos](https://github.com/RhetTbull/osxphotos) exports from the Apple Photos library.
+- [ExifTool](https://exiftool.org) by Phil Harvey reads when each photo was taken.
+- [FFmpeg](https://ffmpeg.org) draws video and HEIC previews.
+
+## Licence
+
+[MIT](LICENSE)
