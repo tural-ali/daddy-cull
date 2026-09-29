@@ -34,13 +34,13 @@ jobs:
       - name: Every test passed on this commit
         run: |
           for _ in $(seq 1 60); do
-            runs=$(gh run list --commit "$SHA" --json name,status,conclusion --jq '[.[] | select(.name == "Go" or .name == "Web" or .name == "Mac")]')
+            runs=$(gh run list --commit "$SHA" --json name,status,conclusion --jq '[.[] | select(.name == "Go" or .name == "Web" or .name == "Mac" or .name == "Docker")]')
             pending=$(jq '[.[] | select(.status != "completed")] | length' <<<"$runs")
             [ "$pending" -eq 0 ] && break
             sleep 20
           done
           echo "$runs" | jq -r '.[] | "\(.name): \(.conclusion)"'
-          for name in Go Web Mac; do
+          for name in Go Web Mac Docker; do
             jq -e --arg name "$name" 'any(.[]; .name == $name and .conclusion == "success")' <<<"$runs" >/dev/null ||
               { echo "$name did not pass on $SHA"; exit 1; }
           done
