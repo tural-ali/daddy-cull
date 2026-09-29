@@ -1246,8 +1246,7 @@ main.selecting .mo.sel:not(:focus-visible) { box-shadow: none; transform: none; 
 
 /* The legend is drawn in the calendar's own colours, as pale chips from the
    light end of each band, then the states a date can be in. */
-.legend { display: grid; gap: .6rem; margin: 1.25rem 0 1rem; }
-.lgrow { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: 0; }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: 1.25rem 0 1rem; }
 .lgkey {
   position: relative; display: inline-flex; align-items: center;
   height: 2rem; padding: 0 .85rem; border-radius: 8px;
@@ -1263,7 +1262,6 @@ main.selecting .mo.sel:not(:focus-visible) { box-shadow: none; transform: none; 
 .lgkey.now  { background: transparent; color: var(--text); box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); margin: 0 .2rem; font-weight: 500; }
 .lgkey.fresh { font-weight: 500; }
 .lgkey.fresh .freshdot { position: absolute; top: -3px; right: -3px; box-shadow: 0 0 0 2px var(--bg); }
-.lgnote { margin-left: .6rem; font-size: 14px; color: var(--text); }
 .cell > .freshdot { position: absolute; top: -3px; right: -3px; box-shadow: 0 0 0 2px var(--bg); }
 
 /* ------------------------------------------------------------- completion -- */

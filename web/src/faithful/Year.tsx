@@ -11,7 +11,6 @@ export function calendarLabel(md:string){
   const [month,day]=md.split('-').map(Number);
   return new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'long',timeZone:'UTC'}).format(new Date(Date.UTC(2000,month-1,day)));
 }
-function minutes(seconds:number){return seconds<60?`${Math.round(seconds)}s`:`${Math.round(seconds/60)} min`}
 
 /** JSX translation of templates/year.php with the same calendar and legend. */
 /** How much still waits on a date: fewer than 30 files, 30 to 100, or more. */
@@ -39,7 +38,7 @@ function describe(cell:CalendarCell){
   return `${calendarLabel(cell.md)} - ${plural(cell.waiting,'file')} waiting${cell.done>0?`, ${plural(cell.done,'year')} already reviewed`:''}${freshNote(cell)}`;
 }
 
-export function Year({months,prog,streak,week,refreshed}:YearData){
+export function Year({months,prog,streak}:YearData){
   const dates=Math.max(1,prog.dates),percent=prog.done/dates*100;
   // Today is the viewer's own date, not the server's, so the outline moves at
   // the viewer's midnight.
@@ -62,23 +61,14 @@ export function Year({months,prog,streak,week,refreshed}:YearData){
         >{cell.dom}{(cell.fresh??0)>0&&<span className="freshdot" aria-hidden="true"/>}</a>)}
       </div>)}
     </div>
-    <div className="legend">
-      <p className="lgrow">
-        <span className="lgkey low">Fewer than 30</span>
-        <span className="lgkey mid">30 to 100</span>
-        <span className="lgkey high">More than 100</span>
-        <span className="lgnote">Files still waiting on each date.{busiest>0&&<> Deeper shades have more, up to {busiest.toLocaleString()} on the busiest.</>}</span>
-      </p>
-      <p className="lgrow">
-        <span className="lgkey done">Reviewed</span>
-        <span className="lgkey none">Nothing filed</span>
-        <span className="lgkey now">Today</span>
-        <span className="lgkey fresh">New files<span className="freshdot"/></span>
-      </p>
-    </div>
-    <p className="hint">{prog.filesDone.toLocaleString()} of {prog.files.toLocaleString()} files sit under a date you have finished. A reviewed date comes back, with a red dot, when new files reach it.
-      {week.days>0&&<> You reviewed on {week.days} of the last 7 days, {minutes(week.seconds)} in total.</>}
-      {refreshed&&<> Index last refreshed {new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(refreshed))}.</>}
+    <p className="legend">
+      <span className="lgkey low" title="Fewer than 30 files still waiting">Fewer than 30</span>
+      <span className="lgkey mid" title="30 to 100 files still waiting">30 to 100</span>
+      <span className="lgkey high" title="More than 100 files still waiting; deeper shades have more">More than 100</span>
+      <span className="lgkey done">Reviewed</span>
+      <span className="lgkey none">Nothing filed</span>
+      <span className="lgkey now">Today</span>
+      <span className="lgkey fresh">New files<span className="freshdot"/></span>
     </p>
   </section>;
 }
