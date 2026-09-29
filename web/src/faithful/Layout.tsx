@@ -14,6 +14,8 @@ import {GridZoom} from './gridZoom';
 import {FilterButton,FilterMenu,FilterPills,PageFiltersProvider,matchFilters,unusualSort,type PageFilters,type Suggestion} from './SearchFilters';
 import {Kbd,Tips,tipProps,useShortcut} from './keys';
 import {GuideButton,PageGuide} from './PageGuide';
+import {SideLibrary} from './SideLibrary';
+import type {LibraryTotals} from './Settings';
 
 export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'google'|'log'|'bin'|'settings'|'addons'|'developers'|'setup'|'frame';
 type Item={href:string;route?:LegacyRoute;label:string;icon:IconName};
@@ -161,7 +163,7 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
  * into a rail of icons, so there is no menu button to reach for. */
 const narrowQuery='(max-width: 1000px)';
 
-export function Layout({route,path,visit,binFiles,reviewed,streak,notifications,onNotificationsRead,flash,children}:{route:LegacyRoute;path:string;visit:number;binFiles:number;reviewed?:{done:number;total:number};streak?:{days:number;today:boolean};notifications?:number;onNotificationsRead?:()=>void;flash?:string;children:ReactNode}){
+export function Layout({route,path,visit,binFiles,reviewed,library,streak,notifications,onNotificationsRead,flash,children}:{route:LegacyRoute;path:string;visit:number;binFiles:number;reviewed?:{done:number;total:number};library?:LibraryTotals;streak?:{days:number;today:boolean};notifications?:number;onNotificationsRead?:()=>void;flash?:string;children:ReactNode}){
   const [selection,setSelection]=useState<Selection|null>(null);
   const addons=useAddons();
   const sections=useMemo(()=>sidebar(addons),[addons]);
@@ -232,6 +234,7 @@ export function Layout({route,path,visit,binFiles,reviewed,streak,notifications,
         <span className="meter" role="progressbar" aria-label="Calendar dates reviewed" aria-valuemin={0} aria-valuemax={reviewed.total} aria-valuenow={reviewed.done}><span style={{width:`${Math.min(100,share*100)}%`}}/></span>
         <span className="sideprogressfoot"><span className="sideprogressnote">{reviewed.done.toLocaleString()} of {reviewed.total.toLocaleString()} dates</span></span>
       </a>}
+      {library&&library.photos.files+library.videos.files>0&&<SideLibrary library={library} rail={rail}/>}
       <nav className="sidefoot" aria-label="Settings">
         <a href="/addons" className={route==='addons'?'on':undefined} aria-current={route==='addons'?'page':undefined} {...(rail?tipProps('Addons'):{})}>
           <Icon name="extension" filled={route==='addons'}/><span className="sidelabel">Addons</span>

@@ -53,6 +53,8 @@ import Pending from '@material-symbols/svg-400/outlined/pending_actions.svg?raw'
 import PendingFill from '@material-symbols/svg-400/outlined/pending_actions-fill.svg?raw';
 import Done from '@material-symbols/svg-400/outlined/task_alt.svg?raw';
 import DoneFill from '@material-symbols/svg-400/outlined/task_alt-fill.svg?raw';
+import Media from '@material-symbols/svg-400/outlined/perm_media.svg?raw';
+import MediaFill from '@material-symbols/svg-400/outlined/perm_media-fill.svg?raw';
 import ArrowBack from '@material-symbols/svg-400/outlined/arrow_back.svg?raw';
 import ArrowBackFill from '@material-symbols/svg-400/outlined/arrow_back-fill.svg?raw';
 import ZoomIn from '@material-symbols/svg-400/outlined/zoom_in.svg?raw';
@@ -144,6 +146,7 @@ const icons={
   menu:[Menu,MenuFill],
   close:[Close,CloseFill],
   task_alt:[Done,DoneFill],
+  perm_media:[Media,MediaFill],
   pending_actions:[Pending,PendingFill],
   play_circle:[PlayCircle,PlayCircleFill],
   check:[Check,CheckFill],

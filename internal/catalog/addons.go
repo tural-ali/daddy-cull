@@ -101,6 +101,52 @@ type Stats struct {
 	VideoMuted bool `json:"videoMuted"`
 	// Notifications counts unread notifications.
 	Notifications int `json:"notifications"`
+	// Library counts what the library holds, as photos and videos.
+	Library LibraryStats `json:"library"`
+}
+
+// LibraryStats counts the files in the library: the archive, less what is in
+// the Bin, deleted from it or missing from disk.
+type LibraryStats struct {
+	// Photos counts photos, RAW files included.
+	Photos MediaTotal `json:"photos"`
+	// Videos counts videos.
+	Videos MediaTotal `json:"videos"`
+}
+
+// MediaTotal is how many files there are and how much space they take.
+type MediaTotal struct {
+	// Files counts the files.
+	Files int64 `json:"files"`
+	// Bytes is their size added up, in bytes.
+	Bytes int64 `json:"bytes"`
+}
+
+// LibraryStats counts the library's photos and videos and their sizes.
+func (s *Store) LibraryStats(ctx context.Context) (LibraryStats, error) {
+	var st LibraryStats
+	rows, err := s.read.QueryContext(ctx, `SELECT a.kind='video',count(*),coalesce(sum(a.size_bytes),0) FROM assets a
+		WHERE a.source_id='archive'
+		  AND NOT EXISTS(SELECT 1 FROM missing_assets m WHERE m.asset_id=a.id)
+		  AND NOT EXISTS(SELECT 1 FROM file_state f WHERE f.asset_id=a.id AND f.state!='restored')
+		GROUP BY a.kind='video'`)
+	if err != nil {
+		return st, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var video bool
+		var total MediaTotal
+		if err := rows.Scan(&video, &total.Files, &total.Bytes); err != nil {
+			return st, err
+		}
+		if video {
+			st.Videos = total
+		} else {
+			st.Photos = total
+		}
+	}
+	return st, rows.Err()
 }
 
 // Stats counts the library, with the day of review ending at midnight in loc.
@@ -148,6 +194,7 @@ func (s *Store) Stats(ctx context.Context, loc *time.Location) (Stats, error) {
 	st.ReviewedToday = activity.Today
 	st.VideoMuted, _ = s.VideoMuted(ctx)
 	st.Notifications, _ = s.UnreadNotifications(ctx)
+	st.Library, _ = s.LibraryStats(ctx)
 	return st, nil
 }
 
