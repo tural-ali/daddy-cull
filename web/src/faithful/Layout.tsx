@@ -13,6 +13,7 @@ import {DateCalendar,DatePill,PageDateProvider,type PageDate} from './DatePicker
 import {GridZoom} from './gridZoom';
 import {FilterButton,FilterMenu,FilterPills,PageFiltersProvider,matchFilters,unusualSort,type PageFilters,type Suggestion} from './SearchFilters';
 import {Kbd,Tips,tipProps,useShortcut} from './keys';
+import {GuideButton,PageGuide} from './PageGuide';
 
 export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'google'|'log'|'bin'|'settings'|'addons'|'developers'|'setup'|'frame';
 type Item={href:string;route?:LegacyRoute;label:string;icon:IconName};
@@ -209,6 +210,7 @@ export function Layout({route,path,visit,binFiles,reviewed,streak,notifications,
       <DateSearch key={visit} date={pageDate} filters={pageFilters}/>
       <div className="gbaracts">
         {pageActions&&<PageActionButtons page={pageActions}/>}
+        {!selection&&<GuideButton route={route}/>}
       </div>
     </header>}
     <aside id="side" className="side">
@@ -244,7 +246,7 @@ export function Layout({route,path,visit,binFiles,reviewed,streak,notifications,
     {intro&&streak&&<StreakIntro streak={streak} target={pill} onDone={()=>{setIntro(false);setBump(true)}}/>}
     <div className="panel">
       {flash&&<p className="flash" role="status">{flash}</p>}
-      <main className={`${gridRoutes.has(route)?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}><PageActionsProvider value={setPageActions}><PageDateProvider value={setPageDate}><PageFiltersProvider value={setPageFilters}>{children}</PageFiltersProvider></PageDateProvider></PageActionsProvider></SelectionProvider></main>
+      <main className={`${gridRoutes.has(route)?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}><PageActionsProvider value={setPageActions}><PageDateProvider value={setPageDate}><PageFiltersProvider value={setPageFilters}><PageGuide route={route}/>{children}</PageFiltersProvider></PageDateProvider></PageActionsProvider></SelectionProvider></main>
       <div className="snacks" id="snacks"/>
     </div>
   </div>;

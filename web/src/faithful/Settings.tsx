@@ -6,6 +6,7 @@ import {clearSessionSound,setVideoSoundPreference} from '../SessionVideo';
 import {reloadPage} from './router';
 import {failure} from '../api';
 import {readSetup,type SetupView} from './Setup';
+import {hiddenGuides,showAllGuides} from './PageGuide';
 
 export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;videoMuted?:boolean;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number;immichRefused?:number;calendarDates?:number;reviewedDates?:number;streak?:number;reviewedToday?:boolean;notifications?:number};
 
@@ -203,6 +204,18 @@ function FolderSettings(){
   </>;
 }
 
+// Guides brings back the guide at the top of each page, once hidden.
+function Guides(){
+  const [hidden,setHidden]=useState(hiddenGuides);
+  const [message,setMessage]=useState('');
+  return <>
+    <h2 id="guides">Page guides</h2>
+    <p className="hint">Each page starts with a short guide to how it works, until you hide it. The question mark at the top of a page shows its guide again.</p>
+    {message&&<p className="flash" role="status">{message}</p>}
+    <button type="button" className="btn" disabled={hidden===0} onClick={()=>{const count=showAllGuides();setHidden(0);setMessage(`${count} guide${count===1?'':'s'} will show again.`)}}>{hidden===0?'Every guide is showing':`Show all guides again (${hidden} hidden)`}</button>
+  </>;
+}
+
 export function Settings({stats}:{stats:Stats}){
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
@@ -245,6 +258,7 @@ export function Settings({stats}:{stats:Stats}){
     <BinSettings/>
     <VideoSettings initial={stats.videoMuted!==false}/>
     <Appearance/>
+    <Guides/>
     <h2>Google Takeout</h2>
     <p><a href="/upgrades">Review upgrades</a> · {stats.upgradeCandidates.toLocaleString()} archive photos have confirmed higher-resolution Takeout matches. They appear beside the archive original, not as a separate collection.</p>
     <h2>Safety</h2>

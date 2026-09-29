@@ -149,18 +149,18 @@ async function open(browser,options,viewport={width:1280,height:860},theme='nigh
 
   // Started with flags, as in Docker: the folders are shown, not changed.
   {
-    const {page,errors}=await open(browser,{configurable:false},{width:390,height:844},'day');
-    await page.goto(`${base}/setup?step=folders`);
-    await page.getByLabel('Library',{exact:true}).waitFor();
-    assert.equal(await page.getByLabel('Library',{exact:true}).isDisabled(),true);
-    assert.equal(await page.getByRole('button',{name:'Save and continue'}).count(),0,'nothing to save');
-    const width=await page.evaluate(()=>document.documentElement.scrollWidth);
+    const {page:phone,errors:problems}=await open(browser,{configurable:false},{width:390,height:844},'day');
+    await phone.goto(`${base}/setup?step=folders`);
+    await phone.getByLabel('Library',{exact:true}).waitFor();
+    assert.equal(await phone.getByLabel('Library',{exact:true}).isDisabled(),true);
+    assert.equal(await phone.getByRole('button',{name:'Save and continue'}).count(),0,'nothing to save');
+    const width=await phone.evaluate(()=>document.documentElement.scrollWidth);
     assert.ok(width<=390,`the page fits a phone, ${width}px`);
-    if(shots)await page.screenshot({path:`${shots}/setup-fixed-phone-day.png`,fullPage:true});
-    await page.goto(`${base}/setup?step=welcome`);
-    await page.getByText(/started with its folders set where it runs/).waitFor();
-    assert.deepEqual(errors,[]);
-    await page.close();
+    if(shots)await phone.screenshot({path:`${shots}/setup-fixed-phone-day.png`,fullPage:true});
+    await phone.goto(`${base}/setup?step=welcome`);
+    await phone.getByText(/started with its folders set where it runs/).waitFor();
+    assert.deepEqual(problems,[]);
+    await phone.close();
   }
 
   await browser.close();
