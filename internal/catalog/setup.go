@@ -107,6 +107,8 @@ type SetupView struct {
 	ApplePhotos SetupRun `json:"applePhotos"`
 	// Free is how many bytes are free where the library is, or 0 if that cannot be told.
 	Free int64 `json:"free"`
+	// Version is the release that is running, or dev when built from a checkout.
+	Version string `json:"version"`
 	// Restarting says Cull is starting again to take up a change; read the page again in a few seconds.
 	Restarting bool `json:"restarting,omitempty"`
 }
@@ -121,12 +123,14 @@ type Setup struct {
 	restart func()
 	// look finds a program.
 	look func(string) (string, error)
+	// version is the release that is running.
+	version string
 }
 
 // NewSetup is the Setup page for config file, or for the flags alone when file
-// is empty.
-func NewSetup(file string, fixed SetupConfig, restart func()) *Setup {
-	return &Setup{file: file, fixed: fixed, restart: restart, look: exec.LookPath}
+// is empty, in the release version.
+func NewSetup(file string, fixed SetupConfig, restart func(), version string) *Setup {
+	return &Setup{file: file, fixed: fixed, restart: restart, look: exec.LookPath, version: version}
 }
 
 // ReadSetup reads a config file.
@@ -284,7 +288,7 @@ func writeQuietly(file string, body []byte) error {
 
 // View is the Setup page.
 func (s *Setup) View() SetupView {
-	view := SetupView{Config: s.fixed, Configurable: s.file != ""}
+	view := SetupView{Config: s.fixed, Configurable: s.file != "", Version: s.version}
 	if s.file != "" {
 		if config, err := ReadSetup(s.file); err == nil {
 			view.Config = config

@@ -10,7 +10,7 @@ import {bytes} from './Bin';
 export type SetupConfig={library:string;import:string;takeoutInbox:string;shared:boolean;icloud:{on:boolean;appleId:string;since:string};immich:{url:string;pathPrefix:string};done:boolean};
 type SetupRun={signedIn:boolean;lastRun:string;ok:boolean;message:string};
 type SetupTool={name:string;found:boolean;for:string};
-export type SetupView={configurable:boolean;config:SetupConfig;immichKeySet:boolean;tools:SetupTool[];icloud:SetupRun;applePhotos:SetupRun;free:number;restarting?:boolean};
+export type SetupView={configurable:boolean;config:SetupConfig;immichKeySet:boolean;tools:SetupTool[];icloud:SetupRun;applePhotos:SetupRun;free:number;version?:string;restarting?:boolean};
 
 // The steps, in the order they are taken. Each after Folders is optional.
 const steps=[
@@ -201,7 +201,7 @@ export function Setup({initial}:{initial:SetupView}){
     </>;
   }else if(step==='icloud'){
     body=<>
-      <p className="setuplead">Download what is in iCloud Photos into the Import folder, every six hours, with <a href="https://github.com/icloud-photos-downloader/icloud_photos_downloader" target="_blank" rel="noreferrer">icloudpd</a>. Photos stay in iCloud; this is a copy you own.</p>
+      <p className="setuplead">Download what is in iCloud Photos to this Mac every six hours, with <a href="https://github.com/icloud-photos-downloader/icloud_photos_downloader" target="_blank" rel="noreferrer">icloudpd</a>, and file each photo under the day it was taken. Photos stay in iCloud; this is a copy you own.</p>
       <label className="setupcheck">
         <input type="checkbox" checked={draft.icloud.on} disabled={!editable||busy} onChange={event=>setICloud({on:event.target.checked})}/>
         <b>Download my iCloud Photos</b>

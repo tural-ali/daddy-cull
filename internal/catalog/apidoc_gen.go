@@ -565,6 +565,7 @@ func init() {
 		"daddy-cull/next/internal/catalog.SetupView.ImmichKeySet":           "ImmichKeySet says whether an Immich API key is kept.",
 		"daddy-cull/next/internal/catalog.SetupView.Restarting":             "Restarting says Cull is starting again to take up a change; read the page again in a few seconds.",
 		"daddy-cull/next/internal/catalog.SetupView.Tools":                  "Tools are the programs Cull uses.",
+		"daddy-cull/next/internal/catalog.SetupView.Version":                "Version is the release that is running, or dev when built from a checkout.",
 		"daddy-cull/next/internal/catalog.ShadowGroup":                      "ShadowGroup is a set of files the merged share cannot tell apart, found by the earlier app's scan of the disks.",
 		"daddy-cull/next/internal/catalog.ShadowGroup.Key":                  "Key is the path the group shares: for shadowed, the path on every disk; for case-only, one of its spellings.",
 		"daddy-cull/next/internal/catalog.ShadowGroup.Kind":                 "Kind is shadowed for one path held on more than one disk, of which the share shows only one, or case-only for paths that differ only in the case of their letters.",

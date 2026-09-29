@@ -1,0 +1,524 @@
+#!/bin/bash
+# daddy-cull runs Daddy Cull on this Mac: it starts and stops the two
+# background services, installs and runs the optional downloaders, and updates
+# or removes the app. install.sh puts it on the PATH.
+#
+# Written for the bash that ships with macOS (3.2). Run it without arguments,
+# or with help, for the list of commands.
+
+set -euo pipefail
+
+STATE="${DADDY_CULL_HOME:-$HOME/Library/Application Support/Daddy Cull}"
+CONFIG="$STATE/config.json"
+APP="$STATE/app/current"
+LOGS="$STATE/logs"
+PORT="${DADDY_CULL_PORT:-8830}"
+WRITER_PORT=$((PORT + 1))
+AGENTS="$HOME/Library/LaunchAgents"
+LABEL="${DADDY_CULL_LABEL:-app.daddycull}"
+REPO="tural-ali/daddy-cull-oss"
+DOMAIN="gui/$(id -u)"
+
+# The downloaders are pinned: an update of either is a new release of this.
+# icloudpd is the pure-Python wheel: its macOS wheel bundles an Intel-only
+# program, which does not start on Apple silicon without Rosetta.
+ICLOUDPD_VERSION="1.32.2"
+ICLOUDPD_WHEEL="icloudpd-1.32.2-py3-none-any.whl"
+ICLOUDPD_URL="https://files.pythonhosted.org/packages/4d/06/3fed66a7ee0c9e84c0a7cf1c731931d188e74314fadafb3775b6ac4419ab/$ICLOUDPD_WHEEL"
+ICLOUDPD_SHA256="14df1380cd8fa6bbfe083079651a51809c5a57beb9986b307e8ddba53f16671a"
+OSXPHOTOS_VERSION="0.76.1"
+PYTHON_VERSION="3.12"
+
+# uv keeps the downloaders, and the Python they run on, inside the state
+# folder, so nothing else on the Mac is changed and uninstalling is one folder.
+export UV_TOOL_DIR="$STATE/tools/uv"
+export UV_TOOL_BIN_DIR="$STATE/tools/bin"
+export UV_PYTHON_INSTALL_DIR="$STATE/tools/python"
+export UV_CACHE_DIR="$STATE/tools/cache"
+
+say() { printf '%s\n' "$*"; }
+fail() {
+  printf 'daddy-cull: %s\n' "$*" >&2
+  exit 1
+}
+
+brew_prefix() {
+  local prefix
+  for prefix in /opt/homebrew /usr/local; do
+    if [ -x "$prefix/bin/brew" ]; then
+      say "$prefix"
+      return
+    fi
+  done
+  fail "Homebrew is not installed. Run install.sh again, which installs it."
+}
+
+# The PATH the services run with: launchd starts them with almost none.
+service_path() {
+  say "$UV_TOOL_BIN_DIR:$(brew_prefix)/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+}
+export PATH="$UV_TOOL_BIN_DIR:$PATH"
+
+need_config() {
+  [ -f "$CONFIG" ] || fail "Daddy Cull is not installed here: $CONFIG is missing. Run install.sh first."
+}
+
+# setting reads one value from config.json, such as icloud.appleId; empty
+# when it is not there.
+setting() {
+  plutil -extract "$1" raw -o - "$CONFIG" 2>/dev/null || true
+}
+
+xml() {
+  local value=$1
+  value=${value//&/&amp;}
+  value=${value//</&lt;}
+  value=${value//>/&gt;}
+  printf '%s' "$value"
+}
+
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+# status_file writes what a download last did, which the Setup and Settings
+# pages show. The message is always one of this script's own sentences.
+status_file() {
+  local file=$1 signed_in=$2 ok=$3 message=$4 complete=${5:-false}
+  local temp="$file.new"
+  printf '{"signedIn":%s,"lastRun":"%s","ok":%s,"message":"%s","complete":%s}\n' \
+    "$signed_in" "$(now)" "$ok" "$message" "$complete" >"$temp"
+  mv "$temp" "$file"
+}
+
+status_value() {
+  local file=$1 key=$2
+  [ -f "$file" ] && plutil -extract "$key" raw -o - "$file" 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------- services
+
+plist() {
+  local name=$1
+  shift
+  local file="$AGENTS/$LABEL.$name.plist" argument
+  mkdir -p "$AGENTS" "$LOGS"
+  {
+    cat <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$LABEL.$name</string>
+  <key>ProgramArguments</key>
+  <array>
+EOF
+    for argument in "$@"; do
+      printf '    <string>%s</string>\n' "$(xml "$argument")"
+    done
+    cat <<EOF
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>$(xml "$(service_path)")</string>
+    <key>DADDY_CULL_HOME</key><string>$(xml "$STATE")</string>
+    <key>DADDY_CULL_PORT</key><string>$PORT</string>
+    <key>DADDY_CULL_LABEL</key><string>$(xml "$LABEL")</string>
+  </dict>
+  <key>StandardOutPath</key><string>$(xml "$LOGS/$name.log")</string>
+  <key>StandardErrorPath</key><string>$(xml "$LOGS/$name.log")</string>
+  <key>ProcessType</key><string>Background</string>
+EOF
+    if [ "$name" = icloud ]; then
+      # Every six hours, and once when the Mac starts.
+      printf '  <key>StartInterval</key><integer>21600</integer>\n  <key>RunAtLoad</key><true/>\n'
+    else
+      # Setup stops the service to take up a change; launchd starts it again at once.
+      printf '  <key>RunAtLoad</key><true/>\n  <key>KeepAlive</key><true/>\n  <key>ThrottleInterval</key><integer>1</integer>\n'
+    fi
+    printf '</dict>\n</plist>\n'
+  } >"$file.new"
+  plutil -lint -s "$file.new" || fail "could not write $file."
+  mv "$file.new" "$file"
+}
+
+write_agents() {
+  local cull="$APP/bin/cull"
+  [ -x "$cull" ] || fail "$cull is missing. Run install.sh again."
+  plist web "$cull" -config "$CONFIG" -web "$APP/web" -listen "127.0.0.1:$PORT" -bin-upstream "http://127.0.0.1:$WRITER_PORT"
+  plist writer "$cull" -config "$CONFIG" -writer -listen "127.0.0.1:$WRITER_PORT"
+  plist icloud /bin/bash "$APP/bin/daddy-cull" icloud run --scheduled
+}
+
+loaded() { launchctl print "$DOMAIN/$LABEL.$1" >/dev/null 2>&1; }
+
+running() { launchctl print "$DOMAIN/$LABEL.$1" 2>/dev/null | grep -q 'state = running'; }
+
+answering() { curl -fsS --max-time 2 "http://127.0.0.1:$PORT/api/setup" >/dev/null 2>&1; }
+
+cmd_start() {
+  need_config
+  write_agents
+  local name
+  for name in writer web icloud; do
+    if loaded "$name"; then
+      launchctl bootout "$DOMAIN/$LABEL.$name" 2>/dev/null || true
+    fi
+    launchctl bootstrap "$DOMAIN" "$AGENTS/$LABEL.$name.plist" || fail "launchd did not start $LABEL.$name. See daddy-cull logs."
+  done
+  local tries=0
+  until answering; do
+    tries=$((tries + 1))
+    [ "$tries" -lt 60 ] || fail "Daddy Cull did not answer on port $PORT within 30 seconds. See daddy-cull logs."
+    sleep 0.5
+  done
+  say "Daddy Cull is running at http://127.0.0.1:$PORT"
+}
+
+cmd_stop() {
+  local name
+  for name in icloud web writer; do
+    if loaded "$name"; then
+      launchctl bootout "$DOMAIN/$LABEL.$name" 2>/dev/null || true
+    fi
+  done
+  say "Daddy Cull is stopped. daddy-cull start starts it again."
+}
+
+cmd_restart() {
+  need_config
+  if ! loaded web || ! loaded writer; then
+    cmd_start
+    return
+  fi
+  launchctl kickstart -k "$DOMAIN/$LABEL.writer"
+  launchctl kickstart -k "$DOMAIN/$LABEL.web"
+  local tries=0
+  until answering; do
+    tries=$((tries + 1))
+    [ "$tries" -lt 60 ] || fail "Daddy Cull did not answer on port $PORT within 30 seconds. See daddy-cull logs."
+    sleep 0.5
+  done
+  say "Daddy Cull started again at http://127.0.0.1:$PORT"
+}
+
+tool_line() {
+  local name=$1 why=$2 install=${3:-}
+  if command -v "$name" >/dev/null 2>&1; then
+    printf '  %-10s %-14s %s\n' "$name" installed "$why"
+  else
+    printf '  %-10s %-14s %s\n' "$name" "not installed" "$why${install:+: $install}"
+  fi
+}
+
+cmd_status() {
+  need_config
+  local version="not installed" name state
+  [ -x "$APP/bin/cull" ] && version=$("$APP/bin/cull" -version 2>/dev/null || say unknown)
+  say "Daddy Cull $version"
+  for name in web writer; do
+    state="stopped"
+    if running "$name"; then state="running"; elif loaded "$name"; then state="starting"; fi
+    printf '  %-10s %s\n' "$name" "$state"
+  done
+  if answering; then say "  address    http://127.0.0.1:$PORT"; fi
+  say ""
+  say "Folders"
+  printf '  %-10s %s\n' library "$(setting library)" import "$(setting import)" state "$STATE"
+  local takeout
+  takeout=$(setting takeoutInbox)
+  [ -z "$takeout" ] || printf '  %-10s %s\n' takeout "$takeout"
+  say ""
+  say "Downloads"
+  if [ "$(setting icloud.on)" != true ]; then
+    printf '  %-12s off\n' iCloud
+  else
+    printf '  %-12s %s\n' iCloud "$(last_run "$STATE/icloud-status.json" "not run yet")"
+  fi
+  printf '  %-12s %s\n' "Apple Photos" "$(last_run "$STATE/apple-photos-status.json" "not imported yet")"
+  say ""
+  say "Tools"
+  tool_line exiftool "reads when each photo was taken"
+  tool_line ffmpeg "makes previews of videos"
+  tool_line icloudpd "downloads from iCloud" "daddy-cull icloud install"
+  tool_line osxphotos "exports from Apple Photos" "daddy-cull apple-photos install"
+}
+
+last_run() {
+  local file=$1 never=$2 when
+  when=$(status_value "$file" lastRun)
+  if [ -z "$when" ]; then say "$never"; else say "$when: $(status_value "$file" message)"; fi
+}
+
+cmd_open() { open "http://127.0.0.1:$PORT/${1:-}"; }
+
+cmd_logs() {
+  mkdir -p "$LOGS"
+  touch "$LOGS/web.log" "$LOGS/writer.log" "$LOGS/icloud.log"
+  exec tail -n 40 -F "$LOGS/web.log" "$LOGS/writer.log" "$LOGS/icloud.log"
+}
+
+cmd_update() {
+  local checkout
+  checkout=$(cat "$STATE/app/checkout" 2>/dev/null || true)
+  if [ -n "$checkout" ]; then
+    say "This Mac runs Daddy Cull built from $checkout."
+    say "Update it there:  cd \"$checkout\" && git pull && ./install.sh"
+    return
+  fi
+  say "Downloading the latest release of Daddy Cull…"
+  local installer
+  installer=$(mktemp -t daddy-cull-install)
+  curl -fsSL "https://github.com/$REPO/releases/latest/download/install.sh" -o "$installer" || fail "could not download the installer."
+  exec /bin/bash "$installer" --update
+}
+
+cmd_uninstall() {
+  cmd_stop >/dev/null
+  local name
+  for name in web writer icloud; do rm -f "$AGENTS/$LABEL.$name.plist"; done
+  local link
+  link="$(brew_prefix)/bin/daddy-cull"
+  [ -L "$link" ] && rm -f "$link"
+  rm -rf "$STATE/app" "$STATE/tools"
+  say "Daddy Cull is uninstalled. Your photos have not been touched:"
+  say "  library  $(setting library)"
+  say "  import   $(setting import)"
+  say "Its catalogue, settings and iCloud session are kept, so installing again picks up where you left off:"
+  say "  $STATE"
+  say "To remove those too, move that folder to the Trash."
+  say "The iCloud password, if you signed in, stays in your keychain until you delete it in Keychain Access."
+}
+
+# ---------------------------------------------------------------- iCloud
+
+cmd_icloud_install() {
+  command -v uv >/dev/null 2>&1 || fail "uv is missing. Run install.sh again, which installs it."
+  mkdir -p "$UV_CACHE_DIR"
+  local wheel="$UV_CACHE_DIR/$ICLOUDPD_WHEEL"
+  if [ ! -f "$wheel" ] || [ "$(shasum -a 256 "$wheel" | cut -d' ' -f1)" != "$ICLOUDPD_SHA256" ]; then
+    say "Downloading icloudpd $ICLOUDPD_VERSION…"
+    curl -fsSL "$ICLOUDPD_URL" -o "$wheel.part" || fail "could not download icloudpd."
+    [ "$(shasum -a 256 "$wheel.part" | cut -d' ' -f1)" = "$ICLOUDPD_SHA256" ] || {
+      rm -f "$wheel.part"
+      fail "the icloudpd download is not the file this release expects, so it was not installed."
+    }
+    mv "$wheel.part" "$wheel"
+  fi
+  uv tool install --quiet --force --python "$PYTHON_VERSION" "$wheel"
+  "$UV_TOOL_BIN_DIR/icloudpd" --version >/dev/null || fail "icloudpd was installed but does not start."
+  say "icloudpd $ICLOUDPD_VERSION is installed."
+  if [ -z "$(ls -A "$STATE/icloud-session" 2>/dev/null)" ]; then
+    say "Next: choose iCloud in setup (daddy-cull open 'setup?step=icloud'), then run daddy-cull icloud sign-in."
+  fi
+}
+
+icloud_account() {
+  need_config
+  local account
+  account=$(setting icloud.appleId)
+  [ -n "$account" ] || fail "no Apple Account is set. Choose iCloud in setup first: daddy-cull open 'setup?step=icloud'"
+  command -v icloudpd >/dev/null 2>&1 || fail "icloudpd is not installed. Run daddy-cull icloud install first."
+  say "$account"
+}
+
+cmd_icloud_sign_in() {
+  local account
+  account=$(icloud_account)
+  mkdir -p "$STATE/icloud-session"
+  chmod 700 "$STATE/icloud-session"
+  say "Signing in to iCloud. icloudpd asks for the password and, if Apple asks, the code sent to your devices."
+  say "The password is kept in this Mac's keychain, not in Daddy Cull."
+  say ""
+  if icloudpd --username "$account" --auth-only \
+    --cookie-directory "$STATE/icloud-session" \
+    --password-provider keyring --password-provider console; then
+    status_file "$STATE/icloud-status.json" true true "Signed in." "$(status_value "$STATE/icloud-status.json" complete)"
+    say ""
+    say "Signed in. The first download starts now and runs every six hours after that."
+    say "Watch it with: daddy-cull logs"
+    if loaded icloud; then launchctl kickstart "$DOMAIN/$LABEL.icloud" || true; fi
+  else
+    status_file "$STATE/icloud-status.json" false false "Signing in did not finish. Run daddy-cull icloud sign-in again."
+    fail "signing in did not finish. Run daddy-cull icloud sign-in again."
+  fi
+}
+
+cmd_icloud_run() {
+  local scheduled=false
+  [ "${1:-}" = --scheduled ] && scheduled=true
+  need_config
+  if [ "$(setting icloud.on)" != true ]; then
+    $scheduled || say "iCloud downloads are off. Turn them on in setup: daddy-cull open 'setup?step=icloud'"
+    return 0
+  fi
+  local account status="$STATE/icloud-status.json"
+  account=$(setting icloud.appleId)
+  # Nothing runs, and nothing is recorded, until icloudpd is installed and signed in:
+  # the setup page already says what to do.
+  if ! command -v icloudpd >/dev/null 2>&1; then
+    $scheduled && return 0
+    fail "icloudpd is not installed. Run daddy-cull icloud install first."
+  fi
+  if [ -z "$(ls -A "$STATE/icloud-session" 2>/dev/null)" ]; then
+    $scheduled && return 0
+    fail "not signed in yet. Run daddy-cull icloud sign-in first."
+  fi
+  # One download at a time: a scheduled run and one from Terminal would race.
+  LOCK="$STATE/icloud.lock"
+  if ! mkdir "$LOCK" 2>/dev/null; then
+    if kill -0 "$(cat "$LOCK/pid" 2>/dev/null || say 0)" 2>/dev/null; then
+      say "A download from iCloud is already running."
+      return 0
+    fi
+    rm -rf "$LOCK"
+    mkdir "$LOCK"
+  fi
+  say $$ >"$LOCK/pid"
+  trap 'rm -rf "$LOCK"' EXIT
+
+  # icloudpd runs this when Apple asks for a new sign-in, which a scheduled run cannot answer.
+  local marker="$STATE/icloud-needs-sign-in" hook="$STATE/tools/icloud-needs-sign-in"
+  mkdir -p "$STATE/tools" "$STATE/iCloud" "$LOGS"
+  # shellcheck disable=SC2016 # the hook expands it, when icloudpd runs it
+  printf '#!/bin/sh\n: > "$DADDY_CULL_MARKER"\n' >"$hook"
+  chmod 700 "$hook"
+  rm -f "$marker"
+
+  local complete since
+  complete=$(status_value "$status" complete)
+  since=$(setting icloud.since)
+  local args=(--username "$account" --directory "$STATE/iCloud" --cookie-directory "$STATE/icloud-session"
+    --password-provider keyring --folder-structure none --file-match-policy name-id7
+    --no-progress-bar --log-level info --notification-script "$hook")
+  [ -z "$since" ] || args+=(--skip-created-before "$since")
+  # After one complete run, newest first, stopping once 100 in a row are already here.
+  [ "$complete" = true ] && args+=(--until-found 100)
+
+  local output
+  output=$(mktemp -t daddy-cull-icloud)
+  say "$(now) downloading from iCloud"
+  local code=0
+  DADDY_CULL_MARKER="$marker" icloudpd "${args[@]}" </dev/null 2>&1 | tee "$output" || code=$?
+  local count
+  count=$(grep -c ' Downloaded ' "$output" || true)
+  rm -f "$output"
+  if [ -f "$marker" ]; then
+    rm -f "$marker"
+    status_file "$status" false false "iCloud asks you to sign in again. Run daddy-cull icloud sign-in in Terminal." "$complete"
+  elif [ "$code" -ne 0 ]; then
+    status_file "$status" true false "The download stopped with an error after $count new photos and videos. See daddy-cull logs." "$complete"
+  elif [ "$count" -eq 0 ]; then
+    status_file "$status" true true "Nothing new to download." true
+  elif [ "$count" -eq 1 ]; then
+    status_file "$status" true true "Downloaded 1 new photo or video." true
+  else
+    status_file "$status" true true "Downloaded $count new photos and videos." true
+  fi
+  say "$(now) $(status_value "$status" message)"
+}
+
+# ---------------------------------------------------------------- Apple Photos
+
+cmd_apple_photos_install() {
+  command -v uv >/dev/null 2>&1 || fail "uv is missing. Run install.sh again, which installs it."
+  say "Installing osxphotos $OSXPHOTOS_VERSION…"
+  uv tool install --quiet --force --python "$PYTHON_VERSION" "osxphotos==$OSXPHOTOS_VERSION"
+  "$UV_TOOL_BIN_DIR/osxphotos" version >/dev/null || fail "osxphotos was installed but does not start."
+  say "osxphotos $OSXPHOTOS_VERSION is installed."
+  [ -f "$STATE/apple-photos-status.json" ] || say "Next: daddy-cull apple-photos import copies your Photos library into the Import folder."
+}
+
+cmd_apple_photos_import() {
+  need_config
+  command -v osxphotos >/dev/null 2>&1 || fail "osxphotos is not installed. Run daddy-cull apple-photos install first."
+  local into status="$STATE/apple-photos-status.json"
+  into="$(setting import)/Apple Photos"
+  mkdir -p "$into" "$LOGS"
+  say "Exporting from Apple Photos into $into"
+  say "Only photos not exported before are copied. Photos itself is not changed."
+  say "macOS may ask to let Terminal use Photos: allow it."
+  say ""
+  local output code=0
+  output=$(mktemp -t daddy-cull-photos)
+  osxphotos export "$into" --update --only-new --exportdb "$STATE/osxphotos.db" \
+    --skip-original-if-edited --download-missing --use-photokit --touch-file --retry 3 \
+    "$@" 2>&1 | tee "$output" || code=$?
+  local exported
+  exported=$(sed -n 's/.*exported: \([0-9][0-9]*\).*/\1/p' "$output" | tail -n 1)
+  cat "$output" >>"$LOGS/apple-photos.log"
+  rm -f "$output"
+  if [ "$code" -ne 0 ]; then
+    status_file "$status" true false "The export stopped with an error. Run daddy-cull apple-photos import again."
+    fail "the export stopped with an error. Run it again to carry on where it stopped."
+  fi
+  case "${exported:-}" in
+    "") status_file "$status" true true "Exported from Apple Photos." ;;
+    0) status_file "$status" true true "Nothing new in Apple Photos." ;;
+    1) status_file "$status" true true "Exported 1 new photo or video." ;;
+    *) status_file "$status" true true "Exported $exported new photos and videos." ;;
+  esac
+  say ""
+  say "$(status_value "$status" message) Daddy Cull files them under the day each was taken within a minute."
+}
+
+# ---------------------------------------------------------------- help
+
+usage() {
+  cat <<EOF
+daddy-cull runs Daddy Cull on this Mac.
+
+  daddy-cull status                 what is running, where the folders are, what is installed
+  daddy-cull open [page]            open Daddy Cull in the browser, such as: daddy-cull open setup
+  daddy-cull start | stop | restart start or stop the background services
+  daddy-cull logs                   follow what the services write
+
+  daddy-cull icloud install         install icloudpd, which downloads from iCloud Photos
+  daddy-cull icloud sign-in         sign in to iCloud, in this Terminal
+  daddy-cull icloud run             download new photos now; it also runs every six hours
+
+  daddy-cull apple-photos install   install osxphotos, which exports from Apple Photos
+  daddy-cull apple-photos import    copy new photos from Apple Photos into the Import folder
+
+  daddy-cull update                 install the latest release
+  daddy-cull uninstall              remove the app; your photos and catalogue stay
+EOF
+}
+
+main() {
+  local command=${1:-help}
+  [ $# -eq 0 ] || shift
+  case "$command" in
+    status) cmd_status ;;
+    open) cmd_open "$@" ;;
+    start) cmd_start ;;
+    stop) cmd_stop ;;
+    restart) cmd_restart ;;
+    logs) cmd_logs ;;
+    update) cmd_update ;;
+    uninstall) cmd_uninstall ;;
+    icloud)
+      case "${1:-}" in
+        install) cmd_icloud_install ;;
+        sign-in) cmd_icloud_sign_in ;;
+        run) shift; cmd_icloud_run "$@" ;;
+        *) fail "daddy-cull icloud takes install, sign-in or run." ;;
+      esac
+      ;;
+    apple-photos)
+      case "${1:-}" in
+        install) cmd_apple_photos_install ;;
+        import) shift; cmd_apple_photos_import "$@" ;;
+        *) fail "daddy-cull apple-photos takes install or import." ;;
+      esac
+      ;;
+    help | -h | --help) usage ;;
+    version | --version)
+      if [ -x "$APP/bin/cull" ]; then "$APP/bin/cull" -version; else say "not installed"; fi
+      ;;
+    *)
+      usage >&2
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

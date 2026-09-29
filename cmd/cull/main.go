@@ -29,7 +29,12 @@ import (
 	_ "time/tzdata"
 )
 
+// version is the release, set when a release is built:
+// go build -ldflags "-X main.version=0.12.3".
+var version = "dev"
+
 func main() {
+	showVersion := flag.Bool("version", false, "print the release this is and exit")
 	configFile := flag.String("config", "", "config.json written by install.sh and changed from the Setup page; it fills in every flag not given here, and Cull stops when it changes so launchd starts it again")
 	writer := flag.Bool("writer", false, "run only the private Bin filesystem service")
 	writerRoot := flag.String("archive-root", "/archive", "writer archive root")
@@ -77,6 +82,10 @@ func main() {
 	immichURL := flag.String("immich-url", os.Getenv("IMMICH_URL"), "Immich base URL that archive favourites are mirrored to; empty disables the sync")
 	immichPrefix := flag.String("immich-path-prefix", os.Getenv("IMMICH_PATH_PREFIX"), "archive path as Immich's external library recorded it; needed with -immich-url")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
 	var setupConfig catalog.SetupConfig
 	if *configFile != "" {
 		setupConfig = applyConfig(*configFile, *writer, &downloadDirs)
@@ -343,7 +352,7 @@ func main() {
 			fixed = setupConfig
 		}
 		// A change on the Setup page stops Cull, and launchd starts it again.
-		catalog.NewSetup(*configFile, fixed, stop).Routes(apiMux)
+		catalog.NewSetup(*configFile, fixed, stop, version).Routes(apiMux)
 		// The Mac helper that carries culling across to Apple Photos talks to
 		// this process, which is also where its jobs live. Its key is normally
 		// handed out by the setup command on the Apple Photos page and only its

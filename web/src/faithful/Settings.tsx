@@ -182,6 +182,7 @@ function FolderSettings(){
       <div><dt>Import folder</dt><dd>{config.import||'None'}</dd></div>
       <div><dt>iCloud Photos</dt><dd>{config.icloud.on?<>{config.icloud.appleId}{setup.icloud.lastRun?<>, last run {ago(setup.icloud.lastRun)}</>:', not run yet'}</>:'Off'}</dd></div>
       <div><dt>Google Takeout folder</dt><dd>{config.takeoutInbox||'None'}</dd></div>
+      {setup.version&&<div><dt>Version</dt><dd>Daddy Cull {setup.version}</dd></div>}
     </dl>}
     {setup?.config.icloud.on&&setup.icloud.lastRun&&!setup.icloud.ok&&<p className="note warn">iCloud: {setup.icloud.message||'the last download did not finish.'} <a href="/setup?step=icloud">Sign in again</a></p>}
     {status&&<>

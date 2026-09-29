@@ -34,7 +34,7 @@ func setupFixture(t *testing.T) (*Setup, string, *atomic.Int32) {
 		t.Fatal(err)
 	}
 	restarts := &atomic.Int32{}
-	setup := NewSetup(file, SetupConfig{}, func() { restarts.Add(1) })
+	setup := NewSetup(file, SetupConfig{}, func() { restarts.Add(1) }, "0.1.0")
 	setup.look = func(name string) (string, error) {
 		if name == "exiftool" {
 			return "/opt/homebrew/bin/exiftool", nil
@@ -121,7 +121,7 @@ func TestSetupSavesAndRestarts(t *testing.T) {
 		t.Fatalf("restarted %d times", restarts.Load())
 	}
 	view := setup.View()
-	if !view.ImmichKeySet || !view.Configurable || view.Free <= 0 {
+	if !view.ImmichKeySet || !view.Configurable || view.Free <= 0 || view.Version != "0.1.0" {
 		t.Fatalf("view %+v", view)
 	}
 	if !view.Tools[0].Found || view.Tools[2].Found {
@@ -146,7 +146,7 @@ func TestSetupRefusesWhatItCannotSave(t *testing.T) {
 	if answer := put(addon, `{"config":{"library":"/a","import":"/b"}}`); answer.Code != 403 {
 		t.Fatalf("an addon: %d %s", answer.Code, answer.Body.String())
 	}
-	fixed := NewSetup("", SetupConfig{Library: "/archive"}, func() { t.Fatal("restarted") })
+	fixed := NewSetup("", SetupConfig{Library: "/archive"}, func() { t.Fatal("restarted") }, "dev")
 	if answer := httptest.NewRecorder(); true {
 		routeHandler(t, fixed).ServeHTTP(answer, func() *http.Request {
 			r := httptest.NewRequest("POST", "/api/setup", strings.NewReader(`{"config":{}}`))
