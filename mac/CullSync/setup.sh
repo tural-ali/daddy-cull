@@ -26,7 +26,10 @@ main() {
   # sync.conf holds the key; nothing written here is for anyone else to read.
   umask 077
 
-  local label="net.example.cullsync"
+  local label="app.daddycull.sync"
+  # Installs before the rename used this label; one left loaded would run a
+  # second copy beside the new one.
+  local old_label="net.example.cullsync"
   local app="$HOME/Applications/Cull Sync.app"
   local conf_dir="$HOME/.config/daddy-cull"
   local conf="$conf_dir/sync.conf"
@@ -107,12 +110,22 @@ main() {
   fi
   [ -f "$src/build.sh" ] || fail "no Cull Sync sources in $src."
 
+  # The server's name, when it is reached over plain http, so the build can
+  # let the app talk to it.
+  local url_line host=""
+  url_line=$(sed -n 's/^url[[:space:]]*=[[:space:]]*//p' "$conf" 2>/dev/null | tail -1)
+  case "$url_line" in
+    http://*) host=${url_line#http://}; host=${host%%/*}; host=${host%%:*} ;;
+  esac
+
   say "Building Cull Sync. This takes a minute or so."
-  /bin/zsh "$src/build.sh" || fail "the build failed; the messages above say why. Once that is fixed, $again."
+  CULL_SYNC_HTTP_HOST="$host" /bin/zsh "$src/build.sh" || fail "the build failed; the messages above say why. Once that is fixed, $again."
 
   # Stop whatever is running now: the LaunchAgent's copy, or one started by
   # hand or by an older install as a login item.
   launchctl bootout "$domain/$label" >/dev/null 2>&1 || true
+  launchctl bootout "$domain/$old_label" >/dev/null 2>&1 || true
+  rm -f "$HOME/Library/LaunchAgents/$old_label.plist"
   if pgrep -xq CullSync; then
     osascript -e "tell application id \"$label\" to quit" >/dev/null 2>&1 || pkill -x CullSync || true
     local waited=0

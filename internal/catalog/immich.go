@@ -51,8 +51,6 @@ const (
 	immichBatch          = 50
 	// Immich's search answers are small; anything larger is not an answer.
 	immichMaxResponse = 8 << 20
-	// The prefix under which Immich recorded the archive, when none is given.
-	DefaultImmichPathPrefix = "/mnt/family-archive"
 )
 
 // ImmichConfig is how the review app reaches Immich. The key is read from the
@@ -91,14 +89,14 @@ func NewImmichSync(s *Store, cfg ImmichConfig) (*ImmichSync, error) {
 	}
 	base, err := url.Parse(strings.TrimRight(strings.TrimSpace(cfg.URL), "/"))
 	if err != nil || (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" || base.User != nil || base.RawQuery != "" || base.Fragment != "" {
-		return nil, fmt.Errorf("IMMICH_URL must be a plain http or https address such as http://192.168.1.10:2283")
+		return nil, fmt.Errorf("IMMICH_URL must be a plain http or https address such as http://immich.local:2283")
 	}
 	prefix := strings.TrimRight(strings.TrimSpace(cfg.PathPrefix), "/")
 	if prefix == "" {
-		prefix = DefaultImmichPathPrefix
+		return nil, fmt.Errorf("IMMICH_PATH_PREFIX is needed with IMMICH_URL: the folder Immich's external library reads the archive from, such as /mnt/photos")
 	}
 	if !path.IsAbs(prefix) || path.Clean(prefix) != prefix {
-		return nil, fmt.Errorf("IMMICH_PATH_PREFIX must be an absolute path such as %s", DefaultImmichPathPrefix)
+		return nil, fmt.Errorf("IMMICH_PATH_PREFIX must be an absolute path such as /mnt/photos")
 	}
 	client := &http.Client{
 		Timeout: immichRequestTimeout,
@@ -399,7 +397,7 @@ type immichAsset struct {
 
 // lookup finds the one Immich asset for an archive file. Cull records the file
 // as /archive/<rel>, and Immich's external library records the same file under
-// its own mount, /mnt/family-archive/<rel> by default. Immich's originalPath
+// its own mount, IMMICH_PATH_PREFIX/<rel>. Immich's originalPath
 // search matches loosely, so only an item whose path is exactly the one asked
 // for counts, and anything but exactly one such item is refused rather than
 // guessed at.

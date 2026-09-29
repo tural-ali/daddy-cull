@@ -14,6 +14,17 @@ xcrun swiftc -O -swift-version 6 -target "$(uname -m)-apple-macos14.0" \
   -o "$APP/Contents/MacOS/CullSync" \
   "$HERE"/Sources/*.swift
 cp "$HERE/Info.plist" "$APP/Contents/Info.plist"
+# App Transport Security refuses plain HTTP to a named server unless the app
+# says so. Local names and addresses are already allowed, so only a server
+# such as a tailnet name is written in, and only when it is reached over http.
+if [[ -n "${CULL_SYNC_HTTP_HOST:-}" && "$CULL_SYNC_HTTP_HOST" == *.* && "$CULL_SYNC_HTTP_HOST" != *.local && ! "$CULL_SYNC_HTTP_HOST" =~ '^[0-9.]+$' ]]; then
+  plist="$APP/Contents/Info.plist"
+  /usr/libexec/PlistBuddy \
+    -c "Add :NSAppTransportSecurity:NSExceptionDomains dict" \
+    -c "Add :NSAppTransportSecurity:NSExceptionDomains:$CULL_SYNC_HTTP_HOST dict" \
+    -c "Add :NSAppTransportSecurity:NSExceptionDomains:$CULL_SYNC_HTTP_HOST:NSExceptionAllowsInsecureHTTPLoads bool true" \
+    "$plist"
+fi
 plutil -lint -s "$APP/Contents/Info.plist"
 
 # Ad-hoc signing is enough for an app built and run on this Mac. macOS ties the

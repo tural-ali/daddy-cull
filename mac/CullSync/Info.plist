@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>net.example.cullsync</string>
+	<string>app.daddycull.sync</string>
 	<key>CFBundleName</key>
 	<string>Cull Sync</string>
 	<key>CFBundleDisplayName</key>
@@ -28,20 +28,11 @@
 	<string>Cull Sync finds the photographs you removed or favourited in Daddy Cull, shows them to you in the browser, and removes or favourites them in Photos only when you apply.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<!-- Daddy Cull is served over plain HTTP on the tailnet, which WireGuard
-		     already encrypts, and sometimes on the LAN or this Mac while testing. -->
+		<!-- Daddy Cull is usually served over plain HTTP: on this Mac, on the LAN,
+		     or on a tailnet, which WireGuard already encrypts. Local addresses are
+		     allowed here; build.sh adds the one named server that is not local. -->
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
-		<key>NSExceptionDomains</key>
-		<dict>
-			<key>example.ts.net</key>
-			<dict>
-				<key>NSIncludesSubdomains</key>
-				<true/>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
-			</dict>
-		</dict>
 	</dict>
 </dict>
 </plist>

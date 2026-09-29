@@ -4,7 +4,7 @@ import Foundation
 /// ~/.config/daddy-cull/sync.conf, the file the old Terminal tool used, so an
 /// existing install keeps its settings.
 struct SyncConfig: Equatable, Sendable {
-    static let defaultURL = "http://cull.example.ts.net:8830"
+    static let defaultURL = "http://127.0.0.1:8830"
 
     var url: String
     /// The key the setup command wrote, or the server's PHOTOS_AGENT_KEY.

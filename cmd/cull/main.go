@@ -46,10 +46,10 @@ func main() {
 	phoneDeletions := flag.String("phone-deletions", "", "read photos deleted on a phone from stdin, as host paths under this archive directory, mark for the Bin the ones nobody decided on, then exit")
 	screenshotFilter := flag.Bool("screenshot-filter", false, "read paths on stdin, print \"<path>\\t<rule>\" for each one that is a screenshot, then exit")
 	importSocial := flag.String("import-social", "", "import the social-video detection report TSV")
-	socialArchivePrefix := flag.String("social-archive-prefix", "/mnt/user/family-archive", "host archive prefix recorded in the social report")
+	socialArchivePrefix := flag.String("social-archive-prefix", "", "host archive prefix recorded in the social report; needed with -import-social")
 	socialPosters := flag.String("social-posters", "", "read-only directory of poster frames captured during social detection")
-	upgradeSourcePrefix := flag.String("upgrade-source-prefix", "/mnt/disk1/takeout-upgrades", "host path prefix recorded in the upgrade report")
-	upgradeArchivePrefix := flag.String("upgrade-archive-prefix", "/mnt/user/family-archive", "host archive prefix recorded in the upgrade report")
+	upgradeSourcePrefix := flag.String("upgrade-source-prefix", "", "host path prefix recorded in the upgrade report; needed with -import-upgrades")
+	upgradeArchivePrefix := flag.String("upgrade-archive-prefix", "", "host archive prefix recorded in the upgrade report; needed with -import-upgrades")
 	upstream := flag.String("media-upstream", "", "trusted legacy read-only media service URL")
 	archiveMedia := flag.String("archive-media", "", "read-only archive mount served directly for previews and video playback")
 	screenshotsMedia := flag.String("screenshots-media", "", "read-only mount of the screenshot holding area, served for previews")
@@ -68,7 +68,7 @@ func main() {
 	// The Immich key is taken from IMMICH_KEY only, never from a flag, so it
 	// does not appear in a process listing or in the container's command line.
 	immichURL := flag.String("immich-url", os.Getenv("IMMICH_URL"), "Immich base URL that archive favourites are mirrored to; empty disables the sync")
-	immichPrefix := flag.String("immich-path-prefix", envOr("IMMICH_PATH_PREFIX", catalog.DefaultImmichPathPrefix), "archive path as Immich's external library recorded it")
+	immichPrefix := flag.String("immich-path-prefix", os.Getenv("IMMICH_PATH_PREFIX"), "archive path as Immich's external library recorded it; needed with -immich-url")
 	flag.Parse()
 	imports := 0
 	for _, value := range []string{*importFile, *importEvidence, *importLegacy, *importScreenshots, *importUpgrades, *importSocial, *scanArchive, *phoneDeletions} {
@@ -174,6 +174,9 @@ func main() {
 		return
 	}
 	if *importUpgrades != "" {
+		if *upgradeSourcePrefix == "" || *upgradeArchivePrefix == "" {
+			log.Fatal("-import-upgrades needs -upgrade-source-prefix and -upgrade-archive-prefix: the host paths the report was written with")
+		}
 		f, openErr := os.Open(*importUpgrades)
 		if openErr != nil {
 			log.Fatal(openErr)
@@ -187,6 +190,9 @@ func main() {
 		return
 	}
 	if *importSocial != "" {
+		if *socialArchivePrefix == "" {
+			log.Fatal("-import-social needs -social-archive-prefix: the host archive path the report was written with")
+		}
 		f, openErr := os.Open(*importSocial)
 		if openErr != nil {
 			log.Fatal(openErr)
@@ -428,13 +434,6 @@ func startImmichSync(ctx context.Context, s *catalog.Store, cfg catalog.ImmichCo
 	// It runs only while the Immich addon is on; hearts given meanwhile wait
 	// in the queue and are sent once it is back on.
 	go addons.While(ctx, catalog.AddonImmich, sync.Run)
-}
-
-func envOr(name, fallback string) string {
-	if value := os.Getenv(name); value != "" {
-		return value
-	}
-	return fallback
 }
 
 // filterScreenshots reads one path per line and writes "<path>\t<rule>" for

@@ -192,7 +192,7 @@ func immichFixture(t *testing.T, f *fakeImmich) (*Store, *ImmichSync, *immichClo
 
 func immichSyncFor(t *testing.T, s *Store, f *fakeImmich) *ImmichSync {
 	t.Helper()
-	y, err := NewImmichSync(s, ImmichConfig{URL: f.server.URL + "/", Key: fakeImmichKey})
+	y, err := NewImmichSync(s, ImmichConfig{URL: f.server.URL + "/", Key: fakeImmichKey, PathPrefix: "/mnt/photos"})
 	if err != nil || y == nil {
 		t.Fatalf("sync not created: %v", err)
 	}
@@ -252,7 +252,7 @@ func drainNow(t *testing.T, y *ImmichSync) {
 }
 
 func TestImmichFavouriteThenUnfavouriteMirrorsWhatCullSet(t *testing.T) {
-	f := newFakeImmich(t, immichAsset{ID: "im-1", OriginalPath: "/mnt/family-archive/2021/05/IMG_0001.HEIC"})
+	f := newFakeImmich(t, immichAsset{ID: "im-1", OriginalPath: "/mnt/photos/2021/05/IMG_0001.HEIC"})
 	s, y, clock := immichFixture(t, f)
 	withClock(y, clock)
 	addImmichTestAsset(t, s, 1, "/archive/2021/05/IMG_0001.HEIC", "archive")
@@ -283,7 +283,7 @@ func TestImmichFavouriteThenUnfavouriteMirrorsWhatCullSet(t *testing.T) {
 }
 
 func TestImmichNeverClearsAFavouriteImmichAlreadyHad(t *testing.T) {
-	f := newFakeImmich(t, immichAsset{ID: "im-2", IsFavorite: true, OriginalPath: "/mnt/family-archive/2019/beach.jpg"})
+	f := newFakeImmich(t, immichAsset{ID: "im-2", IsFavorite: true, OriginalPath: "/mnt/photos/2019/beach.jpg"})
 	s, y, clock := immichFixture(t, f)
 	withClock(y, clock)
 	addImmichTestAsset(t, s, 2, "/archive/2019/beach.jpg", "archive")
@@ -309,8 +309,8 @@ func TestImmichNeverClearsAFavouriteImmichAlreadyHad(t *testing.T) {
 
 func TestImmichCoalescesTogglesToTheLatestHeart(t *testing.T) {
 	f := newFakeImmich(t,
-		immichAsset{ID: "im-3", OriginalPath: "/mnt/family-archive/a.jpg"},
-		immichAsset{ID: "im-4", OriginalPath: "/mnt/family-archive/b.jpg"})
+		immichAsset{ID: "im-3", OriginalPath: "/mnt/photos/a.jpg"},
+		immichAsset{ID: "im-4", OriginalPath: "/mnt/photos/b.jpg"})
 	s, y, clock := immichFixture(t, f)
 	withClock(y, clock)
 	addImmichTestAsset(t, s, 3, "/archive/a.jpg", "archive")
@@ -337,7 +337,7 @@ func TestImmichCoalescesTogglesToTheLatestHeart(t *testing.T) {
 }
 
 func TestImmichHeartDuringARequestIsNotLost(t *testing.T) {
-	f := newFakeImmich(t, immichAsset{ID: "im-5", OriginalPath: "/mnt/family-archive/c.jpg"})
+	f := newFakeImmich(t, immichAsset{ID: "im-5", OriginalPath: "/mnt/photos/c.jpg"})
 	s, y, clock := immichFixture(t, f)
 	withClock(y, clock)
 	addImmichTestAsset(t, s, 5, "/archive/c.jpg", "archive")
@@ -367,7 +367,7 @@ func TestImmichHeartDuringARequestIsNotLost(t *testing.T) {
 }
 
 func TestImmichDownIsQueuedAndRetriedWithBackoffAcrossRestarts(t *testing.T) {
-	f := newFakeImmich(t, immichAsset{ID: "im-6", OriginalPath: "/mnt/family-archive/d.jpg"})
+	f := newFakeImmich(t, immichAsset{ID: "im-6", OriginalPath: "/mnt/photos/d.jpg"})
 	f.set(func(f *fakeImmich) { f.down = true })
 	dbPath := filepath.Join(t.TempDir(), "catalog.db")
 	s, err := Open(dbPath)
@@ -445,11 +445,11 @@ func TestImmichBackoffCapsAtAnHour(t *testing.T) {
 func TestImmichNoMatchOrTwoMatchesFailWithoutAHotLoop(t *testing.T) {
 	f := newFakeImmich(t,
 		// Loose matches Immich returns for the first file, none of them exact.
-		immichAsset{ID: "im-near-1", OriginalPath: "/mnt/family-archive/2020/IMG_1.JPG"},
-		immichAsset{ID: "im-near-2", OriginalPath: "/mnt/family-archive/2020/IMG_1.jpg.mov"},
+		immichAsset{ID: "im-near-1", OriginalPath: "/mnt/photos/2020/IMG_1.JPG"},
+		immichAsset{ID: "im-near-2", OriginalPath: "/mnt/photos/2020/IMG_1.jpg.mov"},
 		// Two assets at exactly the second file's path.
-		immichAsset{ID: "im-dup-1", OriginalPath: "/mnt/family-archive/2020/twice.jpg"},
-		immichAsset{ID: "im-dup-2", OriginalPath: "/mnt/family-archive/2020/twice.jpg"})
+		immichAsset{ID: "im-dup-1", OriginalPath: "/mnt/photos/2020/twice.jpg"},
+		immichAsset{ID: "im-dup-2", OriginalPath: "/mnt/photos/2020/twice.jpg"})
 	s, y, clock := immichFixture(t, f)
 	withClock(y, clock)
 	addImmichTestAsset(t, s, 8, "/archive/2020/IMG_1.jpg", "archive")
@@ -457,7 +457,7 @@ func TestImmichNoMatchOrTwoMatchesFailWithoutAHotLoop(t *testing.T) {
 	heart(t, s, 8, true)
 	heart(t, s, 9, true)
 	drainNow(t, y)
-	if row := queueRow(t, s, 8); row.state != "failed" || !strings.Contains(row.lastError, "no asset at /mnt/family-archive/2020/IMG_1.jpg") {
+	if row := queueRow(t, s, 8); row.state != "failed" || !strings.Contains(row.lastError, "no asset at /mnt/photos/2020/IMG_1.jpg") {
 		t.Fatalf("no exact match not recorded: %+v", row)
 	}
 	if row := queueRow(t, s, 9); row.state != "failed" || !strings.Contains(row.lastError, "2 assets") || row.next != clock.at.Add(24*time.Hour).Unix() {
@@ -488,7 +488,7 @@ func TestImmichRefusedKeyFailsAndNeverLeaksTheKey(t *testing.T) {
 	var logs bytes.Buffer
 	log.SetOutput(&logs)
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
-	f := newFakeImmich(t, immichAsset{ID: "im-10", OriginalPath: "/mnt/family-archive/f.jpg"})
+	f := newFakeImmich(t, immichAsset{ID: "im-10", OriginalPath: "/mnt/photos/f.jpg"})
 	s, y, clock := immichFixture(t, f)
 	withClock(y, clock)
 	addImmichTestAsset(t, s, 10, "/archive/f.jpg", "archive")
@@ -533,9 +533,9 @@ func TestImmichRefusedKeyFailsAndNeverLeaksTheKey(t *testing.T) {
 
 func TestImmichBackfillQueuesExistingFavouritesOnce(t *testing.T) {
 	f := newFakeImmich(t,
-		immichAsset{ID: "im-21", OriginalPath: "/mnt/family-archive/x/1.jpg"},
-		immichAsset{ID: "im-22", OriginalPath: "/mnt/family-archive/x/2.jpg"},
-		immichAsset{ID: "im-23", IsFavorite: true, OriginalPath: "/mnt/family-archive/x/3.jpg"})
+		immichAsset{ID: "im-21", OriginalPath: "/mnt/photos/x/1.jpg"},
+		immichAsset{ID: "im-22", OriginalPath: "/mnt/photos/x/2.jpg"},
+		immichAsset{ID: "im-23", IsFavorite: true, OriginalPath: "/mnt/photos/x/3.jpg"})
 	s, y, clock := immichFixture(t, f)
 	withClock(y, clock)
 	for id := int64(21); id <= 23; id++ {
@@ -577,8 +577,8 @@ func TestImmichBackfillQueuesExistingFavouritesOnce(t *testing.T) {
 
 func TestImmichRunBackfillsAndWakesOnAHeart(t *testing.T) {
 	f := newFakeImmich(t,
-		immichAsset{ID: "im-31", OriginalPath: "/mnt/family-archive/r/1.jpg"},
-		immichAsset{ID: "im-32", OriginalPath: "/mnt/family-archive/r/2.jpg"})
+		immichAsset{ID: "im-31", OriginalPath: "/mnt/photos/r/1.jpg"},
+		immichAsset{ID: "im-32", OriginalPath: "/mnt/photos/r/2.jpg"})
 	s, y, _ := immichFixture(t, f)
 	addImmichTestAsset(t, s, 31, "/archive/r/1.jpg", "archive")
 	addImmichTestAsset(t, s, 32, "/archive/r/2.jpg", "archive")
@@ -618,6 +618,9 @@ func TestImmichDisabledWithoutURLOrKeyAndRejectsBadSettings(t *testing.T) {
 		{URL: "ftp://immich", Key: fakeImmichKey},
 		{URL: "http://user:pass@immich:2283", Key: fakeImmichKey},
 		{URL: "http://immich:2283", Key: fakeImmichKey, PathPrefix: "relative/archive"},
+		// Where Immich reads the archive from differs on every server, so it
+		// is asked for rather than guessed.
+		{URL: "http://immich:2283", Key: fakeImmichKey},
 	} {
 		y, err := NewImmichSync(s, cfg)
 		if y != nil || err == nil {
@@ -640,7 +643,7 @@ func TestImmichDisabledWithoutURLOrKeyAndRejectsBadSettings(t *testing.T) {
 }
 
 func TestImmichStatsReportTheQueue(t *testing.T) {
-	f := newFakeImmich(t, immichAsset{ID: "im-50", OriginalPath: "/mnt/family-archive/s.jpg"})
+	f := newFakeImmich(t, immichAsset{ID: "im-50", OriginalPath: "/mnt/photos/s.jpg"})
 	s, y, clock := immichFixture(t, f)
 	withClock(y, clock)
 	addImmichTestAsset(t, s, 50, "/archive/s.jpg", "archive")
@@ -666,7 +669,7 @@ func TestImmichStatsReportTheQueue(t *testing.T) {
 // because it is the only thing that tells the two apart, and the key is still
 // scrubbed if a reply ever repeats it.
 func TestImmichKeepsImmichsReasonForARefusal(t *testing.T) {
-	f := newFakeImmich(t, immichAsset{ID: "im-12", OriginalPath: "/mnt/family-archive/h.jpg"})
+	f := newFakeImmich(t, immichAsset{ID: "im-12", OriginalPath: "/mnt/photos/h.jpg"})
 	s, y, clock := immichFixture(t, f)
 	withClock(y, clock)
 	addImmichTestAsset(t, s, 12, "/archive/h.jpg", "archive")
@@ -686,7 +689,7 @@ func TestImmichKeepsImmichsReasonForARefusal(t *testing.T) {
 // changed with Cull's key. Asking again cannot help, so the heart is set aside,
 // not retried every day and at every restart, until it changes.
 func TestImmichPhotoOfAnotherUserIsNotRetried(t *testing.T) {
-	f := newFakeImmich(t, immichAsset{ID: "im-70", OriginalPath: "/mnt/family-archive/2024/IMG_6419.MOV"})
+	f := newFakeImmich(t, immichAsset{ID: "im-70", OriginalPath: "/mnt/photos/2024/IMG_6419.MOV"})
 	f.refuse = map[string]bool{"im-70": true}
 	s, y, clock := immichFixture(t, f)
 	withClock(y, clock)
@@ -721,14 +724,14 @@ func TestImmichPhotoOfAnotherUserIsNotRetried(t *testing.T) {
 // favourite Cull set then looks the file up again instead of failing on the
 // id it remembered.
 func TestImmichUnfavouriteFollowsANewID(t *testing.T) {
-	f := newFakeImmich(t, immichAsset{ID: "im-80", OriginalPath: "/mnt/family-archive/k.jpg"})
+	f := newFakeImmich(t, immichAsset{ID: "im-80", OriginalPath: "/mnt/photos/k.jpg"})
 	s, y, clock := immichFixture(t, f)
 	withClock(y, clock)
 	addImmichTestAsset(t, s, 80, "/archive/k.jpg", "archive")
 	heart(t, s, 80, true)
 	drainNow(t, y)
 	f.set(func(f *fakeImmich) {
-		f.assets = []immichAsset{{ID: "im-81", OriginalPath: "/mnt/family-archive/k.jpg", IsFavorite: true}}
+		f.assets = []immichAsset{{ID: "im-81", OriginalPath: "/mnt/photos/k.jpg", IsFavorite: true}}
 	})
 	heart(t, s, 80, false)
 	drainNow(t, y)
