@@ -1190,6 +1190,76 @@ main.selecting .mo.sel:not(:focus-visible) { box-shadow: none; transform: none; 
 .xmeta .hash { margin-left: auto; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--faint); }
 .xact { display: flex; align-items: center; gap: .8rem; margin: .7rem 0 0; flex-wrap: wrap; }
 
+/* A group of identical copies on the day page: one small preview, since the
+   bytes are the same, beside a row per copy with what tells them apart. */
+.xcopy .xbody { display: flex; gap: 1rem; align-items: flex-start; }
+.xpeek {
+  position: relative; flex: none; width: 168px; aspect-ratio: 4 / 3; padding: 0;
+  overflow: hidden; cursor: zoom-in;
+  background: var(--bg-3); border: 1px solid var(--line); border-radius: 6px;
+}
+.xpeek img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.xpeek .media-missing { height: 100%; }
+.xpeekicon {
+  position: absolute; inset: auto 6px 6px auto;
+  display: grid; place-items: center; width: 28px; height: 28px;
+  color: #fff; background: rgb(12 13 17 / 66%); border-radius: 50%;
+}
+.xpeekicon .icon, .xpeekicon .icon svg { width: 18px; height: 18px; }
+.xpeek:hover .xpeekicon, .xpeek:focus-visible .xpeekicon { background: var(--accent); color: var(--on-accent); }
+.xpeek:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.xtablewrap { flex: 1; min-width: 0; overflow-x: auto; }
+.xtable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.xtable th {
+  text-align: left; font-weight: 500; font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--faint); padding: 0 .6rem .4rem; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+.xtable td { padding: .45rem .6rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.xtable tbody tr { cursor: pointer; transition: background var(--ease); }
+.xtable tbody tr:last-child td { border-bottom: 0; }
+.xtable tbody tr:hover { background: var(--hover); }
+.xtable tr.keeper { background: color-mix(in oklab, var(--good) 12%, transparent); }
+.xtable tr.keeper:hover { background: color-mix(in oklab, var(--good) 17%, transparent); }
+.xtable .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.xkeep { white-space: nowrap; }
+.xkeep input { margin: 0 .45rem 0 0; accent-color: var(--good); vertical-align: middle; cursor: pointer; }
+.xfate { font-size: 11.5px; color: var(--muted); }
+.xtable tr.keeper .xfate { color: var(--good); font-weight: 500; }
+.xtable tr.binned .xfate { color: var(--warn); }
+.xname { font-weight: 500; overflow-wrap: anywhere; }
+.xname .dupeflag { margin-left: .4rem; }
+.xwhen { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.xpath { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; overflow-wrap: anywhere; min-width: 14ch; }
+.xpath .dim { color: var(--faint); }
+.xopen { width: 1%; padding-right: 0; }
+.xopen .iconbtn { width: 32px; height: 32px; }
+.xopen .iconbtn .icon, .xopen .iconbtn .icon svg { width: 18px; height: 18px; }
+.xstays { display: inline-flex; align-items: center; gap: .35rem; font-size: 13px; color: var(--good); }
+.xstays .icon, .xstays .icon svg { width: 18px; height: 18px; }
+/* On a phone each copy is a card of its own facts under the preview. */
+@media (width <= 720px) {
+  .xcopy .xbody { flex-direction: column; }
+  .xpeek { width: 100%; max-width: 320px; }
+  .xtablewrap { width: 100%; overflow: visible; }
+  .xtable thead { display: none; }
+  .xtable, .xtable tbody { display: block; }
+  .xtable tbody tr {
+    display: grid; grid-template-columns: auto auto auto 1fr auto; gap: .2rem .6rem; align-items: baseline;
+    padding: .6rem .4rem; border-bottom: 1px solid var(--line); border-radius: 6px;
+  }
+  .xtable tbody tr:last-child { border-bottom: 0; }
+  .xtable td { padding: 0; border: 0; }
+  .xkeep { grid-row: 1; grid-column: 1; }
+  .xname { grid-row: 1; grid-column: 2 / span 3; }
+  .xopen { grid-row: 1 / span 3; grid-column: 5; width: auto; align-self: center; }
+  .xtable td:nth-child(3), .xtable td:nth-child(4), .xwhen { grid-row: 2; font-size: 12px; color: var(--muted); text-align: left; }
+  .xtable td:nth-child(3) { grid-column: 2; }
+  .xtable td:nth-child(4) { grid-column: 3; }
+  .xwhen { grid-column: 4; }
+  .xpath { grid-row: 3; grid-column: 2 / span 3; }
+  .xact .btn { white-space: normal; text-align: left; }
+}
+
 /* --------------------------------------------------------------- the bin -- */
 
 .binhead, .yearview, .dupehead, .settings { margin-bottom: 1.4rem; }

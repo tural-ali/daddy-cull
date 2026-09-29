@@ -43,7 +43,33 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
   await page.locator('.gbar .pageacts').getByRole('button',{name:/^Mark .+ reviewed$/}).waitFor();
   assert.equal(await page.locator('.fbar button').count(),0);
   assert.match(await page.locator('.xdupes').innerText(),/byte-identical, verified by full hash/);
-  await page.getByRole('button',{name:'choose as keeper'}).click();
+  // Each copy is a row of the facts that tell it apart, not a big thumbnail.
+  const rows=page.locator('.xtable tbody tr');
+  assert.equal(await rows.count(),2);
+  assert.deepEqual((await rows.nth(1).locator('td').allInnerTexts()).slice(1,6),['FAMILY (2).JPG','JPG','0.1 KB','7 Sept 2010, '+new Date(Date.parse('2010-09-07T12:00:00Z')).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),'/archive/2010/2010-09/2010-09-07']);
+  assert.match(await rows.nth(0).locator('.xpath').innerText(),/2000\/2000-09\/2000-09-07$/);
+  assert.equal(await rows.nth(0).locator('.xpath .dim').innerText(),'/archive/','the folders both copies share are dimmed');
+  if(process.env.SHOTS)await page.locator('.xdupes').screenshot({path:`${process.env.SHOTS}/copy-group.png`});
+  await page.setViewportSize({width:390,height:844});
+  const wide=await page.evaluate(()=>[...document.querySelectorAll('.xdupes *')].filter(node=>node.getBoundingClientRect().right>391).slice(0,6).map(node=>`${node.tagName}.${node.className} ${Math.round(node.getBoundingClientRect().right)}`));
+  assert.deepEqual(wide,[],`the group fits a phone: ${JSON.stringify(wide)}`);
+  if(process.env.SHOTS)await page.locator('.xdupes').screenshot({path:`${process.env.SHOTS}/copy-group-phone.png`});
+  await page.setViewportSize({width:1440,height:900});
+  // A copy opens full size, and can be chosen from there.
+  await rows.nth(1).getByRole('button',{name:'Open FAMILY (2).JPG'}).click();
+  const box=page.getByRole('dialog',{name:'Preview of FAMILY (2).JPG'});
+  await box.waitFor();
+  assert.match(await box.locator('.lbtitle').innerText(),/JPG · 0\.1 KB · 7 Sept 2010/);
+  if(process.env.SHOTS)await page.screenshot({path:`${process.env.SHOTS}/copy-group-open.png`});
+  await page.keyboard.press('k');
+  await box.locator('.xstays').waitFor();
+  assert.equal(await rows.nth(1).getAttribute('class'),'keeper','K in the preview chose that copy');
+  await page.keyboard.press('Escape');
+  await box.waitFor({state:'hidden'});
+  // A click on a row chooses too.
+  await rows.nth(0).locator('.xname').click();
+  assert.equal(await rows.nth(0).getAttribute('class'),'keeper');
+  await page.getByRole('radio',{name:'Keep FAMILY (2).JPG'}).check();
   await page.getByRole('button',{name:/Keep the selected copy/}).click();
   await page.getByText(/verified copy marked for the Bin/).waitFor();
   assert.equal(writes.length,1);

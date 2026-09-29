@@ -13,6 +13,7 @@ import {shortLabel,usePageDate} from './DatePicker';
 import {dayName} from './goto';
 import {requestID,sendDecisions} from './decisions';
 import {historyKey,undoKeys,useHistory,type HistoryEntry,type Snapshot} from './history';
+import {CopyGroup} from './CopyGroup';
 import {fileFormat,setPaired,stackFormats,stackOf,stacksBehind} from './stacks';
 import {usePageFilters,type SortOption} from './SearchFilters';
 import {Snacks} from './Snacks';
@@ -213,7 +214,7 @@ export function Today({initial}:{initial:TodayData}){
       if(!response.ok)throw new Error(response.status===409?'One of these files changed. Reload before resolving this group.':'The duplicate choices could not be confirmed.');
       const results:{revision:number}[]=await response.json();
       binChanged();
-      flyToBin(group.members.filter(asset=>asset.id!==keeperID).map(asset=>document.querySelector(`.xgroup figure[data-asset="${asset.id}"]`)));
+      flyToBin(group.members.filter(asset=>asset.id!==keeperID).map(asset=>document.querySelector(`.xgroup tr[data-asset="${asset.id}"]`)));
       group.members.forEach((asset,index)=>patchAsset(asset.id,{status:asset.id===keeperID?'keep':'cull',favourite:asset.id===keeperID&&asset.favourite,revision:results[index].revision}));
       history.record({kind:'decisions',label:`resolved ${group.members.length} copies`,before:group.members.map(snapshot),after:changes.map(change=>({id:change.assetId,status:change.status as Status,favourite:change.favourite}))});
 	  setDuplicateGroups(current=>current.filter(item=>item.hash!==group.hash||item.size!==group.size));
@@ -429,7 +430,8 @@ export function Today({initial}:{initial:TodayData}){
   });
   useEffect(()=>{
     function key(event:KeyboardEvent){
-      if(viewer!==null||event.ctrlKey||event.metaKey||event.altKey||event.target instanceof HTMLButtonElement||typing(event.target))return;
+      // A copy opened full size from a duplicate group has the keys to itself.
+      if(viewer!==null||document.documentElement.classList.contains('rv-open')||event.ctrlKey||event.metaKey||event.altKey||event.target instanceof HTMLButtonElement||typing(event.target))return;
       // A selection's keys are the selection bar's.
       if(picking&&event.key!=='ArrowRight'&&event.key!=='ArrowLeft')return;
       const index=shown.findIndex(asset=>asset.id===selected);
@@ -530,15 +532,7 @@ export function Today({initial}:{initial:TodayData}){
     {years.length===0&&<p className="note">Nothing in the archive is filed under {initial.label}, so there is nothing to review.</p>}
     {duplicateGroups.length>0&&<section className="xdupes">
       <h2>Same file, different folders <small>{duplicateGroups.length} {duplicateGroups.length===1?'group':'groups'} · byte-identical, verified by full hash</small></h2>
-      {duplicateGroups.map(group=><div className="xgroup" key={`${group.hash}:${group.size}`}>
-        <p className="xmeta">{group.members.length} identical copies · {bytes(group.size)} each · <strong>{bytes(group.reclaimable)}</strong> reclaimable</p>
-        <div className="gal tight">{group.members.map(member=><figure className={`mo${(keepers[group.hash]??group.members[0].id)===member.id?' keeper':''}`} key={member.id} data-asset={member.id}>
-          <Media asset={member}/>
-          <div className="bdg"><button type="button" className="b keepchip" aria-pressed={(keepers[group.hash]??group.members[0].id)===member.id} disabled={saving} onClick={()=>setKeepers(current=>({...current,[group.hash]:member.id}))}>{(keepers[group.hash]??group.members[0].id)===member.id?'keep this one':'choose as keeper'}</button></div>
-          <figcaption className="cap"><span>{member.day}</span></figcaption>
-        </figure>)}</div>
-        <p className="xact"><button type="button" className="btn small danger" disabled={saving} onClick={()=>void resolveGroup(group)}>Keep the selected copy, mark the other {group.members.length-1} for the Bin</button><span className="hint">Nothing is deleted. The Bin remains separately reviewable and restorable.</span></p>
-      </div>)}
+      {duplicateGroups.map(group=><CopyGroup key={`${group.hash}:${group.size}`} group={group} keeperID={keepers[group.hash]??group.members[0].id} saving={saving} onChoose={id=>setKeepers(current=>({...current,[group.hash]:id}))} onResolve={()=>void resolveGroup(group)}/>)}
     </section>}
     {shownYears.filter(year=>filters.size===0||year.assets.some(asset=>shownIDs.has(asset.id))).map(year=>{
       const memories=year.assets.filter(asset=>!hidden.has(asset.id)).length;
