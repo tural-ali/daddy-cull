@@ -69,13 +69,13 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   assert.equal(await search.evaluate(input=>input===document.activeElement),false,'Esc in an empty field leaves it');
   assert.equal(posts.length,0,'nothing was restored by typing');
 
-  // The key opens the question; its buttons show Esc and Return, and Return
+  // The key opens the question; its buttons show Esc and Enter, and Enter
   // answers yes although the focus starts on Cancel.
   await page.keyboard.press('Shift+Backspace');
   const question=page.getByRole('dialog',{name:'Empty the Bin?'});
   await question.waitFor();
   assert.equal(await question.getByRole('button',{name:'Cancel'}).locator('kbd').innerText(),'Esc');
-  assert.equal(await question.getByRole('button',{name:'Empty the Bin'}).locator('kbd').innerText(),'↵');
+  assert.equal(await question.getByRole('button',{name:'Empty the Bin'}).locator('kbd').innerText(),mac?'↵':'Enter');
   assert.equal(await question.getByRole('button',{name:'Cancel'}).evaluate(button=>button===document.activeElement),true);
   if(shots)await page.screenshot({path:`${shots}/keys-dialog.png`});
   // Page keys wait while the question is open.
