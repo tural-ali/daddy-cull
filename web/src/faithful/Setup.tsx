@@ -33,6 +33,29 @@ export async function readSetup():Promise<SetupView>{
   return response.json() as Promise<SetupView>;
 }
 
+const same=(a:SetupConfig,b:SetupConfig)=>JSON.stringify(a)===JSON.stringify(b);
+
+/** Saves a change to the setup, then waits for Cull, which stops to take it up
+ * and is started again by launchd, to answer with it. The answer is compared
+ * with the setup as saved, since folders and addresses are tidied as they are
+ * saved. Null means Cull did not answer again within 30 seconds. */
+export async function saveSetup(change:{config:SetupConfig;immichKey?:string},onRestarting?:()=>void):Promise<SetupView|null>{
+  const response=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(change)});
+  if(!response.ok)throw new Error(await failure(response,'The setup could not be saved.'));
+  const saved=(await response.json() as SetupView).config;
+  onRestarting?.();
+  const started=Date.now();
+  await new Promise(resolve=>setTimeout(resolve,1200));
+  for(;;){
+    try{
+      const answer=await readSetup();
+      if(!answer.restarting&&same(answer.config,saved))return answer;
+    }catch{/* still starting */}
+    if(Date.now()-started>30000)return null;
+    await new Promise(resolve=>setTimeout(resolve,800));
+  }
+}
+
 function ago(value:string){
   const at=Date.parse(value);
   if(!Number.isFinite(at))return '';
@@ -68,6 +91,13 @@ function Field({id,label,hint,children}:{id:string;label:string;hint?:ReactNode;
     {children}
     {hint&&<p className="hint">{hint}</p>}
   </div>;
+}
+
+/** A Takeout folder beside the Import folder, out of Downloads, which macOS
+ * keeps from background apps. */
+function takeoutSuggestion(importFolder:string){
+  const parent=importFolder.replace(/\/+$/,'').split('/').slice(0,-1).join('/');
+  return parent?`${parent}/Takeout`:'/Users/you/Pictures/Daddy Cull/Takeout';
 }
 
 /** The day folder a photo taken on 14 August 2019 goes into. */
@@ -118,27 +148,15 @@ export function Setup({initial}:{initial:SetupView}){
     return()=>window.clearInterval(timer);
   },[waiting,saving]);
 
-  const changed=JSON.stringify(draft)!==JSON.stringify(view.config);
+  const changed=!same(draft,view.config);
 
   /** Saves the draft, then waits for Cull to come back with it. */
   const save=useCallback(async(config:SetupConfig):Promise<boolean>=>{
     setError('');setSaving('saving');
     try{
-      const response=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({config})});
-      if(!response.ok)throw new Error(await failure(response,'The setup could not be saved.'));
-      setSaving('restarting');
-      // Cull stops to take the change up and launchd starts it again. The
-      // page asks until the new process answers with the saved setup.
-      const started=Date.now();
-      await new Promise(resolve=>setTimeout(resolve,1200));
-      for(;;){
-        try{
-          const answer=await readSetup();
-          if(!answer.restarting&&JSON.stringify(answer.config)===JSON.stringify(config)){setView(answer);setDraft(answer.config);break}
-        }catch{/* still starting */}
-        if(Date.now()-started>30000){setSaving('gone');return false}
-        await new Promise(resolve=>setTimeout(resolve,800));
-      }
+      const answer=await saveSetup({config},()=>setSaving('restarting'));
+      if(!answer){setSaving('gone');return false}
+      setView(answer);setDraft(answer.config);
       setSaving('');
       return true;
     }catch(reason){setError((reason as Error).message);setSaving('');return false}
@@ -252,7 +270,7 @@ export function Setup({initial}:{initial:SetupView}){
     body=<>
       <p className="setuplead">Google Photos has no way for other apps to download a whole library any more, so photos come across in a Google Takeout export.</p>
       <Field id="takeout" label="Takeout folder" hint="Leave this empty if you do not use Google Photos.">
-        <input id="takeout" className="setupinput" value={draft.takeoutInbox} disabled={!editable||busy} spellCheck={false} autoComplete="off" placeholder="/Users/you/Downloads/Takeout" onChange={event=>set({takeoutInbox:event.target.value})}/>
+        <input id="takeout" className="setupinput" value={draft.takeoutInbox} disabled={!editable||busy} spellCheck={false} autoComplete="off" placeholder={takeoutSuggestion(draft.import)} onChange={event=>set({takeoutInbox:event.target.value})}/>
       </Field>
       <ol className="setuplist">
         <li>At <a href="https://takeout.google.com" target="_blank" rel="noreferrer">takeout.google.com</a>, deselect all, select Google Photos, and export as .zip or .tgz files.</li>

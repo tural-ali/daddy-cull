@@ -39,7 +39,9 @@ function server({configurable=true}={}){
       saves.push(config);
       if(!state.configurable)return route.fulfill({status:409,json:{error:'Cull was started without a config file, so its folders are set where it is started.'}});
       if(config.icloud.on&&!/@/.test(config.icloud.appleId))return route.fulfill({status:400,json:{error:'The Apple Account is the email address or phone number you sign in to iCloud with, such as sam@example.com.'}});
-      state.config=config;
+      // As Cull does, folders are saved without a trailing slash.
+      const tidy=folder=>folder.trim().replace(/(.)\/+$/,'$1');
+      state.config={...config,library:tidy(config.library),import:tidy(config.import),takeoutInbox:tidy(config.takeoutInbox)};
       down=2;
       return route.fulfill({status:202,json:{...state,restarting:true}});
     }
@@ -125,16 +127,21 @@ async function open(browser,options,viewport={width:1280,height:860},theme='nigh
   await page.locator('.setupsteps code',{hasText:'daddy-cull apple-photos import'}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Set up Cull Sync'}).count(),1);
 
-  // Google Photos: a Takeout folder turns the addon on.
+  // Google Photos: a Takeout folder turns the addon on. It is suggested beside
+  // the Import folder, and typed with a trailing slash, which Cull drops as it
+  // saves; the page goes on as soon as Cull answers with the folder as saved.
   await page.getByRole('button',{name:'Continue'}).click();
-  await page.getByLabel('Takeout folder').fill('/Users/sam/Downloads/Takeout');
+  assert.equal(await page.getByLabel('Takeout folder').getAttribute('placeholder'),`${home}/Takeout`);
+  await page.getByLabel('Takeout folder').fill('/Users/sam/Pictures/Takeout/');
+  const saving=Date.now();
   await page.getByRole('button',{name:'Save and continue'}).click();
-  await page.getByRole('button',{name:'Start culling'}).waitFor();
+  await page.getByRole('button',{name:'Start culling'}).waitFor({timeout:10000});
+  assert.ok(Date.now()-saving<8000,'a tidied folder does not leave the page waiting for Cull');
   assert.deepEqual(mock.addons,[{id:'google-photos',on:true}]);
   const summary=await page.locator('.setup .kv').textContent();
   assert.match(summary,/Library\/Users\/sam\/Family Photos/);
   assert.match(summary,/iCloud Photossam@example\.com, from 2024-01-01/);
-  assert.match(summary,/Google Takeout\/Users\/sam\/Downloads\/Takeout/);
+  assert.match(summary,/Google Takeout\/Users\/sam\/Pictures\/Takeout$/);
   if(shots)await page.screenshot({path:`${shots}/setup-done.png`,fullPage:true});
 
   // Done: saved as done, and the app opens on today, with no step left over.
