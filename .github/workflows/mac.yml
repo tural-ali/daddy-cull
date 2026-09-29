@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: ShellCheck
-        run: shellcheck -s bash install.sh mac/daddy-cull mac/test-cli.sh mac/test-install.sh mac/CullSync/setup.sh tools/version.sh tools/release.sh tools/release-notes.sh web/tests/run.sh
+        run: shellcheck -s bash install.sh mac/daddy-cull mac/test-cli.sh mac/test-install.sh mac/CullSync/setup.sh tools/version.sh tools/release.sh tools/release-notes.sh web/tests/run.sh examples/test-compose.sh
 
   cli:
     name: daddy-cull command and Cull Sync

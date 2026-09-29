@@ -16,7 +16,11 @@ COPY internal/ ./internal/
 # The Cull Sync sources are compiled into the binary, which serves them to the
 # Mac that runs the setup command.
 COPY mac/ ./mac/
-RUN CGO_ENABLED=1 go test ./... && go build -trimpath -o /out/cull ./cmd/cull && go build -trimpath -o /out/scale ./cmd/scale
+# VERSION is the release this is, from tools/version.sh; see docs/SERVER.md.
+ARG VERSION=dev
+RUN CGO_ENABLED=1 go test ./... \
+ && go build -trimpath -ldflags "-X main.version=${VERSION}" -o /out/cull ./cmd/cull \
+ && go build -trimpath -o /out/scale ./cmd/scale
 
 FROM alpine:3.24
 # ffmpeg decodes video frames and HEIC stills. An iPhone HEIC is a tiled grid

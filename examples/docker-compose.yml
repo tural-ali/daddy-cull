@@ -1,0 +1,74 @@
+# Daddy Cull on a server or NAS, as two containers: the web process, which
+# only reads the library, and the private writer, the only one that changes it.
+#
+#   cp examples/.env.example examples/.env   # then fill it in
+#   VERSION=$(tools/version.sh) docker compose -f examples/docker-compose.yml up -d --build
+#
+# See docs/SERVER.md.
+name: daddy-cull
+
+x-common: &common
+  build:
+    context: ..
+    args:
+      VERSION: ${VERSION:-dev}
+  image: daddy-cull:local
+  restart: unless-stopped
+  user: "${PUID:-1000}:${PGID:-1000}"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  environment:
+    CULL_BIN_KEY: ${CULL_BIN_KEY:?set CULL_BIN_KEY in examples/.env}
+    TZ: ${TZ:-Europe/London}
+
+services:
+  web:
+    <<: *common
+    command:
+      - -db=/state/library.db
+      - -preview-cache=/state/preview-cache
+      - -archive-media=/library
+      - -bin-upstream=http://writer:8831
+      - -listen=0.0.0.0:8830
+      - -demo-network
+    environment:
+      CULL_BIN_KEY: ${CULL_BIN_KEY:?set CULL_BIN_KEY in examples/.env}
+      TZ: ${TZ:-Europe/London}
+      # Optional: favourites set in Daddy Cull are set in Immich too.
+      IMMICH_URL: ${IMMICH_URL:-}
+      IMMICH_KEY: ${IMMICH_KEY:-}
+      IMMICH_PATH_PREFIX: ${IMMICH_PATH_PREFIX:-}
+    depends_on:
+      writer:
+        condition: service_healthy
+    ports:
+      # Bound to one address on your network. There is no login, so never
+      # publish this port to the internet.
+      - "${LISTEN_IP:-127.0.0.1}:${PORT:-8830}:8830"
+    volumes:
+      - ${STATE:?set STATE in examples/.env}:/state
+      - ${LIBRARY:?set LIBRARY in examples/.env}:/library:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    mem_limit: 2g
+
+  writer:
+    <<: *common
+    command:
+      - -writer
+      - -db=/state/library.db
+      - -archive-root=/library
+      - -import-dir=/import
+      - -listen=0.0.0.0:8831
+      - -demo-network
+    volumes:
+      - ${STATE:?set STATE in examples/.env}:/state
+      - ${LIBRARY:?set LIBRARY in examples/.env}:/library
+      - ${IMPORT:?set IMPORT in examples/.env}:/import
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "/app/cull", "-check-writer"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
