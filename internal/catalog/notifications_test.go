@@ -167,7 +167,7 @@ func TestPhoneDeletionMarksAreNotified(t *testing.T) {
 	if _, err := s.write.Exec("INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(7,'/archive/2026/2026-09/2026-09-26/IMG_0007.HEIC',1,'image',300,'archive')"); err != nil {
 		t.Fatal(err)
 	}
-	root := "/mnt/user/family-archive"
+	root := "/photos/library"
 	line := root + "/2026/2026-09/2026-09-26/IMG_0007.HEIC\t300\talex\t2026/09/26/IMG_0007.HEIC\t2026-09-28T00:00:00+00:00\n"
 	for range 2 {
 		if _, err := s.MarkPhoneDeletions(ctx, root, strings.NewReader(line)); err != nil {

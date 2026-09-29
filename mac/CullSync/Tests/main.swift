@@ -151,12 +151,12 @@ do {
 do {
     let config = SyncConfig.parse("""
     # Where the tool is
-    url = http://tower.example:8823/
+    url = http://cull.example:8823/
 
       token =  abc=def==
     other = ignored
     """)
-    expect(config.url == "http://tower.example:8823", "url trimmed of its slash, got \(config.url)")
+    expect(config.url == "http://cull.example:8823", "url trimmed of its slash, got \(config.url)")
     expect(config.token == "abc=def==", "token keeps its own equals signs")
     let empty = SyncConfig.parse("url =\ntoken =\n")
     expect(empty.url == SyncConfig.defaultURL && empty.token.isEmpty, "empty values fall back")

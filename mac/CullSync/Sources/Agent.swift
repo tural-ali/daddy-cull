@@ -123,7 +123,7 @@ actor Agent {
                     pause = 30
                 default:
                     await update { $0.connection = .unreachable }
-                    // Back off while the server is away, so a sleeping Tower or a
+                    // Back off while the server is away, so a sleeping server or a
                     // dropped VPN costs nothing, but come back quickly after a blip.
                     pause = wait
                     wait = min(wait * 2, 60)

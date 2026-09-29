@@ -1,4 +1,4 @@
-const {chromium}=require('playwright');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const assert=require('node:assert/strict');
 (async()=>{
  const b=await chromium.launch({channel:'chrome',headless:true});const page=await b.newPage();

@@ -20,7 +20,7 @@ import (
 // cache, keyed like every other derived file, and the archive is only read.
 
 // playableTimeout bounds one conversion. The longest clip in the archive, a
-// 448 MB AVI, converts in well under a minute on Tower.
+// 448 MB AVI, converts in well under a minute on a home NAS.
 const playableTimeout = 5 * time.Minute
 
 // converting holds one lock per copy, so a player's burst of range requests

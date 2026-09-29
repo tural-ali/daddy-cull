@@ -17,7 +17,7 @@ func skipAsRoot(t *testing.T) {
 
 // A folder the app may not change is found before anything moves, so the
 // photograph stays where it is and stays in the Bin, instead of a batch being
-// left half moved as it was on Tower when 895 folders belonged to another user.
+// left half moved, as it was on the first server Cull ran on, when 895 folders belonged to another user.
 func TestTrashRefusesAFolderItMayNotChangeBeforeMovingAnything(t *testing.T) {
 	skipAsRoot(t)
 	f := newTrashFixture(t)
@@ -45,7 +45,7 @@ func TestTrashRefusesAFolderItMayNotChangeBeforeMovingAnything(t *testing.T) {
 	}
 }
 
-// halfMoved leaves asset 1's batch the way Tower's was: the photograph in the
+// halfMoved leaves asset 1's batch the way that server's was: the photograph in the
 // Bin, its sidecar linked into the Bin but not yet removed from its folder.
 func halfMoved(t *testing.T, f trashFixture) string {
 	t.Helper()

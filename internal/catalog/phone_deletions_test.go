@@ -31,7 +31,7 @@ func TestPhoneDeletionsMarkWhatNobodyDecided(t *testing.T) {
 	if _, err := s.write.Exec("INSERT INTO file_state(asset_id,state,plan_id) VALUES(6,'moving','p1')"); err != nil {
 		t.Fatal(err)
 	}
-	root := "/mnt/user/family-archive"
+	root := "/photos/library"
 	line := func(name string, size int) string {
 		return root + "/2026/2026-09/2026-09-27/" + name + "\t" + strconv.Itoa(size) + "\tsam\t2026/09/27/" + name + "\t2026-09-28T01:00:00+00:00\n"
 	}

@@ -1,4 +1,4 @@
-const {chromium}=require('playwright');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const assert=require('node:assert/strict');
 // The Duplicates page laid out as Apple Photos: date headings newest first,
 // every copy on its own tile with its size, one preview read per set, and a

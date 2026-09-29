@@ -627,7 +627,7 @@ func TestLocalMediaReachesShadowedCopiesThroughTheReviewFarm(t *testing.T) {
 }
 
 // An iPhone HEIC is a grid of dozens of HEVC tiles, and by default every tile's
-// decoder starts a thread per core. On Tower that is hundreds of threads for one
+// decoder starts a thread per core. On a many-core NAS that is hundreds of threads for one
 // photograph, past the container's process limit, and every such tile came back
 // blank. One frame gains nothing from threading, so the decoder is held to one.
 func TestFrameExtractorIsHeldToOneThread(t *testing.T) {

@@ -44,7 +44,7 @@ func TestCatalogueGenerationFollowsFilesNotDecisions(t *testing.T) {
 	if got := generation(t, s); got != start+3 {
 		t.Fatalf("after a file removed: %d, want %d", got, start+3)
 	}
-	root := "/mnt/user/family-archive"
+	root := "/photos/library"
 	line := root + "/2026/2026-09/2026-09-26/IMG_0001.HEIC\t100\talex\t2026/09/26/IMG_0001.HEIC\t2026-09-28T00:00:00+00:00\n"
 	// Asset 1 is kept, so the phone deletion leaves it and nothing changes.
 	if _, err := s.MarkPhoneDeletions(ctx, root, strings.NewReader(line)); err != nil {

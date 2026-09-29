@@ -24,7 +24,7 @@ import (
 	"daddy-cull/next/mac"
 )
 
-const fakeBase = "http://tower.example.test:8830"
+const fakeBase = "http://cull.example.test:8830"
 
 var tokenLine = regexp.MustCompile(`(?m)^CULL_SYNC_TOKEN='([^']*)'$`)
 
@@ -229,7 +229,7 @@ func TestPhotosSetupRefusesWhileApplyingAndKeepsTheCode(t *testing.T) {
 
 func TestPhotosSetupOnlyUsesPlainAddresses(t *testing.T) {
 	h, _ := setupHub(t, testStore(t), "")
-	for _, base := range []string{"http://tower'$(id)", "http://a b", "ftp://tower", "http://", "http://tower/path", "http://tower:8830\nx"} {
+	for _, base := range []string{"http://cull'$(id)", "http://a b", "ftp://cull", "http://", "http://cull/path", "http://cull:8830\nx"} {
 		if _, err := h.NewSetup(base); err == nil {
 			t.Fatalf("accepted %q", base)
 		}
