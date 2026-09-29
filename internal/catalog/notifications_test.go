@@ -50,6 +50,16 @@ func TestArrivalsReopenReviewedDaysWithARedDot(t *testing.T) {
 		return id
 	}
 
+	// The first scan reads the library as it already was: nothing in it is news.
+	write("2010/2010-01/2010-01-01/OLD.JPG")
+	scan()
+	if list, err := s.ListNotifications(ctx, 10); err != nil || list.Unread != 0 || len(list.Items) != 0 {
+		t.Fatalf("first scan notified %+v (%v), want nothing", list, err)
+	}
+	if got := cell("01-01").Fresh; got != 0 {
+		t.Fatalf("first scan: fresh %d, want 0", got)
+	}
+
 	write("2026/2026-09/2026-09-26/IMG_0001.HEIC")
 	write("2026/2026-09/2026-09-26/IMG_0002.HEIC")
 	write("2019/2019-09/2019-09-27/IMG_0100.HEIC")
@@ -222,6 +232,8 @@ func TestOpeningADateClearsItsRedDot(t *testing.T) {
 		return dates["09-26"], shown
 	}
 
+	// Already in the library when it was first read, so not new.
+	write("2010/2010-01/2010-01-01/OLD.JPG")
 	write("2026/2026-09/2026-09-26/IMG_0001.HEIC")
 	write("2025/2025-09/2025-09-26/IMG_0002.HEIC")
 	n, shown := fresh()

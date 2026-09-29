@@ -219,6 +219,11 @@ func (s *Store) ScanArchive(ctx context.Context, root string) (ArchiveScanResult
 			return result, err
 		}
 	}
+	// The first scan of a library reads what was already there; only what
+	// reaches it afterwards is new, with a notification and a red dot.
+	if len(known) == 0 {
+		arrivals = nil
+	}
 	if err = recordArrivalsTx(ctx, tx, arrivals, time.Now()); err != nil {
 		return result, err
 	}
