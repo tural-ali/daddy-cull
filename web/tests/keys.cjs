@@ -40,6 +40,8 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   });
   const tip=page.getByRole('tooltip');
   const tipText=async()=>(await tip.innerText()).replace(/\s+/g,' ').trim();
+  // The app draws Mac key symbols on a Mac and key names elsewhere.
+  const mac=await page.evaluate(()=>/Mac|iPhone|iPad/.test(navigator.platform));
   await page.goto(`${base}/bin`);
   await page.locator('.bingrid figure').nth(2).waitFor();
 
@@ -48,7 +50,7 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   assert.equal(await empty.getAttribute('aria-keyshortcuts'),'Shift+Delete');
   await empty.hover();
   await tip.waitFor();
-  assert.equal(await tipText(),'Empty Bin ⇧ ⌫');
+  assert.equal(await tipText(),mac?'Empty Bin ⇧ ⌫':'Empty Bin Shift Del','keys are drawn the way this machine labels them');
   const [box,tipBox]=[await empty.boundingBox(),await tip.boundingBox()];
   assert.ok(tipBox.y>=box.y+box.height&&tipBox.y-(box.y+box.height)<12,'the tip sits just under the button');
   assert.ok(tipBox.x+tipBox.width<=1440-8,'and stays on screen at the right edge');
@@ -99,7 +101,7 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   // Moving along the row shows the next tip at once.
   await bar.getByRole('button',{name:'Delete for good'}).hover();
   await page.waitForTimeout(150);
-  assert.equal(await tipText(),'Delete for good ⌫');
+  assert.equal(await tipText(),mac?'Delete for good ⌫':'Delete for good Del');
   if(shots)await page.screenshot({path:`${shots}/keys-selection.png`,clip:{x:900,y:0,width:540,height:140}});
   await page.mouse.move(700,500);
   await page.keyboard.press('r');

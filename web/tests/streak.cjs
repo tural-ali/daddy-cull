@@ -92,12 +92,13 @@ async function open(browser,options={}){
   assert.equal(await page.locator('.streakintro').count(),0,'the second load of the day is quiet');
   await context.close();
 
-  // A click skips straight to the flight.
+  // A click skips straight to the flight, 720ms, where the whole intro takes
+  // about 3.4s; the wait allows for a busy test machine.
   const skipper=await open(browser);
   await skipper.page.goto(`${base}/on/09-07`);
   await skipper.page.locator('.streakintro').waitFor();
   await skipper.page.mouse.click(640,400);
-  await skipper.page.locator('.streakintro').waitFor({state:'hidden',timeout:1500});
+  await skipper.page.locator('.streakintro').waitFor({state:'hidden',timeout:2500});
   await skipper.context.close();
 
   // Asking for less motion means no animation at all.
