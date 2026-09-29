@@ -207,7 +207,9 @@ app() {
   mkdir -p "$STATE/app"
   rm -rf "$into.new"
   if [ -n "$SOURCE" ]; then build "$into.new"; else download "$into.new"; fi
-  [ -x "$into.new/bin/cull" ] && [ -f "$into.new/web/index.html" ] || fail "the new version is incomplete."
+  if [ ! -x "$into.new/bin/cull" ] || [ ! -f "$into.new/web/index.html" ]; then
+    fail "the new version is incomplete."
+  fi
   chmod 755 "$into.new/bin/cull" "$into.new/bin/daddy-cull"
   rm -rf "$into"
   mv "$into.new" "$into"

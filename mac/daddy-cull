@@ -91,7 +91,9 @@ status_file() {
 
 status_value() {
   local file=$1 key=$2
-  [ -f "$file" ] && plutil -extract "$key" raw -o - "$file" 2>/dev/null || true
+  if [ -f "$file" ]; then
+    plutil -extract "$key" raw -o - "$file" 2>/dev/null || true
+  fi
 }
 
 # ---------------------------------------------------------------- services
@@ -295,7 +297,7 @@ cmd_icloud_install() {
   mkdir -p "$UV_CACHE_DIR"
   local wheel="$UV_CACHE_DIR/$ICLOUDPD_WHEEL"
   if [ ! -f "$wheel" ] || [ "$(shasum -a 256 "$wheel" | cut -d' ' -f1)" != "$ICLOUDPD_SHA256" ]; then
-    say "Downloading icloudpd $ICLOUDPD_VERSION…"
+    say "Downloading icloudpd ${ICLOUDPD_VERSION}…"
     curl -fsSL "$ICLOUDPD_URL" -o "$wheel.part" || fail "could not download icloudpd."
     [ "$(shasum -a 256 "$wheel.part" | cut -d' ' -f1)" = "$ICLOUDPD_SHA256" ] || {
       rm -f "$wheel.part"
@@ -420,7 +422,7 @@ cmd_icloud_run() {
 
 cmd_apple_photos_install() {
   command -v uv >/dev/null 2>&1 || fail "uv is missing. Run install.sh again, which installs it."
-  say "Installing osxphotos $OSXPHOTOS_VERSION…"
+  say "Installing osxphotos ${OSXPHOTOS_VERSION}…"
   uv tool install --quiet --force --python "$PYTHON_VERSION" "osxphotos==$OSXPHOTOS_VERSION"
   "$UV_TOOL_BIN_DIR/osxphotos" version >/dev/null || fail "osxphotos was installed but does not start."
   say "osxphotos $OSXPHOTOS_VERSION is installed."
