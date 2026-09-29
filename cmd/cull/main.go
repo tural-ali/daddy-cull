@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -29,6 +30,7 @@ import (
 )
 
 func main() {
+	configFile := flag.String("config", "", "config.json written by install.sh and changed from the Setup page; it fills in every flag not given here, and Cull stops when it changes so launchd starts it again")
 	writer := flag.Bool("writer", false, "run only the private Bin filesystem service")
 	writerRoot := flag.String("archive-root", "/archive", "writer archive root")
 	disksRoot := flag.String("disks-root", "", "guarded physical-disk root for imported legacy Bin records")
@@ -36,7 +38,8 @@ func main() {
 	upgradesRoot := flag.String("upgrades-root", "", "guarded read-only Takeout upgrade staging root")
 	takeoutInbox := flag.String("takeout-inbox", "", "read-only folder that Google Takeout exports of Google Photos are dropped into; both processes need it")
 	importDir := flag.String("import-dir", "", "folder new photos are dropped into; the writer files each under the day it was taken in -archive-root and catalogues it")
-	icloudDir := flag.String("icloud-dir", "", "folder icloudpd downloads into, outside the import folder and the library; the writer files its photos like the import folder's and leaves an empty placeholder of each, so icloudpd does not download it again; needs -import-dir")
+	var downloadDirs folderList
+	flag.Var(&downloadDirs, "download-dir", "folder a downloader such as icloudpd fills, outside the import folder and the library; the writer files its photos like the import folder's and leaves an empty placeholder of each, so it is not downloaded again; may be given more than once; needs -import-dir")
 	folderMode := flag.String("folder-mode", "0777", "octal mode the writer gives the day folders it makes; 0777 suits a shared NAS, 0755 a library only its owner uses")
 	binUpstream := flag.String("bin-upstream", "", "private Bin service URL")
 	checkWriter := flag.Bool("check-writer", false, "check local private Bin service")
@@ -74,6 +77,10 @@ func main() {
 	immichURL := flag.String("immich-url", os.Getenv("IMMICH_URL"), "Immich base URL that archive favourites are mirrored to; empty disables the sync")
 	immichPrefix := flag.String("immich-path-prefix", os.Getenv("IMMICH_PATH_PREFIX"), "archive path as Immich's external library recorded it; needed with -immich-url")
 	flag.Parse()
+	var setupConfig catalog.SetupConfig
+	if *configFile != "" {
+		setupConfig = applyConfig(*configFile, *writer, &downloadDirs)
+	}
 	imports := 0
 	for _, value := range []string{*importFile, *importEvidence, *importLegacy, *importScreenshots, *importUpgrades, *importSocial, *scanArchive, *phoneDeletions} {
 		if value != "" {
@@ -286,15 +293,15 @@ func main() {
 				log.Fatal(intakeErr)
 			}
 			defer intake.Close()
-			if *icloudDir != "" {
-				if mirrorErr := intake.Mirror(*icloudDir); mirrorErr != nil {
+			for _, dir := range downloadDirs {
+				if mirrorErr := intake.Mirror(dir); mirrorErr != nil {
 					log.Fatal(mirrorErr)
 				}
 			}
 			mux.Handle("/intake/", intake.Handler(secret))
 			go intake.Keep(ctx)
-		} else if *icloudDir != "" {
-			log.Fatal("-icloud-dir needs -import-dir: its photos are filed by the same writer")
+		} else if len(downloadDirs) > 0 {
+			log.Fatal("-download-dir needs -import-dir: its photos are filed by the same writer")
 		} else if forgetErr := s.ForgetIntake(ctx); forgetErr != nil {
 			log.Fatal(forgetErr)
 		}
@@ -305,6 +312,9 @@ func main() {
 		// Files deleted from the Bin wait out their grace period on disk; only
 		// this process may delete them, so the reaper runs here.
 		trash.StartReaper(ctx)
+		if *configFile != "" {
+			go catalog.Watch(ctx, *configFile, stop)
+		}
 		mux.Handle("/", engine.Handler(secret))
 	} else {
 		// A local read-only mount is preferred when one is given: it needs no
@@ -328,6 +338,12 @@ func main() {
 		book := api.NewBook()
 		apiMux := api.NewMux(book)
 		apiMux.Guard(api.SameOrigin)
+		fixed := catalog.SetupConfig{Library: *archiveMedia, TakeoutInbox: *takeoutInbox, Immich: catalog.SetupImmich{URL: *immichURL, PathPrefix: *immichPrefix}}
+		if *configFile != "" {
+			fixed = setupConfig
+		}
+		// A change on the Setup page stops Cull, and launchd starts it again.
+		catalog.NewSetup(*configFile, fixed, stop).Routes(apiMux)
 		// The Mac helper that carries culling across to Apple Photos talks to
 		// this process, which is also where its jobs live. Its key is normally
 		// handed out by the setup command on the Apple Photos page and only its
@@ -436,6 +452,75 @@ func main() {
 // resolveTool turns a frame-extractor name into an absolute path once at start
 // up, so nothing later resolves a bare command name against PATH. An empty name,
 // or one that is not on this machine, simply disables video previews.
+// applyConfig fills every flag not given on the command line from the config
+// file, makes the folders it names, and takes the writer's key and Immich's
+// from secrets.env beside it when the environment has none.
+func applyConfig(file string, writer bool, downloads *folderList) catalog.SetupConfig {
+	config, err := catalog.ReadSetup(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+	given := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	use := func(name, value string) {
+		if value == "" || given[name] {
+			return
+		}
+		if err := flag.Set(name, value); err != nil {
+			log.Fatalf("%s: %s: %v", file, name, err)
+		}
+	}
+	state := catalog.StateDir(file)
+	use("db", filepath.Join(state, "library.db"))
+	use("preview-cache", filepath.Join(state, "preview-cache"))
+	use("addons-dir", filepath.Join(state, "addons"))
+	use("takeout-inbox", config.TakeoutInbox)
+	use("immich-url", config.Immich.URL)
+	use("immich-path-prefix", config.Immich.PathPrefix)
+	if writer {
+		use("listen", "127.0.0.1:8831")
+		use("archive-root", config.Library)
+		use("import-dir", config.Import)
+		use("folder-mode", fmt.Sprintf("%#o", config.FolderMode()))
+		if config.ICloud.On && !given["download-dir"] {
+			*downloads = append(*downloads, catalog.ICloudDownloads(file))
+		}
+		for _, folder := range append([]string{config.Library, config.Import}, *downloads...) {
+			if folder == "" {
+				continue
+			}
+			if err := os.MkdirAll(folder, 0o755); err != nil {
+				log.Fatal(err)
+			}
+		}
+	} else {
+		use("archive-media", config.Library)
+		use("bin-upstream", "http://127.0.0.1:8831")
+	}
+	if body, err := os.ReadFile(filepath.Join(state, "secrets.env")); err == nil {
+		for _, line := range strings.Split(string(body), "\n") {
+			name, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+			if ok && (name == "CULL_BIN_KEY" || name == "IMMICH_KEY") && os.Getenv(name) == "" && value != "" {
+				os.Setenv(name, value)
+			}
+		}
+	}
+	return config
+}
+
+// folderList is a flag that may be given more than once.
+type folderList []string
+
+func (f *folderList) String() string { return strings.Join(*f, ",") }
+
+func (f *folderList) Set(value string) error {
+	if value == "" {
+		return fmt.Errorf("a folder is needed")
+	}
+	*f = append(*f, value)
+	return nil
+}
+
 func resolveTool(name string) string {
 	if name == "" {
 		return ""

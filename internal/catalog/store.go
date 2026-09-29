@@ -5,10 +5,29 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
+	"syscall"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+// lockOpening holds a lock beside the catalogue until the returned function
+// is called.
+func lockOpening(path string) (func(), error) {
+	lock, err := os.OpenFile(path+".open-lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		lock.Close()
+		return nil, err
+	}
+	return func() {
+		syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+		lock.Close()
+	}, nil
+}
 
 // This application ID keeps the prototype from migrating a legacy catalogue.
 const applicationID = 1129663538
@@ -26,6 +45,15 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The web process and the writer open the same catalogue, often at the
+	// same moment when they start together. Switching a new file to WAL and
+	// making or migrating its tables take locks that do not wait, so one
+	// process opens at a time.
+	unlock, err := lockOpening(abs)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 	u := url.URL{Scheme: "file", Path: abs}
 	base := u.String()
 	w, err := sql.Open("sqlite3", base+"?mode=rwc&_busy_timeout=3000&_foreign_keys=on")

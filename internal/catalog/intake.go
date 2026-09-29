@@ -42,6 +42,7 @@ const IntakeDuplicates = "Already in the library"
 // only once it has stopped changing, so a copy still arriving is left alone.
 const (
 	intakeEvery  = time.Minute
+	intakeRescan = time.Hour
 	intakeSettle = 5 * time.Second
 	intakeStatus = "intake_status"
 	// exiftool is given this many files at a time.
@@ -81,7 +82,7 @@ type CaptureDater func(ctx context.Context, files []string) (map[string]time.Tim
 type IntakeWriter struct {
 	s           *Store
 	inbox       *intakeSource
-	mirror      *intakeSource
+	mirrors     []*intakeSource
 	archive     *os.Root
 	archivePath string
 	date        CaptureDater
@@ -137,24 +138,22 @@ func (w *IntakeWriter) Mirror(root string) error {
 		return fmt.Errorf("download folder %s: %w", root, err)
 	}
 	resolved, _ := filepath.EvalSymlinks(filepath.Clean(root))
-	for _, other := range []string{w.inbox.path, w.archivePath} {
+	others := []string{w.inbox.path, w.archivePath}
+	for _, m := range w.mirrors {
+		others = append(others, m.path)
+	}
+	for _, other := range others {
 		if within(resolved, other) || within(other, resolved) {
 			mirror.Close()
-			return fmt.Errorf("the download folder must not be inside the import folder or the library, nor they inside it")
+			return fmt.Errorf("the download folder %s must not be inside the import folder, the library or another download folder, nor they inside it", root)
 		}
 	}
-	if w.mirror != nil {
-		w.mirror.root.Close()
-	}
-	w.mirror = &intakeSource{root: mirror, path: resolved, placeholders: true}
+	w.mirrors = append(w.mirrors, &intakeSource{root: mirror, path: resolved, placeholders: true})
 	return nil
 }
 
 func (w *IntakeWriter) sources() []*intakeSource {
-	if w.mirror == nil {
-		return []*intakeSource{w.inbox}
-	}
-	return []*intakeSource{w.inbox, w.mirror}
+	return append([]*intakeSource{w.inbox}, w.mirrors...)
 }
 
 func within(child, parent string) bool {
@@ -165,8 +164,8 @@ func within(child, parent string) bool {
 // Close releases both folders.
 func (w *IntakeWriter) Close() error {
 	first := w.inbox.root.Close()
-	if w.mirror != nil {
-		w.mirror.root.Close()
+	for _, m := range w.mirrors {
+		m.root.Close()
 	}
 	if second := w.archive.Close(); first == nil {
 		return second
@@ -183,9 +182,20 @@ func (w *IntakeWriter) Wake() {
 }
 
 // Keep looks at the Import folder every minute, and whenever woken, until
-// ctx ends.
+// ctx ends. It also catalogues the library when it starts and every hour
+// after, so photos put straight into a day folder, or a library that was
+// there before Cull, wait for review too.
 func (w *IntakeWriter) Keep(ctx context.Context) {
+	var scanned time.Time
 	for {
+		if time.Since(scanned) > intakeRescan {
+			if result, err := w.s.ScanArchive(ctx, w.archivePath); err != nil && ctx.Err() == nil {
+				log.Printf("cataloguing the library: %v", err)
+			} else if result.Added > 0 {
+				log.Printf("catalogued %d files found in the library", result.Added)
+			}
+			scanned = time.Now()
+		}
 		if _, err := w.Pass(ctx); err != nil && ctx.Err() == nil {
 			log.Printf("import folder: %v", err)
 		}
