@@ -36,6 +36,7 @@ func main() {
 	upgradesRoot := flag.String("upgrades-root", "", "guarded read-only Takeout upgrade staging root")
 	takeoutInbox := flag.String("takeout-inbox", "", "read-only folder that Google Takeout exports of Google Photos are dropped into; both processes need it")
 	importDir := flag.String("import-dir", "", "folder new photos are dropped into; the writer files each under the day it was taken in -archive-root and catalogues it")
+	icloudDir := flag.String("icloud-dir", "", "folder icloudpd downloads into, outside the import folder and the library; the writer files its photos like the import folder's and leaves an empty placeholder of each, so icloudpd does not download it again; needs -import-dir")
 	folderMode := flag.String("folder-mode", "0777", "octal mode the writer gives the day folders it makes; 0777 suits a shared NAS, 0755 a library only its owner uses")
 	binUpstream := flag.String("bin-upstream", "", "private Bin service URL")
 	checkWriter := flag.Bool("check-writer", false, "check local private Bin service")
@@ -285,8 +286,15 @@ func main() {
 				log.Fatal(intakeErr)
 			}
 			defer intake.Close()
+			if *icloudDir != "" {
+				if mirrorErr := intake.Mirror(*icloudDir); mirrorErr != nil {
+					log.Fatal(mirrorErr)
+				}
+			}
 			mux.Handle("/intake/", intake.Handler(secret))
 			go intake.Keep(ctx)
+		} else if *icloudDir != "" {
+			log.Fatal("-icloud-dir needs -import-dir: its photos are filed by the same writer")
 		} else if forgetErr := s.ForgetIntake(ctx); forgetErr != nil {
 			log.Fatal(forgetErr)
 		}

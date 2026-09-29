@@ -219,6 +219,49 @@ func TestIntakeCopiesAcrossDisks(t *testing.T) {
 	}
 }
 
+func TestIntakeLeavesPlaceholdersInADownloadFolder(t *testing.T) {
+	f := newIntakeFixture(t)
+	downloads := t.TempDir()
+	if err := f.w.Mirror(downloads); err != nil {
+		t.Fatal(err)
+	}
+	day := filepath.Join(f.archive, "2019/2019-08/2019-08-14")
+	writeFile(t, day, "IMG_0009.JPG", "already filed")
+	f.dated["IMG_0010_AbCdEfG.HEIC"] = time.Date(2019, 8, 14, 12, 0, 0, 0, time.Local)
+	f.dated["IMG_0009_AbCdEfH.JPG"] = time.Date(2019, 8, 14, 12, 0, 0, 0, time.Local)
+	writeFile(t, downloads, "IMG_0010_AbCdEfG.HEIC", "downloaded")
+	writeFile(t, downloads, "IMG_0009_AbCdEfH.JPG", "already filed")
+	writeFile(t, downloads, "abcdef.part", "still downloading")
+
+	status := f.pass(t)
+	if status.Filed != 1 || status.Duplicates != 0 || status.Unsupported != 0 || status.Problem != "" {
+		t.Fatalf("status = %+v", status)
+	}
+	if got := readText(t, filepath.Join(day, "IMG_0010_AbCdEfG.HEIC")); got != "downloaded" {
+		t.Fatalf("filed = %q", got)
+	}
+	// Each leaves an empty file of its name, which the downloader takes as
+	// already downloaded.
+	for _, name := range []string{"IMG_0010_AbCdEfG.HEIC", "IMG_0009_AbCdEfH.JPG"} {
+		if got := readText(t, filepath.Join(downloads, name)); got != "" {
+			t.Errorf("%s holds %q, want an empty placeholder", name, got)
+		}
+	}
+	if got := readText(t, filepath.Join(downloads, "abcdef.part")); got != "still downloading" {
+		t.Fatalf("the download in progress was touched: %q", got)
+	}
+	if again := f.pass(t); again.Filed != 0 || again.Waiting != 0 {
+		t.Fatalf("second look = %+v", again)
+	}
+	inside := filepath.Join(f.archive, "iCloud")
+	if err := os.Mkdir(inside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.w.Mirror(inside); err == nil || !strings.Contains(err.Error(), "must not be inside") {
+		t.Fatal("a download folder inside the library was accepted")
+	}
+}
+
 func TestIntakeStatusReachesTheWebProcess(t *testing.T) {
 	f := newIntakeFixture(t)
 	secret := strings.Repeat("k", 32)

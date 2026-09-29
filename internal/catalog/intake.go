@@ -80,9 +80,9 @@ type CaptureDater func(ctx context.Context, files []string) (map[string]time.Tim
 // private writer, the only process that may change the library.
 type IntakeWriter struct {
 	s           *Store
-	inbox       *os.Root
+	inbox       *intakeSource
+	mirror      *intakeSource
 	archive     *os.Root
-	inboxPath   string
 	archivePath string
 	date        CaptureDater
 	link        func(oldname, newname string) error
@@ -111,9 +111,50 @@ func NewIntakeWriter(s *Store, inboxRoot, archiveRoot, dateTool string) (*Intake
 		archive.Close()
 		return nil, fmt.Errorf("the import folder and the library must not be inside each other")
 	}
-	w := &IntakeWriter{s: s, inbox: inbox, archive: archive, inboxPath: inboxPath, archivePath: archivePath,
+	w := &IntakeWriter{s: s, inbox: &intakeSource{root: inbox, path: inboxPath}, archive: archive, archivePath: archivePath,
 		date: exiftoolDater(dateTool), link: os.Link, settle: intakeSettle, wake: make(chan struct{}, 1)}
 	return w, nil
+}
+
+// intakeSource is a folder photos are filed from.
+type intakeSource struct {
+	root *os.Root
+	path string
+	// placeholders marks a folder a downloader fills, such as icloudpd's: each
+	// file filed from it leaves an empty file of the same name, so the
+	// downloader, which only asks whether a file of that name is there, does
+	// not fetch it again.
+	placeholders bool
+}
+
+// Mirror adds a folder a downloader fills, such as icloudpd's, whose photos
+// are filed like the Import folder's. Each one filed leaves an empty
+// placeholder of its name, and one the library already holds, byte for byte,
+// is replaced by its placeholder, since the library's copy is the same file.
+func (w *IntakeWriter) Mirror(root string) error {
+	mirror, err := openGuardedRoot(root)
+	if err != nil {
+		return fmt.Errorf("download folder %s: %w", root, err)
+	}
+	resolved, _ := filepath.EvalSymlinks(filepath.Clean(root))
+	for _, other := range []string{w.inbox.path, w.archivePath} {
+		if within(resolved, other) || within(other, resolved) {
+			mirror.Close()
+			return fmt.Errorf("the download folder must not be inside the import folder or the library, nor they inside it")
+		}
+	}
+	if w.mirror != nil {
+		w.mirror.root.Close()
+	}
+	w.mirror = &intakeSource{root: mirror, path: resolved, placeholders: true}
+	return nil
+}
+
+func (w *IntakeWriter) sources() []*intakeSource {
+	if w.mirror == nil {
+		return []*intakeSource{w.inbox}
+	}
+	return []*intakeSource{w.inbox, w.mirror}
 }
 
 func within(child, parent string) bool {
@@ -123,7 +164,10 @@ func within(child, parent string) bool {
 
 // Close releases both folders.
 func (w *IntakeWriter) Close() error {
-	first := w.inbox.Close()
+	first := w.inbox.root.Close()
+	if w.mirror != nil {
+		w.mirror.root.Close()
+	}
 	if second := w.archive.Close(); first == nil {
 		return second
 	}
@@ -155,6 +199,7 @@ func (w *IntakeWriter) Keep(ctx context.Context) {
 }
 
 type intakeFile struct {
+	src   *intakeSource
 	rel   string
 	size  int64
 	mod   time.Time
@@ -187,12 +232,12 @@ func intakeStem(name string) string {
 var stillExtensions = map[string]bool{"heic": true, "heif": true, "jpg": true, "jpeg": true, "png": true, "gif": true, "webp": true, "avif": true, "tif": true, "tiff": true,
 	"arw": true, "dng": true, "cr2": true, "nef": true, "raf": true, "orf": true}
 
-// look lists the Import folder: the media and sidecars in it, and how many
-// other files it holds.
-func (w *IntakeWriter) look(ctx context.Context) (map[string]intakeFile, int, int, error) {
+// look lists one folder: the media and sidecars in it, and how many other
+// files it holds.
+func (w *IntakeWriter) look(ctx context.Context, src *intakeSource) (map[string]intakeFile, int, int, error) {
 	files := map[string]intakeFile{}
 	unsupported, duplicates := 0, 0
-	err := fs.WalkDir(w.inbox.FS(), ".", func(rel string, entry fs.DirEntry, err error) error {
+	err := fs.WalkDir(src.root.FS(), ".", func(rel string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -209,8 +254,8 @@ func (w *IntakeWriter) look(ctx context.Context) (map[string]intakeFile, int, in
 			return nil
 		}
 		if entry.IsDir() {
-			if rel == IntakeDuplicates {
-				duplicates += countFiles(w.inbox, rel)
+			if rel == IntakeDuplicates && !src.placeholders {
+				duplicates += countFiles(src.root, rel)
 				return fs.SkipDir
 			}
 			return nil
@@ -219,6 +264,10 @@ func (w *IntakeWriter) look(ctx context.Context) (map[string]intakeFile, int, in
 			return nil
 		}
 		ext := strings.ToLower(strings.TrimPrefix(path.Ext(entry.Name()), "."))
+		// icloudpd downloads into a .part file and renames it when done.
+		if src.placeholders && ext == "part" {
+			return nil
+		}
 		if !archiveMediaExtensions[ext] && !intakeSidecars[ext] {
 			unsupported++
 			return nil
@@ -230,7 +279,10 @@ func (w *IntakeWriter) look(ctx context.Context) (map[string]intakeFile, int, in
 		if err != nil {
 			return err
 		}
-		files[rel] = intakeFile{rel: rel, size: info.Size(), mod: info.ModTime(), ext: ext, still: stillExtensions[ext]}
+		if src.placeholders && info.Size() == 0 {
+			return nil
+		}
+		files[rel] = intakeFile{src: src, rel: rel, size: info.Size(), mod: info.ModTime(), ext: ext, still: stillExtensions[ext]}
 		return nil
 	})
 	return files, unsupported, duplicates, err
@@ -252,8 +304,29 @@ func countFiles(root *os.Root, dir string) int {
 func (w *IntakeWriter) Pass(ctx context.Context) (IntakeStatus, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	status := IntakeStatus{Folder: w.inboxPath}
-	status, err := w.pass(ctx, status)
+	status := IntakeStatus{Folder: w.inbox.path}
+	var problems []string
+	for _, src := range w.sources() {
+		if err := w.pass(ctx, src, &status); err != nil {
+			if ctx.Err() != nil {
+				problems = []string{ctx.Err().Error()}
+				break
+			}
+			problems = append(problems, err.Error())
+		}
+	}
+	if _, _, duplicates, err := w.look(ctx, w.inbox); err == nil {
+		status.Duplicates = duplicates
+	}
+	if status.Filed > 0 && ctx.Err() == nil {
+		if _, err := w.s.ScanArchive(ctx, w.archivePath); err != nil {
+			problems = append(problems, "cataloguing the library: "+err.Error())
+		}
+	}
+	var err error
+	if len(problems) > 0 {
+		err = errors.New(strings.Join(problems, "; "))
+	}
 	status.LastRun = time.Now().UTC().Format(time.RFC3339)
 	if err != nil {
 		status.Problem = err.Error()
@@ -266,25 +339,24 @@ func (w *IntakeWriter) Pass(ctx context.Context) (IntakeStatus, error) {
 	return status, err
 }
 
-func (w *IntakeWriter) pass(ctx context.Context, status IntakeStatus) (IntakeStatus, error) {
-	first, unsupported, _, err := w.look(ctx)
+func (w *IntakeWriter) pass(ctx context.Context, src *intakeSource, status *IntakeStatus) error {
+	first, unsupported, _, err := w.look(ctx, src)
 	if err != nil {
-		return status, err
+		return err
 	}
-	status.Unsupported = unsupported
+	status.Unsupported += unsupported
 	if len(first) == 0 {
-		_, _, status.Duplicates, _ = w.look(ctx)
-		return status, nil
+		return nil
 	}
 	// A file still being copied in changes between two looks.
 	select {
 	case <-ctx.Done():
-		return status, ctx.Err()
+		return ctx.Err()
 	case <-time.After(w.settle):
 	}
-	second, _, _, err := w.look(ctx)
+	second, _, _, err := w.look(ctx, src)
 	if err != nil {
-		return status, err
+		return err
 	}
 	ready := map[string]intakeFile{}
 	for rel, file := range second {
@@ -306,9 +378,9 @@ func (w *IntakeWriter) pass(ctx context.Context, status IntakeStatus) (IntakeSta
 			}
 		}
 	}
-	taken, err := w.dates(ctx, groups)
+	taken, err := w.dates(ctx, src, groups)
 	if err != nil {
-		return status, err
+		return err
 	}
 	keys := make([]string, 0, len(groups))
 	for key := range groups {
@@ -323,19 +395,15 @@ func (w *IntakeWriter) pass(ctx context.Context, status IntakeStatus) (IntakeSta
 		status.Filed += filed
 		if err != nil {
 			if ctx.Err() != nil {
-				return status, ctx.Err()
+				return ctx.Err()
 			}
 			problems = append(problems, fmt.Sprintf("%s: %v", group.files[0].rel, err))
 			continue
 		}
 		emptied[group.dir] = true
 	}
-	w.tidy(emptied)
-	_, _, status.Duplicates, _ = w.look(ctx)
-	if status.Filed > 0 {
-		if _, err := w.s.ScanArchive(ctx, w.archivePath); err != nil {
-			problems = append(problems, "cataloguing the library: "+err.Error())
-		}
+	if !src.placeholders {
+		w.tidy(src, emptied)
 	}
 	if len(problems) > 0 {
 		sort.Strings(problems)
@@ -344,9 +412,9 @@ func (w *IntakeWriter) pass(ctx context.Context, status IntakeStatus) (IntakeSta
 			more = fmt.Sprintf(", and %d more", len(problems)-3)
 			problems = problems[:3]
 		}
-		return status, errors.New(strings.Join(problems, "; ") + more)
+		return errors.New(strings.Join(problems, "; ") + more)
 	}
-	return status, nil
+	return nil
 }
 
 func groupIntake(files map[string]intakeFile) map[string]*intakeGroup {
@@ -389,12 +457,12 @@ func groupIntake(files map[string]intakeFile) map[string]*intakeGroup {
 
 // dates finds when each group was taken: from the files themselves where
 // they say, then from the name, then from the file's modification time.
-func (w *IntakeWriter) dates(ctx context.Context, groups map[string]*intakeGroup) (map[string]time.Time, error) {
+func (w *IntakeWriter) dates(ctx context.Context, src *intakeSource, groups map[string]*intakeGroup) (map[string]time.Time, error) {
 	var asked []string
 	for _, group := range groups {
 		for _, file := range group.files {
 			if archiveMediaExtensions[file.ext] {
-				asked = append(asked, filepath.Join(w.inboxPath, filepath.FromSlash(file.rel)))
+				asked = append(asked, filepath.Join(src.path, filepath.FromSlash(file.rel)))
 			}
 		}
 	}
@@ -414,7 +482,7 @@ func (w *IntakeWriter) dates(ctx context.Context, groups map[string]*intakeGroup
 	for key, group := range groups {
 		var when time.Time
 		for _, file := range group.files {
-			if t, ok := read[filepath.Join(w.inboxPath, filepath.FromSlash(file.rel))]; ok && plausibleTaken(t) {
+			if t, ok := read[filepath.Join(src.path, filepath.FromSlash(file.rel))]; ok && plausibleTaken(t) {
 				when = t
 				break
 			}
@@ -509,7 +577,7 @@ func (w *IntakeWriter) file(ctx context.Context, group *intakeGroup, taken time.
 	}
 	members := make([]member, 0, len(group.files))
 	for _, file := range group.files {
-		hash, size, err := fingerprintIn(ctx, w.inbox, file.rel, false)
+		hash, size, err := fingerprintIn(ctx, file.src.root, file.rel, false)
 		if err != nil {
 			return 0, err
 		}
@@ -551,7 +619,7 @@ func (w *IntakeWriter) file(ctx context.Context, group *intakeGroup, taken time.
 	filed := 0
 	for _, m := range members {
 		if m.same != "" {
-			if err := w.setAside(m.file.rel); err != nil {
+			if err := w.setAside(m.file); err != nil {
 				return filed, err
 			}
 			continue
@@ -617,9 +685,9 @@ func sameBytesInRoot(ctx context.Context, root *os.Root, dir, hash string, size 
 // otherwise it is copied, checked byte for byte, dated as it was, and only
 // then taken out of Import.
 func (w *IntakeWriter) move(ctx context.Context, file intakeFile, target, hash string) error {
-	source := filepath.Join(w.inboxPath, filepath.FromSlash(file.rel))
+	source := filepath.Join(file.src.path, filepath.FromSlash(file.rel))
 	destination := filepath.Join(w.archivePath, filepath.FromSlash(target))
-	if _, err := guardedRegular(w.inbox, file.rel, false); err != nil {
+	if _, err := guardedRegular(file.src.root, file.rel, false); err != nil {
 		return err
 	}
 	if _, err := guardedDir(w.archive, path.Dir(target)); err != nil {
@@ -648,16 +716,13 @@ func (w *IntakeWriter) move(ctx context.Context, file intakeFile, target, hash s
 	if got != hash || size != file.size {
 		return fmt.Errorf("%s did not arrive intact; the file is still in Import", target)
 	}
-	if err := w.inbox.Remove(file.rel); err != nil {
-		return err
-	}
-	return syncRootDir(w.inbox, file.rel)
+	return takeOut(file)
 }
 
 func (w *IntakeWriter) copyAcross(ctx context.Context, file intakeFile, target, hash string) error {
 	temp := path.Join(path.Dir(target), ".daddy-cull-import-"+shortHash(hash)+".tmp")
 	_ = w.archive.Remove(temp)
-	in, err := w.inbox.Open(file.rel)
+	in, err := file.src.root.Open(file.rel)
 	if err != nil {
 		return err
 	}
@@ -712,26 +777,62 @@ func (r readerWithContext) Read(p []byte) (int, error) {
 	return r.r.Read(p)
 }
 
-// setAside moves a file the library already holds into "Already in the
-// library", keeping the folders it was in, for the person to look at.
-func (w *IntakeWriter) setAside(rel string) error {
-	target := path.Join(IntakeDuplicates, rel)
-	if err := w.inbox.MkdirAll(path.Dir(target), 0o755); err != nil {
-		return err
+// takeOut removes a filed file from where it came, or, in a folder a
+// downloader fills, leaves an empty placeholder of its name.
+func takeOut(file intakeFile) error {
+	root := file.src.root
+	if !file.src.placeholders {
+		if err := root.Remove(file.rel); err != nil {
+			return err
+		}
+		return syncRootDir(root, file.rel)
 	}
-	free, err := freeArchiveName(w.inbox, target)
+	id, err := randomID()
 	if err != nil {
 		return err
 	}
-	if err := w.inbox.Rename(rel, free); err != nil {
+	temp := path.Join(path.Dir(file.rel), ".daddy-cull-placeholder-"+id+".tmp")
+	placeholder, err := root.OpenFile(temp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
 		return err
 	}
-	return syncRootDir(w.inbox, free)
+	if err := placeholder.Close(); err != nil {
+		root.Remove(temp)
+		return err
+	}
+	if err := root.Rename(temp, file.rel); err != nil {
+		root.Remove(temp)
+		return err
+	}
+	return syncRootDir(root, file.rel)
+}
+
+// setAside moves a file the library already holds into "Already in the
+// library", keeping the folders it was in, for the person to look at. In a
+// folder a downloader fills it is replaced by its placeholder instead: the
+// library holds the same bytes, and the downloader would fetch it again.
+func (w *IntakeWriter) setAside(file intakeFile) error {
+	if file.src.placeholders {
+		return takeOut(file)
+	}
+	root, rel := file.src.root, file.rel
+	target := path.Join(IntakeDuplicates, rel)
+	if err := root.MkdirAll(path.Dir(target), 0o755); err != nil {
+		return err
+	}
+	free, err := freeArchiveName(root, target)
+	if err != nil {
+		return err
+	}
+	if err := root.Rename(rel, free); err != nil {
+		return err
+	}
+	return syncRootDir(root, free)
 }
 
 // tidy removes the folders in Import that filing left empty. A folder that
 // still holds anything is left, and so is Import itself.
-func (w *IntakeWriter) tidy(dirs map[string]bool) {
+func (w *IntakeWriter) tidy(src *intakeSource, dirs map[string]bool) {
 	list := make([]string, 0, len(dirs))
 	for dir := range dirs {
 		for d := dir; d != "." && d != "/" && d != IntakeDuplicates; d = path.Dir(d) {
@@ -741,11 +842,11 @@ func (w *IntakeWriter) tidy(dirs map[string]bool) {
 	// Deepest first, so a parent is only tried once its children are gone.
 	sort.Slice(list, func(i, j int) bool { return strings.Count(list[i], "/") > strings.Count(list[j], "/") })
 	for _, dir := range list {
-		entries, err := readRootDir(w.inbox, dir)
+		entries, err := readRootDir(src.root, dir)
 		if err != nil || len(entries) > 0 {
 			continue
 		}
-		_ = w.inbox.Remove(dir)
+		_ = src.root.Remove(dir)
 	}
 }
 
