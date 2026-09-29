@@ -1,7 +1,7 @@
 #!/bin/bash
 # Installs Daddy Cull on this Mac, with everything it needs.
 #
-#   curl -fsSL https://raw.githubusercontent.com/tural-ali/daddy-cull-oss/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/tural-ali/daddy-cull/main/install.sh | bash
 #
 # or, from a checkout of the repository, ./install.sh, which builds it from
 # the source instead of downloading a release.
@@ -14,7 +14,7 @@
 # Written for the bash that ships with macOS (3.2). Everything happens inside
 # main, called on the very last line, so a download cut short runs nothing.
 
-REPO="tural-ali/daddy-cull-oss"
+REPO="tural-ali/daddy-cull"
 MIN_MACOS=14
 MIN_RAM_GB=4
 MIN_FREE_GB=2

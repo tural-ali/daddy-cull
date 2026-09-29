@@ -1,10 +1,10 @@
 # Daddy, Cull!
 
-[![Go](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/go.yml/badge.svg)](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/go.yml)
-[![Web](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/web.yml/badge.svg)](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/web.yml)
-[![Mac](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/mac.yml/badge.svg)](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/mac.yml)
-[![Docker](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/docker.yml/badge.svg)](https://github.com/tural-ali/daddy-cull-oss/actions/workflows/docker.yml)
-[![Release](https://img.shields.io/github/v/release/tural-ali/daddy-cull-oss?include_prereleases&sort=semver)](https://github.com/tural-ali/daddy-cull-oss/releases)
+[![Go](https://github.com/tural-ali/daddy-cull/actions/workflows/go.yml/badge.svg)](https://github.com/tural-ali/daddy-cull/actions/workflows/go.yml)
+[![Web](https://github.com/tural-ali/daddy-cull/actions/workflows/web.yml/badge.svg)](https://github.com/tural-ali/daddy-cull/actions/workflows/web.yml)
+[![Mac](https://github.com/tural-ali/daddy-cull/actions/workflows/mac.yml/badge.svg)](https://github.com/tural-ali/daddy-cull/actions/workflows/mac.yml)
+[![Docker](https://github.com/tural-ali/daddy-cull/actions/workflows/docker.yml/badge.svg)](https://github.com/tural-ali/daddy-cull/actions/workflows/docker.yml)
+[![Release](https://img.shields.io/github/v/release/tural-ali/daddy-cull?include_prereleases&sort=semver)](https://github.com/tural-ali/daddy-cull/releases)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
 One place on your Mac to bring every photo in, file it by the day it was taken, and throw out the rest a few minutes a day.
@@ -96,7 +96,7 @@ You do not need Docker, Homebrew, Python or anything else: the installer brings 
 Paste this into Terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tural-ali/daddy-cull-oss/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tural-ali/daddy-cull/main/install.sh | bash
 ```
 
 It will:
@@ -121,7 +121,7 @@ It will:
 Pass options after `bash -s --`, for example:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tural-ali/daddy-cull-oss/main/install.sh | bash -s -- --library "/Volumes/Photos/Library" --with-icloud
+curl -fsSL https://raw.githubusercontent.com/tural-ali/daddy-cull/main/install.sh | bash -s -- --library "/Volumes/Photos/Library" --with-icloud
 ```
 
 ### The setup wizard

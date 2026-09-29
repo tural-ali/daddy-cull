@@ -16,7 +16,7 @@ PORT="${DADDY_CULL_PORT:-8830}"
 WRITER_PORT=$((PORT + 1))
 AGENTS="$HOME/Library/LaunchAgents"
 LABEL="${DADDY_CULL_LABEL:-app.daddycull}"
-REPO="tural-ali/daddy-cull-oss"
+REPO="tural-ali/daddy-cull"
 DOMAIN="gui/$(id -u)"
 
 # The downloaders are pinned: an update of either is a new release of this.

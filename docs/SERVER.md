@@ -14,7 +14,7 @@ On a Linux server or a NAS, such as Unraid, Synology or TrueNAS, run it with Doc
 ## Start it
 
 ```bash
-git clone https://github.com/tural-ali/daddy-cull-oss.git daddy-cull
+git clone https://github.com/tural-ali/daddy-cull.git
 cd daddy-cull
 cp examples/.env.example examples/.env
 ```
