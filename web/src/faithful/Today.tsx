@@ -535,7 +535,7 @@ export function Today({initial}:{initial:TodayData}){
         <p className="xmeta">{group.members.length} identical copies · {bytes(group.size)} each · <strong>{bytes(group.reclaimable)}</strong> reclaimable</p>
         <div className="gal tight">{group.members.map(member=><figure className={`mo${(keepers[group.hash]??group.members[0].id)===member.id?' keeper':''}`} key={member.id} data-asset={member.id}>
           <Media asset={member}/>
-          <div className="bdg"><button type="button" className="b tocmp" disabled={saving} onClick={()=>setKeepers(current=>({...current,[group.hash]:member.id}))}>{(keepers[group.hash]??group.members[0].id)===member.id?'keep this one':'choose as keeper'}</button></div>
+          <div className="bdg"><button type="button" className="b keepchip" aria-pressed={(keepers[group.hash]??group.members[0].id)===member.id} disabled={saving} onClick={()=>setKeepers(current=>({...current,[group.hash]:member.id}))}>{(keepers[group.hash]??group.members[0].id)===member.id?'keep this one':'choose as keeper'}</button></div>
           <figcaption className="cap"><span>{member.day}</span></figcaption>
         </figure>)}</div>
         <p className="xact"><button type="button" className="btn small danger" disabled={saving} onClick={()=>void resolveGroup(group)}>Keep the selected copy, mark the other {group.members.length-1} for the Bin</button><span className="hint">Nothing is deleted. The Bin remains separately reviewable and restorable.</span></p>

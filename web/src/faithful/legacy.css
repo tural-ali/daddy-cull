@@ -977,6 +977,25 @@ main.wide, main:has(.gal, .rows, .calendar) { max-width: 100%; }
   background: var(--accent); border-color: transparent; color: var(--on-accent);
 }
 
+/* Which copy of a group stays: the chosen one says so with a tick, the others
+   offer to take its place. */
+.bdg .b.keepchip {
+  pointer-events: auto; cursor: pointer;
+  border: 1px solid rgb(255 255 255 / 28%);
+  font: inherit; font-size: 10.5px; font-weight: 500;
+  padding: .1rem .38rem;
+  display: inline-flex; align-items: center; gap: .28rem;
+}
+.bdg .b.keepchip[aria-pressed="true"] {
+  cursor: default; border-color: transparent;
+  background: color-mix(in oklab, var(--good) 78%, #000);
+}
+.bdg .b.keepchip[aria-pressed="true"]::before { content: '\2713'; font-size: 11px; line-height: 1; }
+.bdg .b.keepchip[aria-pressed="false"]:hover:not(:disabled),
+.bdg .b.keepchip[aria-pressed="false"]:focus-visible {
+  background: var(--accent); border-color: transparent; color: var(--on-accent);
+}
+
 /* Cull and Favourite appear on hover or keyboard focus, per §15. */
 .acts {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 3;
@@ -1092,7 +1111,8 @@ main.selecting .tfav:not([aria-pressed="true"]) { opacity: 0; }
 .mo .cap.stack { display: block; }
 .mo .cap.stack > * { display: block; }
 .mo .cap.stack .dim { margin-top: .1rem; }
-.mo.keeper { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--good) 60%, transparent); }
+/* The copy that stays wears the ring; an inset one would sit under the photo. */
+.mo.keeper { outline: 2px solid var(--good); outline-offset: 2px; }
 
 /* ------------------------------------------------------------ selection --
  * Selection has to read at a glance across a grid of near-identical frames, so
