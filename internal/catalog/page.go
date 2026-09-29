@@ -35,9 +35,10 @@ type Asset struct {
 	Source string `json:"source"`
 	// AlternativeCount counts other versions of the same picture.
 	AlternativeCount int `json:"alternativeCount"`
-	// Pair is the other half of a RAW+JPEG pair, on the pages that show
-	// pairs as one photo.
-	Pair int64 `json:"pair,omitempty"`
+	// Stack lists the other files of the same exposure, a RAW and the JPEG,
+	// HEIC or TIFF files exported beside it, on the pages that show them as
+	// one photo.
+	Stack []int64 `json:"stack,omitempty"`
 	// New marks a file that reached the archive after its day was reviewed
 	// and still waits for a decision, on the day page.
 	New bool `json:"new,omitempty"`

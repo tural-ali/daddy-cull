@@ -100,6 +100,8 @@ type Stats struct {
 	ReviewedToday bool `json:"reviewedToday"`
 	// VideoMuted is whether videos start muted.
 	VideoMuted bool `json:"videoMuted"`
+	// RawTogether is whether a RAW and its exports show as one photo.
+	RawTogether bool `json:"rawTogether"`
 	// Notifications counts unread notifications.
 	Notifications int `json:"notifications"`
 	// Library counts what the library holds, as photos and videos, while the
@@ -195,6 +197,7 @@ func (s *Store) Stats(ctx context.Context, loc *time.Location) (Stats, error) {
 	st.Streak = activity.Streak
 	st.ReviewedToday = activity.Today
 	st.VideoMuted, _ = s.VideoMuted(ctx)
+	st.RawTogether, _ = s.RawTogether(ctx)
 	st.Notifications, _ = s.UnreadNotifications(ctx)
 	// The addon is on unless someone turned it off, as its Default is always.
 	if on, chosen, err := s.AddonChoice(ctx, AddonLibrary); err == nil && (on || !chosen) {

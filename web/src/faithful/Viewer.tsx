@@ -7,15 +7,10 @@ import {undoKeys,type HistoryEntry} from './history';
 import {Kbd,tipProps} from './keys';
 import {TurnedControls} from './TurnedControls';
 import {useShownPath} from './libraryPath';
+import {fileFormat as format} from './stacks';
 
 function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
 function preview(asset:Asset){return `/api/media/${asset.id}/preview?size=large`}
-/** The file's format as Apple Photos badges it: RAW for any camera RAW, the
- * extension for everything else. */
-function format(asset:Asset){
-  const extension=asset.path.includes('.')?asset.path.split('.').pop()!.toUpperCase():'';
-  return asset.kind==='raw'?'RAW':extension;
-}
 
 type Box={left:number;top:number;width:number;height:number};
 /** The photograph's tile in the grid behind the viewer, when the page marks
@@ -40,22 +35,23 @@ const flightTime=320;
  * pages that show files from many days. */
 /** `onMove` hears which photo is showing, so the address can follow it. */
 /** `onRecord`, when given, hears a group choice so the page can undo it. */
-/** `rawOf` names the RAW behind a photo that stands for a RAW+JPEG pair, and
- * `onUnpair` splits the pair when the two turn out not to belong together. */
-export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onRecord,rawOf,onUnpair,onTurn}:{assets:Asset[];initialID:number;onClose:()=>void;onSave:(asset:Asset,status:Status,favourite?:boolean)=>boolean;onPatch:(id:number,change:Partial<Asset>)=>void;dayOf?:(asset:Asset)=>string;onMove?:(id:number)=>void;onRecord?:(entry:HistoryEntry)=>void;rawOf?:(asset:Asset)=>Asset|undefined;onUnpair?:(photo:Asset,raw:Asset)=>void;onTurn?:(asset:Asset,quarters:number)=>void}){
+/** `behindOf` names the files behind a photo that stands for a RAW and its
+ * exports, and `onSeparate` shows them as separate photos when they turn out
+ * not to belong together. */
+export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onRecord,behindOf,onSeparate,onTurn}:{assets:Asset[];initialID:number;onClose:()=>void;onSave:(asset:Asset,status:Status,favourite?:boolean)=>boolean;onPatch:(id:number,change:Partial<Asset>)=>void;dayOf?:(asset:Asset)=>string;onMove?:(id:number)=>void;onRecord?:(entry:HistoryEntry)=>void;behindOf?:(asset:Asset)=>Asset[]|undefined;onSeparate?:(photo:Asset,files:Asset[])=>void;onTurn?:(asset:Asset,quarters:number)=>void}){
   const onDisk=useShownPath();
   const initialIndex=Math.max(0,assets.findIndex(asset=>asset.id===initialID));
   const [at,setAt]=useState(initialIndex);
   // The file the reviewer is on, or moving to. When the list changes under
-  // the viewer (a pair split, or a choice that takes a file out of a filtered
+  // the viewer (a stack split, or a choice that takes a file out of a filtered
   // list), the viewer stays with it rather than with a position.
   const anchor=useRef(initialID);
   useLayoutEffect(()=>{
     const index=assets.findIndex(asset=>asset.id===anchor.current);
     if(index>=0)setAt(index);
   },[assets]);
-  // Which half of a pair is on the stage.
-  const [side,setSide]=useState<'photo'|'raw'>('photo');
+  // Which file of a stack is on the stage, the photo that stands for it first.
+  const [side,setSide]=useState(0);
   // Info stays open from photo to photo, and from one visit to the next.
   const [info,setInfoState]=useState(()=>{try{return localStorage.getItem('cull-info')==='open'}catch{return false}});
   function setInfo(change:boolean|((open:boolean)=>boolean)){
@@ -77,9 +73,10 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   // starts clean. A file moved off the archive between scans answers 404.
   const [broken,setBroken]=useState<{id:number;gone:boolean}|null>(null);
   const current=assets[Math.min(at,Math.max(0,assets.length-1))];
-  const raw=current?rawOf?.(current):undefined;
-  // What the stage draws: the photo, or the RAW behind it when asked for.
-  const onStage=side==='raw'&&raw?raw:current;
+  const others=current?behindOf?.(current):undefined;
+  const stack=current&&others?[current,...others]:[];
+  // What the stage draws: the photo, or a file behind it when asked for.
+  const onStage=stack[side]??current;
   // How far the reviewer turned it in Cull; the file itself is as it was.
   const turn=onStage?.turn??0;
   // A picture zoomed while turned a quarter needs its own size to make room
@@ -170,7 +167,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       anchor.current=assets[next].id;
       setAt(next);
     }
-    setZoom(false);setBare(false);setRelated(null);setMenu(false);setSide('photo');
+    setZoom(false);setBare(false);setRelated(null);setMenu(false);setSide(0);
   }
   function choose(status:Status,favoured?:boolean,advance=false){if(!current)return;if(onSave(current,status,favoured)&&advance)step(1)}
   // K and X each undo themselves and stay on the photo. A heart on a removed
@@ -182,8 +179,8 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     if(!current)return;
     navigator.clipboard.writeText(onDisk(current.path)).then(()=>{setCopied(true);window.setTimeout(()=>setCopied(false),1500)},()=>setError('The path could not be copied.'));
   }
-  // A pair's own RAW is not a similar photo to compare with.
-  const similar=(current?.relatedCount??0)-(raw?1:0);
+  // A stack's own files are not similar photos to compare with.
+  const similar=(current?.relatedCount??0)-(others?.length??0);
   async function openCompare(){
     if(!current||similar<1)return;
     setError('');
@@ -252,7 +249,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       else if(key==='z')setZoom(value=>!value);
       else if(key==='h')setBare(value=>!value);
       else if(key==='c')void openCompare();
-      else if(key==='r'&&raw)setSide(value=>value==='raw'?'photo':'raw');
+      else if(key==='r'&&others)setSide(value=>(value+1)%stack.length);
       else if(key===']'&&onTurn)onTurn(current,1);
       else if(key==='['&&onTurn)onTurn(current,-1);
       else if(key==='?')setHelp(value=>!value);
@@ -280,9 +277,8 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     <div className="rvtop" onMouseUp={event=>(event.target as HTMLElement).closest('button')?.blur()}>
       <button type="button" className="rvact rvback" aria-label="Back to the grid" {...tipProps('Back','Escape')} onClick={leave}><Icon name="arrow_back"/></button>
       <div className="rvacts">
-        {raw?<div className="rvpair" role="group" aria-label="Show which file of the pair" {...tipProps('Photo or RAW','R')}>
-          <button type="button" aria-pressed={side==='photo'} title={name} onClick={()=>setSide('photo')}>{format(current)}</button>
-          <button type="button" aria-pressed={side==='raw'} title={raw.path.split('/').pop()} onClick={()=>setSide('raw')}>RAW</button>
+        {others?<div className="rvpair" role="group" aria-label="Show which file of this photo" {...tipProps('Each file of this photo','R')}>
+          {stack.map((file,index)=><button type="button" key={file.id} aria-pressed={index===side} title={file.path.split('/').pop()} onClick={()=>setSide(index)}>{format(file)}</button>)}
         </div>:format(current)&&<span className="rvformat" title={name.split('.').pop()?.toUpperCase()}>{format(current)}</span>}
         {similar>0&&<button type="button" className="rvact cmp" aria-label="Compare similar photos" {...tipProps('Compare','C')} onClick={()=>void openCompare()}><Icon name="compare"/></button>}
         {onTurn&&<button type="button" className="rvact turn" aria-label="Rotate clockwise" {...tipProps('Rotate clockwise',']')} onClick={()=>onTurn(current,1)}><Icon name="rotate_right"/></button>}
@@ -296,7 +292,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
         {menu&&<div className="rvmenu" role="menu" tabIndex={-1} onClick={event=>event.stopPropagation()}>
           {dayOf&&<a role="menuitem" href={dayOf(current)} target="_blank" rel="noopener" onClick={()=>setMenu(false)}><Icon name="open_in_new"/>Open this day in a new tab</a>}
           <button type="button" role="menuitem" onClick={()=>{setMenu(false);copyPath()}}><Icon name="content_copy"/>Copy file path</button>
-          {raw&&onUnpair&&<button type="button" role="menuitem" onClick={()=>{setMenu(false);setSide('photo');onUnpair(current,raw)}}><Icon name="link_off"/>Unpair the RAW and {format(current)}</button>}
+          {others&&onSeparate&&<button type="button" role="menuitem" onClick={()=>{setMenu(false);setSide(0);onSeparate(current,others)}}><Icon name="link_off"/>Show the {stack.map(format).join(', ').replace(/, ([^,]*)$/,' and $1')} separately</button>}
           <button type="button" role="menuitem" onClick={()=>{setMenu(false);setHelp(true)}}><Icon name="keyboard"/>Keyboard shortcuts<Kbd keys="?"/></button>
         </div>}
       </div>
@@ -314,7 +310,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       <h4>Details</h4>
       <div className="irow"><Icon name="calendar_month"/><div><b>{date}</b><span>{weekday}{weekday&&time?', ':''}{time}</span></div></div>
       <div className="irow"><Icon name={mediaIcon}/><div><b>{name}</b><span>{(current.size/1048576).toFixed(1)} MB · {format(current)||current.kind.toUpperCase()}</span></div></div>
-      {raw&&<div className="irow"><Icon name="raw_on"/><div><b>{raw.path.split('/').pop()}</b><span>{(raw.size/1048576).toFixed(1)} MB · RAW, kept or removed with this photo</span></div></div>}
+      {others?.map(file=><div className="irow" key={file.id}><Icon name={file.kind==='raw'?'raw_on':'image'}/><div><b>{file.path.split('/').pop()}</b><span>{(file.size/1048576).toFixed(1)} MB · {format(file)}, kept or removed with this photo</span></div></div>)}
       <div className="irow"><Icon name={decision.icon}/><div><b>{decision.text}</b><span>{current.favourite?'Favourite · ':''}<span className="rvpos">{at+1} / {assets.length}</span> in this review</span></div></div>
       <div className="irow"><Icon name="folder"/><div><b>{folder.split('/').pop()||folder}</b><span className="mono">{onDisk(current.path)}</span></div><button type="button" className="rvact copy" aria-label="Copy file path" {...tipProps(copied?'Copied':'Copy file path')} onClick={copyPath}><Icon name={copied?'check':'content_copy'}/></button></div>
     </aside>
@@ -322,7 +318,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- 1 to 9 focus a frame from the keyboard
       <figure className={index===focus?'on':''} key={asset.id} onClick={()=>setFocus(index)}><img src={preview(asset)} alt={asset.path.split('/').pop()}/><span className="pick">{index+1}</span><figcaption>{asset.path.split('/').pop()} · {asset.status}</figcaption></figure>)}</div><div className="cfacts"><div className="verdict tied"><b>Possible copies or companion files</b><ul><li>Inspect before choosing</li><li>No file moves from this screen</li></ul></div></div><div className="cbot"><button type="button" className="rvbtn" onClick={()=>void saveGroup('keep-all')}>Keep all</button><button type="button" className="rvbtn cull" onClick={()=>void saveGroup('keep-focus')}>Keep the focused one, remove the rest</button><button type="button" className="rvbtn cull cmpall" onClick={()=>void saveGroup('cull-all')}>Remove all</button></div></div>}
     {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- a click dismisses the sheet; ? and Esc do the same */}
-    {help&&<div className="rvkeys" onClick={()=>setHelp(false)}><table><tbody><tr><td>→ ←</td><td>next / previous</td></tr><tr><td>K</td><td>keep and continue, again to undo</td></tr><tr><td>X</td><td>remove (clears keep and favourite), again to undo</td></tr><tr><td>F</td><td>favourite</td></tr><tr><td>I</td><td>info panel</td></tr><tr><td>Z</td><td>zoom</td></tr>{onTurn&&<tr><td>] / [</td><td>rotate clockwise / anticlockwise, in Cull only</td></tr>}<tr><td>H</td><td>hide the controls, again to show them</td></tr><tr><td>C</td><td>compare a group</td></tr>{raw&&<tr><td>R</td><td>show the RAW of this pair</td></tr>}<tr><td>{undoKeys.undo} / {undoKeys.redo}</td><td>{onRecord?'undo / redo the last choice':'undo / redo, on the day page'}</td></tr><tr><td>G / Esc / Space</td><td>back to the grid</td></tr><tr><td>?</td><td>this list</td></tr></tbody></table></div>}
+    {help&&<div className="rvkeys" onClick={()=>setHelp(false)}><table><tbody><tr><td>→ ←</td><td>next / previous</td></tr><tr><td>K</td><td>keep and continue, again to undo</td></tr><tr><td>X</td><td>remove (clears keep and favourite), again to undo</td></tr><tr><td>F</td><td>favourite</td></tr><tr><td>I</td><td>info panel</td></tr><tr><td>Z</td><td>zoom</td></tr>{onTurn&&<tr><td>] / [</td><td>rotate clockwise / anticlockwise, in Cull only</td></tr>}<tr><td>H</td><td>hide the controls, again to show them</td></tr><tr><td>C</td><td>compare a group</td></tr>{others&&<tr><td>R</td><td>show the next file of this photo, such as its RAW</td></tr>}<tr><td>{undoKeys.undo} / {undoKeys.redo}</td><td>{onRecord?'undo / redo the last choice':'undo / redo, on the day page'}</td></tr><tr><td>G / Esc / Space</td><td>back to the grid</td></tr><tr><td>?</td><td>this list</td></tr></tbody></table></div>}
     {error&&<div className="toast err">{error}</div>}
     </div>
     {flight&&<img ref={flyer} className="rvfly" src={flight.src} alt="" style={{left:flight.from.left,top:flight.from.top,width:flight.from.width,height:flight.from.height,borderRadius:flight.mode==='open'?flight.radius:0}}/>}

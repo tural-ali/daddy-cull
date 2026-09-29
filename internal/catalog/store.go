@@ -146,7 +146,11 @@ CREATE TABLE IF NOT EXISTS file_state (asset_id INTEGER PRIMARY KEY REFERENCES a
 CREATE TABLE IF NOT EXISTS file_plans (id TEXT PRIMARY KEY, body TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS related_assets (asset_id INTEGER PRIMARY KEY REFERENCES assets(id), group_key TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS related_group ON related_assets(group_key,asset_id);
-CREATE TABLE IF NOT EXISTS raw_pairs (raw_id INTEGER PRIMARY KEY REFERENCES assets(id), partner_id INTEGER NOT NULL UNIQUE REFERENCES assets(id));
+-- raw_pairs held one export per RAW; raw_stacks holds every export, and is
+-- rebuilt from the files on every index, so the old table goes unread.
+DROP TABLE IF EXISTS raw_pairs;
+CREATE TABLE IF NOT EXISTS raw_stacks (export_id INTEGER PRIMARY KEY REFERENCES assets(id), raw_id INTEGER NOT NULL REFERENCES assets(id));
+CREATE INDEX IF NOT EXISTS raw_stacks_raw ON raw_stacks(raw_id);
 CREATE TABLE IF NOT EXISTS raw_pair_splits (
  raw_id INTEGER NOT NULL,
  partner_id INTEGER NOT NULL,

@@ -115,18 +115,18 @@ type Turned struct {
 	Turns map[string]int `json:"turns"`
 }
 
-// PairChoice joins or splits a RAW+JPEG pair.
+// PairChoice takes one export out of its RAW's stack, or puts it back.
 type PairChoice struct {
 	// RawID is the RAW file's id.
 	RawID int64 `json:"rawId"`
-	// PartnerID is the id of the JPEG taken with it. The two ids may be sent
-	// either way round.
+	// PartnerID is the id of a JPEG, HEIC or TIFF in the RAW's stack. The two
+	// ids may be sent either way round.
 	PartnerID int64 `json:"partnerId"`
-	// Paired is true to show the two as one photo again, false to show them apart.
+	// Paired is true to show the export with its RAW again, false to show it apart.
 	Paired *bool `json:"paired"`
 }
 
-// Paired is whether a pair now shows as one photo.
+// Paired is whether an export now shows with its RAW.
 type Paired struct {
 	// Paired is true when the two show as one photo, false when apart.
 	Paired bool `json:"paired"`
@@ -136,6 +136,14 @@ type Paired struct {
 type GraceChoice struct {
 	// GraceDays is how many days a file deleted from the Bin waits on disk, from 0 to 365.
 	GraceDays *int `json:"graceDays"`
+}
+
+// RawChoice sets whether a RAW and its exports show as one photo.
+type RawChoice struct {
+	// Together is true for a RAW and the JPEG, HEIC or TIFF files exported
+	// beside it to show as one photo that every choice applies to, false for
+	// each file to show and be decided on its own. It is required.
+	Together *bool `json:"together"`
 }
 
 // SoundChoice sets whether videos start muted.
@@ -473,11 +481,11 @@ func (s *Store) Routes(m *api.Mux) {
 	// the catalogue changes: both files stay where they are.
 	m.HandleFunc(api.Route{
 		Method: "POST", Path: "/api/pairs", Tag: "Choices", Needs: api.Review,
-		Summary: "Join or split a RAW+JPEG pair",
-		Doc:     "A RAW file and the JPEG taken with it show as one photo until they are split. Only the catalogue changes; both files stay where they are.",
+		Summary: "Take an export out of a RAW's stack, or put it back",
+		Doc:     "A RAW file and the JPEG, HEIC or TIFF files beside it under the same name show as one photo, while Settings shows them together. Splitting takes one export out of the stack. Only the catalogue changes; every file stays where it is.",
 		Body:    PairChoice{},
 		Returns: Paired{},
-		Errors:  []api.Error{{Status: 400, When: "The two files are not a pair"}, notJSON, offSite, unreadable},
+		Errors:  []api.Error{{Status: 400, When: "The export is not in the RAW's stack"}, notJSON, offSite, unreadable},
 	}, func(w http.ResponseWriter, r *http.Request) {
 		var input PairChoice
 		if !decodeBody(w, r, 1024, &input, "Send rawId, partnerId and paired.") {
@@ -490,7 +498,7 @@ func (s *Store) Routes(m *api.Mux) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 		if err := s.SetPaired(ctx, input.RawID, input.PartnerID, *input.Paired); err != nil {
-			failFor(w, err, "These files are not a pair.")
+			failFor(w, err, "These files are not a RAW and its export.")
 			return
 		}
 		writeJSON(w, Paired{Paired: *input.Paired})
@@ -740,6 +748,32 @@ func (s *Store) Routes(m *api.Mux) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 		if err := s.SetVideoMuted(ctx, *input.Muted); err != nil {
+			failFor(w, err, "")
+			return
+		}
+		writeJSON(w, input)
+	})
+	// How a RAW and its exports show is a preference, saved here and read by
+	// every browser with the rest of the stats.
+	m.HandleFunc(api.Route{
+		Method: "POST", Path: "/api/settings/raw", Tag: "Settings", Needs: api.Settings,
+		Summary: "Set whether a RAW and its exports show as one photo",
+		Doc:     "Saves whether a RAW file and the JPEG, HEIC or TIFF files beside it under the same name show as one photo on the day page, so that keeping, removing and favouriting take every file, or as separate photos. The setting is read back as rawTogether in GET /api/stats. The answer repeats the choice saved.",
+		Body:    RawChoice{},
+		Returns: RawChoice{},
+		Errors:  []api.Error{{Status: 400, When: "together is missing"}, notJSON, offSite, unreadable},
+	}, func(w http.ResponseWriter, r *http.Request) {
+		var input RawChoice
+		if !decodeBody(w, r, 1024, &input, "Send {\"together\": true} or {\"together\": false}.") {
+			return
+		}
+		if input.Together == nil {
+			api.Fail(w, 400, "Send {\"together\": true} or {\"together\": false}.")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		if err := s.SetRawTogether(ctx, *input.Together); err != nil {
 			failFor(w, err, "")
 			return
 		}

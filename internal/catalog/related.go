@@ -72,7 +72,7 @@ func (s *Store) IndexRelated(ctx context.Context) error {
 			return e
 		}
 	}
-	if e = indexRawPairs(ctx, tx); e != nil {
+	if e = indexRawStacks(ctx, tx); e != nil {
 		return e
 	}
 	return tx.Commit()

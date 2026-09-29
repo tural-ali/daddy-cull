@@ -348,7 +348,7 @@ func (s *Store) Today(ctx context.Context, md string) (TodayData, error) {
 			all = append(all, asset)
 		}
 	}
-	if err := s.markPairs(ctx, all); err != nil {
+	if err := s.markStacks(ctx, all); err != nil {
 		return data, err
 	}
 	if err := s.markShapes(ctx, all); err != nil {

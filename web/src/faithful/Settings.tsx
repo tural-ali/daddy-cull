@@ -11,7 +11,7 @@ import {readAddons,useAddons} from './addonList';
 
 export type MediaTotal={files:number;bytes:number};
 export type LibraryTotals={photos:MediaTotal;videos:MediaTotal};
-export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;videoMuted?:boolean;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number;immichRefused?:number;calendarDates?:number;reviewedDates?:number;streak?:number;reviewedToday?:boolean;notifications?:number;library?:LibraryTotals};
+export type Stats={total:number;synthetic:boolean;snapshotAt:string;candidates:number;calendarDays:number;reviewedDays:number;decisions:number;favourites:number;evidence:number;fullHashes:number;marked:number;legacyBin:number;shadowGroups:number;screenshots:number;upgradesAccepted:number;upgradeCandidates:number;videoMuted?:boolean;rawTogether?:boolean;bin?:number;immichSynced?:number;immichPending?:number;immichFailed?:number;immichRefused?:number;calendarDates?:number;reviewedDates?:number;streak?:number;reviewedToday?:boolean;notifications?:number;library?:LibraryTotals};
 
 function localDate(value:string){
   if(!value)return 'never';
@@ -141,6 +141,33 @@ function VideoSettings({initial}:{initial:boolean}){
     </div>
     {error&&<p className="note warn" role="alert">{error}</p>}
     <p className="hint">{muted?'Clips open silent. Turning the sound on in the viewer keeps it on for the rest of that tab.':'Clips open with sound. Muting one in the viewer keeps the rest of that tab quiet.'}</p>
+  </>;
+}
+
+// RawSettings chooses whether a RAW and the JPEG, HEIC or TIFF files exported
+// beside it are one photo on the day page, decided together, or each its own.
+function RawSettings({initial}:{initial:boolean}){
+  const [together,setTogether]=useState(initial);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  async function choose(next:boolean){
+    if(next===together||busy)return;
+    setBusy(true);setError('');
+    try{
+      const response=await fetch('/api/settings/raw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({together:next})});
+      if(!response.ok)throw new Error(await failure(response,'The setting could not be saved.'));
+      const saved:{together:boolean}=await response.json();
+      setTogether(saved.together);
+    }catch(reason){setError((reason as Error).message)}finally{setBusy(false)}
+  }
+  return <>
+    <h2 id="raw">RAW and exports</h2>
+    <div className="segmented" role="radiogroup" aria-label="RAW and exports">
+      <label className={together?'on':undefined}><input type="radio" name="raw-stacks" value="together" checked={together} disabled={busy} onChange={()=>void choose(true)}/>One photo</label>
+      <label className={together?undefined:'on'}><input type="radio" name="raw-stacks" value="separate" checked={!together} disabled={busy} onChange={()=>void choose(false)}/>Separate files</label>
+    </div>
+    {error&&<p className="note warn" role="alert">{error}</p>}
+    <p className="hint">{together?'A RAW and the JPEG, HEIC or TIFF files beside it with the same name show as one photo, badged with each format. Keeping, removing and favouriting take every file, so a RAW is never kept without its exports or removed without them.':'A RAW and each file exported from it show as separate photos, and each is kept or removed on its own.'}</p>
   </>;
 }
 
@@ -374,6 +401,7 @@ export function Settings({stats}:{stats:Stats}){
     <JellyfinSettings/>
     <BinSettings/>
     <VideoSettings initial={stats.videoMuted!==false}/>
+    <RawSettings initial={stats.rawTogether!==false}/>
     <Appearance/>
     <Guides/>
     {stats.upgradeCandidates>0&&<>

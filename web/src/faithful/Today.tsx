@@ -13,7 +13,7 @@ import {shortLabel,usePageDate} from './DatePicker';
 import {dayName} from './goto';
 import {requestID,sendDecisions} from './decisions';
 import {historyKey,undoKeys,useHistory,type HistoryEntry,type Snapshot} from './history';
-import {pairLabel,rawsBehind,setPaired} from './pairs';
+import {fileFormat,setPaired,stackFormats,stackOf,stacksBehind} from './stacks';
 import {usePageFilters,type SortOption} from './SearchFilters';
 import {Snacks} from './Snacks';
 import {flyToBin} from './binFlight';
@@ -52,6 +52,8 @@ function snapshot(asset:Asset):Snapshot{return {id:asset.id,status:asset.status,
 function tileOf(id:number){return document.querySelector(`main figure.mo[data-asset="${id}"]`)}
 
 function fileName(asset:Asset){return asset.path.split('/').pop()??''}
+/** " and its RAW", or " and its RAW and HEIC", for a choice on a stack. */
+function alongside(files:Asset[]){return files.length>1?` and its ${files.slice(1).map(fileFormat).join(' and ')}`:''}
 /** What a single decision did, for the undo message. */
 function describe(asset:Asset,status:Status,favourite:boolean){
   const name=fileName(asset);
@@ -174,10 +176,10 @@ export function Today({initial}:{initial:TodayData}){
   // walk this, so reading the oldest year first reviews it first too.
   const shownYears=useMemo(()=>[...years].sort((a,b)=>order==='oldest'?a.day.localeCompare(b.day):b.day.localeCompare(a.day)),[years,order]);
   const assets=useMemo(()=>shownYears.flatMap(year=>year.assets),[shownYears]);
-  // A RAW+JPEG pair is one tile, the JPEG; its RAW rides along with every
-  // choice and shows in the viewer on request.
-  const behind=useMemo(()=>rawsBehind(assets),[assets]);
-  const hidden=useMemo(()=>new Set([...behind.values()].map(raw=>raw.id)),[behind]);
+  // A RAW and its exports are one tile, an export; the other files ride
+  // along with every choice and show in the viewer on request.
+  const behind=useMemo(()=>stacksBehind(assets),[assets]);
+  const hidden=useMemo(()=>new Set([...behind.values()].flat().map(file=>file.id)),[behind]);
   const tiles=useMemo(()=>hidden.size===0?assets:assets.filter(asset=>!hidden.has(asset.id)),[assets,hidden]);
   const [filters,setFilters]=useState<ReadonlySet<Filter>>(()=>new Set(savedFilters()));
   function saveFilters(next:ReadonlySet<Filter>){
@@ -224,14 +226,13 @@ export function Today({initial}:{initial:TodayData}){
   const queue=useDecisionQueue((job,result,overtaken)=>{
     patchAsset(job.asset.id,overtaken?{revision:result.revision}:{status:job.status,favourite:job.favourite,revision:result.revision});
   });
-  /** Saves a choice on a photo, and on the RAW behind it unless `withRAW` is
-   * false, which undo uses because its entry names both files already. */
-  function save(asset:Asset,status:Status,favourite=asset.favourite,remember=true,withRAW=true){
+  /** Saves a choice on a photo, and on the files behind it unless `withStack`
+   * is false, which undo uses because its entry names every file already. */
+  function save(asset:Asset,status:Status,favourite=asset.favourite,remember=true,withStack=true){
     if(status==='cull')favourite=false;
-    const raw=withRAW?behind.get(asset.id):undefined;
-    const files=raw?[asset,raw]:[asset];
-    // Both halves go into the queue or neither does, so a pair never splits
-    // over a full queue.
+    const files=withStack?stackOf(asset,behind):[asset];
+    // Every file of a stack goes into the queue or none does, so a stack
+    // never splits over a full queue.
     if(files.length>1&&queue.pending+files.length>32){
       setMessage('Choices are waiting to save. Wait for the connection to catch up.');
       return false;
@@ -246,11 +247,11 @@ export function Today({initial}:{initial:TodayData}){
     }
     if(remember&&status==='cull'&&asset.status!=='cull')flyToBin([tileOf(asset.id)]);
     if(remember){
-      history.record({kind:'decisions',label:`${describe(asset,status,favourite)}${raw?' and its RAW':''}`,before:files.map(snapshot),after:files.map(file=>({id:file.id,status,favourite}))});
+      history.record({kind:'decisions',label:`${describe(asset,status,favourite)}${alongside(files)}`,before:files.map(snapshot),after:files.map(file=>({id:file.id,status,favourite}))});
     }
     return true;
   }
-  /** Saves one choice on many photos at once, a selection, with their RAWs,
+  /** Saves one choice on many photos at once, a selection, with their stacks,
    * as one step to undo. It goes as batches rather than through the queue,
    * which holds a few choices at a time. */
   async function saveMany(picked:Asset[],decide:(asset:Asset)=>Snapshot,label:string,remember=true){
@@ -258,8 +259,7 @@ export function Today({initial}:{initial:TodayData}){
     if(queue.pending>0){setMessage('Choices are still saving. Try again in a moment.');return false}
     const targets=picked.flatMap(asset=>{
       const {status,favourite}=decide(asset);
-      const raw=behind.get(asset.id);
-      return (raw?[asset,raw]:[asset]).map(file=>({file,status,favourite:status==='cull'?false:favourite}));
+      return stackOf(asset,behind).map(file=>({file,status,favourite:status==='cull'?false:favourite}));
     }).filter(target=>target.file.status!==target.status||target.file.favourite!==target.favourite);
     if(targets.length===0)return true;
     setSaving(true);
@@ -281,9 +281,9 @@ export function Today({initial}:{initial:TodayData}){
   // press never flicks back.
   const turning=useRef<Promise<unknown>>(Promise.resolve());
   const turnsOut=useRef(0);
-  /** Turns photos a quarter at a time, with their RAWs, in Cull only. */
+  /** Turns photos a quarter at a time, with their stacks, in Cull only. */
   function turn(picked:Asset[],quarters:number,remember=true){
-    const files=picked.flatMap(asset=>{const raw=behind.get(asset.id);return raw?[asset,raw]:[asset]});
+    const files=picked.flatMap(asset=>stackOf(asset,behind));
     if(files.length===0)return;
     files.forEach(file=>patchAsset(file.id,{turn:(((file.turn??0)+quarters)%4+4)%4||undefined}));
     if(remember)history.record({kind:'turn',label:`turned ${picked.length===1?fileName(picked[0]):`${picked.length.toLocaleString()} photos`}`,ids:files.map(file=>file.id),quarters});
@@ -302,15 +302,15 @@ export function Today({initial}:{initial:TodayData}){
       setMessage((error as Error).message);
     }));
   }
-  /** Splits a pair so the RAW is a photo of its own, or joins it again. */
-  async function pairing(raw:number,partner:number,paired:boolean,remember=true){
-    const partnerAsset=assets.find(asset=>asset.id===partner);
-    const name=partnerAsset?fileName(partnerAsset):'the photo';
+  /** Shows a RAW and its exports as separate photos, or as one again. */
+  async function pairing(raw:number,partners:number[],paired:boolean,remember=true){
+    const files=[raw,...partners];
+    const face=assets.find(asset=>asset.id===partners[0]);
+    const name=face?fileName(face):'the photo';
     try{
-      await setPaired(raw,partner,paired);
-      patchAsset(raw,{pair:paired?partner:undefined});
-      patchAsset(partner,{pair:paired?raw:undefined});
-      if(remember)history.record({kind:'pair',label:paired?`paired ${name} with its RAW`:`unpaired ${name} and its RAW`,raw,partner,before:!paired,after:paired});
+      await Promise.all(partners.map(partner=>setPaired(raw,partner,paired)));
+      files.forEach(id=>patchAsset(id,{stack:paired?files.filter(other=>other!==id):undefined}));
+      if(remember)history.record({kind:'pair',label:paired?`stacked ${name} with its RAW`:`separated ${name} from its RAW`,raw,partners,before:!paired,after:paired});
       if(remember)setMessage(paired?`${name} and its RAW are one photo again.`:`${name} and its RAW are separate photos now.`);
       return true;
     }catch(error){setMessage((error as Error).message);return false}
@@ -321,12 +321,12 @@ export function Today({initial}:{initial:TodayData}){
   function restore(entry:HistoryEntry,direction:'before'|'after'){
     if(entry.kind==='turn'){
       const files=assets.filter(asset=>entry.ids.includes(asset.id)&&!hidden.has(asset.id));
-      const lone=assets.filter(asset=>entry.ids.includes(asset.id)&&hidden.has(asset.id)&&!files.some(still=>behind.get(still.id)?.id===asset.id));
+      const lone=assets.filter(asset=>entry.ids.includes(asset.id)&&hidden.has(asset.id)&&!files.some(still=>behind.get(still.id)?.some(file=>file.id===asset.id)));
       turn([...files,...lone],direction==='before'?-entry.quarters:entry.quarters,false);
       return true;
     }
     if(entry.kind==='pair'){
-      void pairing(entry.raw,entry.partner,entry[direction],false);
+      void pairing(entry.raw,entry.partners,entry[direction],false);
       return true;
     }
     if(entry.kind==='progress'){
@@ -353,11 +353,10 @@ export function Today({initial}:{initial:TodayData}){
       return true;
     }
     // A choice on more than one photo, from a selection, goes back the way it
-    // came, as a batch. Each RAW rides with its photo, as it did when the
-    // choice was made, so a photo and its RAW count as one.
+    // came, as a batch. Each stack rides with its photo, as it did when the
+    // choice was made, so a photo and the files behind it count as one.
     const targets=new Map(entry[direction].map(target=>[target.id,target]));
-    const riders=new Set([...behind.values()].map(raw=>raw.id));
-    const photos=assets.filter(asset=>targets.has(asset.id)&&!riders.has(asset.id));
+    const photos=assets.filter(asset=>targets.has(asset.id)&&!hidden.has(asset.id));
     if(photos.length>1){
       if(saving||queue.pending>0)return false;
       void saveMany(photos,asset=>targets.get(asset.id)!,entry.label,false);
@@ -481,8 +480,8 @@ export function Today({initial}:{initial:TodayData}){
   usePageDate({md:initial.md,label:pageLabel,
     short:shortLabel(initial.md,dayPage?.slice(0,4)),
     done:dateDone,years:years.length,yearsDone:doneYears,previous:initial.previous,next:initial.next});
-  // A link to a RAW that shows behind its JPEG opens the pair.
-  const viewing=viewer===null?null:[...behind].find(([,raw])=>raw.id===viewer)?.[0]??viewer;
+  // A link to a file that shows behind another opens the photo of its stack.
+  const viewing=viewer===null?null:[...behind].find(([,files])=>files.some(file=>file.id===viewer))?.[0]??viewer;
   // The viewer walks the files the grid showed when it opened. A choice that
   // takes a file out of the filter keeps it in the walk until the viewer
   // closes, so the next file is the grid's next, and nothing the filter hid
@@ -552,7 +551,7 @@ export function Today({initial}:{initial:TodayData}){
         onKeyDown={event=>{if(event.target===event.currentTarget&&(event.key==='Enter'||event.key===' ')){event.preventDefault();openOrPick(asset,event.shiftKey)}}}>
         <Media asset={asset}/>
         <Pick checked={picks.picked.has(asset.id)} label={`Select ${fileName(asset)}`} onToggle={extend=>picks.toggle(place.get(asset.id)??0,extend)}/>
-        <div className="bdg end">{asset.new&&asset.status==='unreviewed'&&<span className="b new">new</span>}{behind.has(asset.id)&&<span className="b pair">{pairLabel(asset)}</span>}{(asset.relatedCount??0)>(behind.has(asset.id)?1:0)&&<span className="b dupe">duplicate</span>}</div>
+        <div className="bdg end">{asset.new&&asset.status==='unreviewed'&&<span className="b new">new</span>}{behind.has(asset.id)&&stackFormats(stackOf(asset,behind)).map(format=><span className="b pair" key={format}>{format}</span>)}{(asset.relatedCount??0)>(behind.get(asset.id)?.length??0)&&<span className="b dupe">duplicate</span>}</div>
         <button type="button" className="tfav" disabled={!queue.ready} aria-pressed={asset.favourite} aria-label={asset.favourite?'Remove from favourites':'Favourite'} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite)}}><Icon name="favorite" filled={asset.favourite}/></button>
         {(asset.duration||asset.kind==='video')&&<span className="dur" aria-label={asset.duration?`Video, ${runningTime(asset.duration)}`:'Video'}>{asset.duration?runningTime(asset.duration):<Icon name="play_circle" filled/>}</span>}
         {asset.status==='cull'&&<div className="undo"><span>Removed</span><button type="button" className="act" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,'unreviewed')}}>Undo</button></div>}
@@ -564,6 +563,6 @@ export function Today({initial}:{initial:TodayData}){
     </Snacks>}
     {cheer&&<Celebration tally={cheer} nextHref={`/on/${initial.next}`} nextLabel={calendarLabel(initial.next)} onClose={()=>setCheer(null)}/>}
     {viewing!==null&&<Viewer assets={walked} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset} onRecord={history.record} onTurn={(asset,quarters)=>turn([asset],quarters)}
-      rawOf={asset=>behind.get(asset.id)} onUnpair={(still,raw)=>void pairing(raw.id,still.id,false)}/>}
+      behindOf={asset=>behind.get(asset.id)} onSeparate={(still,files)=>{const raw=files.find(file=>file.kind==='raw');if(raw)void pairing(raw.id,[still,...files].filter(file=>file!==raw).map(file=>file.id),false)}}/>}
   </>;
 }
