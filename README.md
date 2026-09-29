@@ -78,7 +78,7 @@ Removing a photo moves it to the Bin, and it can be restored from the Bin or the
 
 | | Minimum |
 |---|---|
-| macOS | 13 Ventura or newer |
+| macOS | 14 Sonoma or newer |
 | Processor | Apple silicon or Intel |
 | Memory | 4 GB |
 | Free space | 2 GB for the app, plus room for your photos |

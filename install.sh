@@ -15,7 +15,7 @@
 # main, called on the very last line, so a download cut short runs nothing.
 
 REPO="tural-ali/daddy-cull-oss"
-MIN_MACOS=13
+MIN_MACOS=14
 MIN_RAM_GB=4
 MIN_FREE_GB=2
 
@@ -81,7 +81,7 @@ requirements() {
   local version major
   version=$(sw_vers -productVersion)
   major=${version%%.*}
-  if [ "$major" -ge "$MIN_MACOS" ]; then check true macOS "$version"; else check false macOS "$version: needs macOS $MIN_MACOS Ventura or newer"; fi
+  if [ "$major" -ge "$MIN_MACOS" ]; then check true macOS "$version"; else check false macOS "$version: needs macOS $MIN_MACOS Sonoma or newer"; fi
 
   local arch
   arch=$(uname -m)

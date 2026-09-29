@@ -61,9 +61,9 @@ actor PhotoLibrary {
         let resources = PHAssetResource.assetResources(for: asset)
         let primary: PHAssetResourceType = asset.mediaType == .video ? .video : .photo
         guard let resource = resources.first(where: { $0.type == primary }) ?? resources.first else { return "" }
-        if #available(macOS 27, *) {
-            return resource.filename ?? ""
-        }
+        // originalFilename is deprecated for apps that target macOS 27, but its
+        // replacement, filename, is only in the macOS 27 SDK, and Cull Sync is
+        // compiled on each Mac with whatever SDK that Mac has.
         return resource.originalFilename
     }
 
