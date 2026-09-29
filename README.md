@@ -15,12 +15,14 @@ One place on your Mac to bring every photo in, file it by the day it was taken, 
 
 ### What?
 
-I had 20 years of photos and videos, around 60,000 files, that needed cleaning up: duplicates of every kind, and plain trash.
+I had 20 years of photos and videos, 60,000+ files spread across Apple Photos, Google Photos and Lightroom, that needed cleaning up: duplicates of every kind, and plain trash.
+There were plenty of places storing them, but no complete local copy I controlled and no recovery process I trusted.
 
 ### And what?
 
-Every time our family of four came back from an event, there were hundreds of new photos, taken on different devices: iPhones, DSLR cameras and more.
-Cleaning them up meant a number of different applications, one for each job.
+Every time our family of four came back from an event, there were hundreds of new photos from two iPhones, a DSLR and now and then a drone or an action camera.
+Culling them meant two or three places, one for each app, and deleting a photo in one cloud left it in the others.
+Lightroom Classic is good with RAW photos but struggles to play 4K video, so it could not be the one tool either.
 
 ### So what?
 
