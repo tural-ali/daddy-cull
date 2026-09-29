@@ -246,7 +246,19 @@ func (s *Setup) Save(change SetupChange) error {
 			return errors.New("an Immich API key is letters and digits only")
 		}
 		secrets := filepath.Join(StateDir(s.file), "secrets.env")
-		if err := writeQuietly(secrets, []byte("IMMICH_KEY="+key+"\n")); err != nil {
+		// Every other line, the writer's key among them, stays as it was.
+		var lines []string
+		if body, err := os.ReadFile(secrets); err == nil {
+			for _, line := range strings.Split(strings.TrimRight(string(body), "\n"), "\n") {
+				if !strings.HasPrefix(strings.TrimSpace(line), "IMMICH_KEY=") {
+					lines = append(lines, line)
+				}
+			}
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		lines = append(lines, "IMMICH_KEY="+key)
+		if err := writeQuietly(secrets, []byte(strings.Join(lines, "\n")+"\n")); err != nil {
 			return err
 		}
 	}

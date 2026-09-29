@@ -29,6 +29,10 @@ func setupFixture(t *testing.T) (*Setup, string, *atomic.Int32) {
 	if err := os.WriteFile(file, body, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// install.sh writes the writer's key here; saving the Immich key keeps it.
+	if err := os.WriteFile(filepath.Join(state, "secrets.env"), []byte("# Daddy Cull\nCULL_BIN_KEY=synthetic-writer-key-for-tests-only-0123\nIMMICH_KEY=old\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	restarts := &atomic.Int32{}
 	setup := NewSetup(file, SetupConfig{}, func() { restarts.Add(1) })
 	setup.look = func(name string) (string, error) {
@@ -105,6 +109,9 @@ func TestSetupSavesAndRestarts(t *testing.T) {
 	}
 	if strings.Contains(answer.Body.String(), "abc123") {
 		t.Fatal("the Immich key was shown")
+	}
+	if secrets, _ := os.ReadFile(filepath.Join(StateDir(setup.file), "secrets.env")); string(secrets) != "# Daddy Cull\nCULL_BIN_KEY=synthetic-writer-key-for-tests-only-0123\nIMMICH_KEY=abc123\n" {
+		t.Fatalf("secrets.env became %q, want the writer's key kept and the Immich key replaced", secrets)
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for restarts.Load() == 0 && time.Now().Before(deadline) {

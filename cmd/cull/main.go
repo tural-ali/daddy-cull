@@ -449,9 +449,6 @@ func main() {
 	}
 }
 
-// resolveTool turns a frame-extractor name into an absolute path once at start
-// up, so nothing later resolves a bare command name against PATH. An empty name,
-// or one that is not on this machine, simply disables video previews.
 // applyConfig fills every flag not given on the command line from the config
 // file, makes the folders it names, and takes the writer's key and Immich's
 // from secrets.env beside it when the environment has none.
@@ -521,6 +518,9 @@ func (f *folderList) Set(value string) error {
 	return nil
 }
 
+// resolveTool turns a frame-extractor name into an absolute path once at start
+// up, so nothing later resolves a bare command name against PATH. An empty name,
+// or one that is not on this machine, simply disables video previews.
 func resolveTool(name string) string {
 	if name == "" {
 		return ""
