@@ -3,8 +3,8 @@ const assert=require('node:assert/strict');
 const {builtIns,common}=require('./lib/addons.cjs');
 
 // The sidebar shows what the library holds under the review meter: photos
-// and videos, how many and how much space, with a bar for each split. Folded
-// to a rail it is one icon whose tooltip says the same. Every count is a
+// and videos, how many and how much space, as numbers only. Folded to a rail
+// it is one icon whose tooltip says the same. Every count is a
 // synthetic fixture.
 const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
 const shots=process.env.SHOTS;
@@ -37,8 +37,7 @@ const library={photos:{files:38412,bytes:581_300_000_000},videos:{files:19807,by
   await widget.waitFor();
   const rows=await widget.locator('tr').allInnerTexts();
   assert.deepEqual(rows.map(row=>row.replace(/\s+/g,' ').trim()),['Kind Files Space','Photos 38,412 581 GB','Videos 19,807 2.8 TB','Total 58,219 3.4 TB']);
-  assert.equal(await widget.getByRole('img',{name:'Files: 66% photos, 34% videos'}).count(),1);
-  assert.equal(await widget.getByRole('img',{name:'Space: 17% photos, 83% videos'}).count(),1);
+  assert.equal(await widget.locator('[role=img], .swatch, .libbar').count(),0,'numbers, no chart');
   const meter=await page.locator('.sideprogress').boundingBox(),box=await widget.boundingBox(),foot=await page.locator('.sidefoot').boundingBox();
   assert.ok(box.y>=meter.y+meter.height&&box.y+box.height<=foot.y,'it sits between the review meter and Settings');
   if(shots)await page.locator('#side').screenshot({path:`${shots}/side-library.png`});

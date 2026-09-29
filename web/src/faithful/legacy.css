@@ -580,13 +580,8 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   .side-hidden .sideprogress:hover .sideprogresshead { background: var(--hover); }
   .side-hidden .sidelibrary { align-items: center; padding: 4px 0; border-top: 0; }
   .side-hidden .sideprogress + .sidelibrary { margin-top: 0; }
-  .side-hidden .libsplits, .side-hidden .libkey { display: none; }
+  .side-hidden .libkey { display: none; }
   .side-hidden .sidelibraryhead { position: relative; justify-content: center; width: 48px; height: 48px; gap: 0; border-radius: 999px; }
-  .side-hidden .sidelibraryhead::before {
-    content: ""; position: absolute; inset: 6px; border-radius: 999px;
-    background: conic-gradient(var(--photos-ink) calc(var(--photos, 0) * 1turn), var(--videos-ink) 0);
-    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
-  }
   .side-hidden .sidelibraryhead .icon, .side-hidden .sidelibraryhead .icon svg { width: 20px; height: 20px; }
   .side-hidden .sidelibrary:hover .sidelibraryhead, .side-hidden .sidelibrary:focus-visible .sidelibraryhead { background: var(--hover); }
   .side-hidden .fbar { left: var(--rail-w); }
@@ -639,12 +634,8 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .sideprogressnote { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sideprogressfoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; }
 /* What the library holds, under the review meter, or pushed to the foot of
-   the sidebar in its place. Photos take the logo's mint and videos its amber;
-   coral stays for what leaves. */
+   the sidebar in its place. */
 .sidelibrary {
-  --photos-ink: var(--logo-mint);
-  --videos-ink: var(--logo-amber);
-
   display: flex; flex-direction: column; gap: 10px;
   margin-top: auto; padding: 18px 20px 4px;
   border-top: 1px solid var(--line);
@@ -652,19 +643,11 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .sideprogress + .sidelibrary { margin-top: 10px; }
 .sidelibraryhead { display: flex; align-items: center; gap: 18px; margin: 0; font-size: 14px; font-weight: 400; letter-spacing: 0; }
 .sidelibraryhead .icon { color: var(--muted); }
-.libsplits { display: grid; gap: 6px; }
-.libsplit { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 8px; }
-.libsplitlabel { font-size: 12px; color: var(--muted); }
-.libbar { display: flex; gap: 2px; height: 8px; overflow: hidden; border-radius: 999px; background: var(--bg-4); }
-.libbar > span { flex-basis: 0; min-width: 3px; }
-.libbar .photos, .libkey .swatch.photos { background: var(--photos-ink); }
-.libbar .videos, .libkey .swatch.videos { background: var(--videos-ink); }
 .libkey { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
 .libkey th, .libkey td { padding: 2px 0; font-weight: 400; white-space: nowrap; }
 .libkey th { text-align: left; color: var(--text); }
 .libkey td { text-align: right; color: var(--muted); padding-left: 10px; }
 .libkey tfoot th, .libkey tfoot td { padding-top: 6px; border-top: 1px solid var(--line); color: var(--text); font-weight: 500; }
-.libkey .swatch { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 2px; vertical-align: 1px; }
 .libkey thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
 /* Settings closes the sidebar, below the review meter, as Google Photos
