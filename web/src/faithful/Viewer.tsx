@@ -6,6 +6,7 @@ import {tracked} from '../saving';
 import {undoKeys,type HistoryEntry} from './history';
 import {Kbd,tipProps} from './keys';
 import {TurnedControls} from './TurnedControls';
+import {useShownPath} from './libraryPath';
 
 function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
 function preview(asset:Asset){return `/api/media/${asset.id}/preview?size=large`}
@@ -42,6 +43,7 @@ const flightTime=320;
 /** `rawOf` names the RAW behind a photo that stands for a RAW+JPEG pair, and
  * `onUnpair` splits the pair when the two turn out not to belong together. */
 export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onRecord,rawOf,onUnpair,onTurn}:{assets:Asset[];initialID:number;onClose:()=>void;onSave:(asset:Asset,status:Status,favourite?:boolean)=>boolean;onPatch:(id:number,change:Partial<Asset>)=>void;dayOf?:(asset:Asset)=>string;onMove?:(id:number)=>void;onRecord?:(entry:HistoryEntry)=>void;rawOf?:(asset:Asset)=>Asset|undefined;onUnpair?:(photo:Asset,raw:Asset)=>void;onTurn?:(asset:Asset,quarters:number)=>void}){
+  const onDisk=useShownPath();
   const initialIndex=Math.max(0,assets.findIndex(asset=>asset.id===initialID));
   const [at,setAt]=useState(initialIndex);
   // The file the reviewer is on, or moving to. When the list changes under
@@ -178,7 +180,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   function favourite(){if(current)choose(current.status==='cull'?'unreviewed':current.status,!current.favourite)}
   function copyPath(){
     if(!current)return;
-    navigator.clipboard.writeText(current.path).then(()=>{setCopied(true);window.setTimeout(()=>setCopied(false),1500)},()=>setError('The path could not be copied.'));
+    navigator.clipboard.writeText(onDisk(current.path)).then(()=>{setCopied(true);window.setTimeout(()=>setCopied(false),1500)},()=>setError('The path could not be copied.'));
   }
   // A pair's own RAW is not a similar photo to compare with.
   const similar=(current?.relatedCount??0)-(raw?1:0);
@@ -314,7 +316,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       <div className="irow"><Icon name={mediaIcon}/><div><b>{name}</b><span>{(current.size/1048576).toFixed(1)} MB · {format(current)||current.kind.toUpperCase()}</span></div></div>
       {raw&&<div className="irow"><Icon name="raw_on"/><div><b>{raw.path.split('/').pop()}</b><span>{(raw.size/1048576).toFixed(1)} MB · RAW, kept or removed with this photo</span></div></div>}
       <div className="irow"><Icon name={decision.icon}/><div><b>{decision.text}</b><span>{current.favourite?'Favourite · ':''}<span className="rvpos">{at+1} / {assets.length}</span> in this review</span></div></div>
-      <div className="irow"><Icon name="folder"/><div><b>{folder.split('/').pop()||folder}</b><span className="mono">{current.path}</span></div><button type="button" className="rvact copy" aria-label="Copy file path" {...tipProps(copied?'Copied':'Copy file path')} onClick={copyPath}><Icon name={copied?'check':'content_copy'}/></button></div>
+      <div className="irow"><Icon name="folder"/><div><b>{folder.split('/').pop()||folder}</b><span className="mono">{onDisk(current.path)}</span></div><button type="button" className="rvact copy" aria-label="Copy file path" {...tipProps(copied?'Copied':'Copy file path')} onClick={copyPath}><Icon name={copied?'check':'content_copy'}/></button></div>
     </aside>
     {related&&<div className="rvcmp"><div className="ctop"><b>Similar photos</b><span className="cpos">{focus+1} / {related.length}</span><span className="hint">1–9 focus a frame · X marks it · C back</span><button type="button" className="rvx cmpx" aria-label="Close compare" {...tipProps('Close','C')} onClick={()=>setRelated(null)}>×</button></div><div className="cgrid">{compareFiles.map((asset,index)=>
       // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- 1 to 9 focus a frame from the keyboard

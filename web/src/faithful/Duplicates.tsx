@@ -5,6 +5,7 @@ import {binChanged} from '../api';
 import {Busy} from '../Busy';
 import {Icon} from '../Icon';
 import {usePageActions} from './pageActions';
+import {useShownPath} from './libraryPath';
 
 export type {DuplicateGroup} from './Today';
 export type DuplicateMember=DuplicateGroup['members'][number];
@@ -104,6 +105,7 @@ function Tile({member,previewID,size,label,keeper,disabled,onKeep}:{member:Dupli
   const [ratio,setRatio]=useState(0);
   const [playing,setPlaying]=useState(false);
   const [failed,setFailed]=useState(false);
+  const shown=useShownPath();
   // The figure takes the photograph's own shape, so the size caption and the
   // badge sit on the picture rather than on the cell around it.
   const shape:CSSProperties|undefined=ratio?(ratio>=1?{width:'100%',height:'auto',aspectRatio:String(ratio)}:{width:'auto',height:'100%',aspectRatio:String(ratio)}):undefined;
@@ -121,18 +123,19 @@ function Tile({member,previewID,size,label,keeper,disabled,onKeep}:{member:Dupli
                 onError={()=>setFailed(true)}/>}
         {!playing&&<>
           <button type="button" className="dupechoose" aria-pressed={keeper} disabled={disabled}
-            aria-label={keeper?`Keeping ${label}`:`Keep ${label} instead`} title={keeper?`Keeping ${member.path}`:`Keep ${member.path} instead`} onClick={onKeep}/>
+            aria-label={keeper?`Keeping ${label}`:`Keep ${label} instead`} title={keeper?`Keeping ${shown(member.path)}`:`Keep ${shown(member.path)} instead`} onClick={onKeep}/>
           <span className={`dupemark ${keeper?'keep':'bin'}`}><Icon name={keeper?'check':'delete'}/></span>
           <span className="dupesize">{bytes(size)}</span>
           {member.kind==='video'&&<button type="button" className="duplay" aria-label={`Play ${name(member.path)}`} onClick={()=>setPlaying(true)}><Icon name="play_circle" filled/></button>}
         </>}
       </figure>
     </div>
-    <p className="dupelabel" title={member.path}><span>{label}</span>{member.path.includes('/.culled/')&&!label.includes('.culled')&&<span className="dupeflag">in .culled</span>}</p>
+    <p className="dupelabel" title={shown(member.path)}><span>{label}</span>{member.path.includes('/.culled/')&&!label.includes('.culled')&&<span className="dupeflag">in .culled</span>}</p>
   </li>;
 }
 
 export function Duplicates({report}:{report:DuplicateReport}){
+  const shown=useShownPath();
   // A set of one is not a set; the server never sends one, and the page would
   // offer to merge a file with nothing if it did.
   const [groups,setGroups]=useState(()=>report.groups.filter(group=>group.members.length>1));
@@ -234,7 +237,7 @@ export function Duplicates({report}:{report:DuplicateReport}){
       <p className="hint">These files are exactly the same length as each other, which is the only way two files can be byte-identical. That is not evidence that they are: same-length files are usually different. Nothing here can be acted on until a full hash settles it, so no action is offered. At most <strong>{bytes(report.unproven.reduce((total,group)=>total+group.reclaimable,0))}</strong> is involved.</p>
       {report.unproven.map(group=><div className="xgroup" key={`size:${group.size}`}>
         <p className="xmeta">{group.members.length} files of {bytes(group.size)} · {group.hashed} of {group.members.length} hashed · up to <strong>{bytes(group.reclaimable)}</strong> if identical</p>
-        <ul className="plain mono">{group.members.map(member=><li key={member.id}>{member.path} <span className="dim">· {member.day}</span></li>)}</ul>
+        <ul className="plain mono">{group.members.map(member=><li key={member.id}>{shown(member.path)} <span className="dim">· {member.day}</span></li>)}</ul>
       </div>)}
     </>}
   </section>;
