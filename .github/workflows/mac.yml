@@ -1,0 +1,45 @@
+name: Mac
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scripts:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: ShellCheck
+        run: shellcheck -s bash install.sh mac/daddy-cull mac/test-cli.sh mac/test-install.sh mac/CullSync/setup.sh tools/version.sh tools/release.sh tools/release-notes.sh web/tests/run.sh
+
+  cli:
+    name: daddy-cull command and Cull Sync
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: daddy-cull, with stand-ins for icloudpd and osxphotos
+        run: mac/test-cli.sh
+      - name: Cull Sync matching
+        run: mac/CullSync/test.sh
+      - name: Cull Sync builds
+        run: mac/CullSync/build.sh
+
+  install:
+    name: install.sh on a Mac
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Install, use, update and uninstall, with iCloud and Apple Photos
+        run: mac/test-install.sh --with-icloud --with-apple-photos
+      - name: Logs
+        if: failure()
+        run: tail -n 100 "$HOME/Library/Application Support/Daddy Cull/logs/"*.log

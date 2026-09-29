@@ -1,0 +1,32 @@
+name: Go
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Server tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Formatted
+        run: test -z "$(gofmt -l cmd internal mac)" || { gofmt -l cmd internal mac; exit 1; }
+      - name: Vet
+        run: go vet ./...
+      - name: API docs match the code
+        run: go generate ./internal/catalog ./internal/addon && git diff --exit-code
+      - name: Test
+        run: CGO_ENABLED=1 go test -count=1 ./...

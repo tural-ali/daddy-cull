@@ -1,0 +1,77 @@
+name: Release
+
+# Every commit on main that passes the tests is released, numbered by
+# tools/version.sh from the history: each feat: commit is a new minor version
+# and each fix: after it a patch. Other commits change nothing, so they are
+# not released. While the version starts with 0 each release is a beta.
+on:
+  workflow_run:
+    workflows: [Mac]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SHA }}
+          fetch-depth: 0
+      - name: Every test passed on this commit
+        run: |
+          for _ in $(seq 1 60); do
+            runs=$(gh run list --commit "$SHA" --json name,status,conclusion --jq '[.[] | select(.name == "Go" or .name == "Web" or .name == "Mac")]')
+            pending=$(jq '[.[] | select(.status != "completed")] | length' <<<"$runs")
+            [ "$pending" -eq 0 ] && break
+            sleep 20
+          done
+          echo "$runs" | jq -r '.[] | "\(.name): \(.conclusion)"'
+          for name in Go Web Mac; do
+            jq -e --arg name "$name" 'any(.[]; .name == $name and .conclusion == "success")' <<<"$runs" >/dev/null ||
+              { echo "$name did not pass on $SHA"; exit 1; }
+          done
+      - name: Version
+        id: version
+        run: |
+          version=$(tools/version.sh)
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "v$version is already released."
+            echo "new=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "new=true" >>"$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-go@v6
+        if: steps.version.outputs.new == 'true'
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v5
+        if: steps.version.outputs.new == 'true'
+        with:
+          node-version-file: web/.nvmrc
+      - name: Build
+        if: steps.version.outputs.new == 'true'
+        run: tools/release.sh "${{ steps.version.outputs.version }}"
+      - name: Release notes
+        if: steps.version.outputs.new == 'true'
+        run: tools/release-notes.sh "${{ steps.version.outputs.version }}" >"$RUNNER_TEMP/notes.md"
+      - name: Publish
+        if: steps.version.outputs.new == 'true'
+        run: |
+          version=${{ steps.version.outputs.version }}
+          gh release create "v$version" dist/* --target "$SHA" --prerelease \
+            --title "Daddy Cull $version (beta)" --notes-file "$RUNNER_TEMP/notes.md"
