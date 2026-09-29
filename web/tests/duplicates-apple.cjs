@@ -14,6 +14,9 @@ const svg=(w,h,fill)=>`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" heig
   const browser=await chromium.launch({channel:'chrome',headless:true});
   const page=await browser.newPage({viewport:{width:1400,height:1000}});
   const previews=[];let posted=null;
+  // Duplicates is one of Cull's own features, on as it is by default.
+  await page.route('**/api/addons',route=>route.fulfill({json:[]}));
+  await page.route('**/api/stats**',route=>route.fulfill({json:{total:6,synthetic:true,candidates:6,calendarDays:4,reviewedDays:0,decisions:0,favourites:0,evidence:6,fullHashes:6,marked:0,legacyBin:0,shadowGroups:0,screenshots:0,upgradesAccepted:0,upgradeCandidates:0,bin:0,notifications:0}}));
   await page.route('**/api/duplicate-report**',route=>route.fulfill({json:report}));
   await page.route(/\/api\/media\/9\d\/preview/,route=>{const id=Number(/media\/(\d+)/.exec(route.request().url())[1]);previews.push(id);return route.fulfill({contentType:'image/svg+xml',body:id===93?svg(600,800,'#6b8f71'):svg(800,533,'#4d6f94')})});
   await page.route('**/api/decisions/batch',route=>{posted=JSON.parse(route.request().postData());return route.fulfill({json:posted.map(change=>({...change,revision:1}))})});
