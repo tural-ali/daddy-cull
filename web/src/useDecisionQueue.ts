@@ -10,6 +10,10 @@ const randomId=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.to
 // in which case that one, not this, is what the file shows.
 export function useDecisionQueue(onSaved:(job:PendingDecision,result:Saved,overtaken:boolean)=>void){
  const jobs=useRef<PendingDecision[]>([]);const running=useRef(false);const paused=useRef(false);
+ // The last revision each file was saved at here. A choice made just after a
+ // save is answered, before the page has drawn that answer, still carries the
+ // older revision, and the server would refuse it as changed elsewhere.
+ const revisions=useRef(new Map<number,number>());
  const key=useRef('');const callback=useRef(onSaved);callback.current=onSaved;
  const [pending,setPending]=useState(0);const [error,setError]=useState('');const [ready,setReady]=useState(false);
  function persist(next:PendingDecision[]){localStorage.setItem(key.current,JSON.stringify(next));jobs.current=next;setPending(next.length)}
@@ -21,6 +25,7 @@ export function useDecisionQueue(onSaved:(job:PendingDecision,result:Saved,overt
   try{while(jobs.current.length){
    const job=jobs.current[0];
    const result=await decide(job.asset,job.status,job.favourite,job.requestId);
+   revisions.current.set(job.asset.id,result.revision);
    // A later choice on the same file was queued before this one was
    // confirmed, so it waits for, and builds on, the revision just saved.
    const rest=jobs.current.slice(1);
@@ -43,7 +48,9 @@ export function useDecisionQueue(onSaved:(job:PendingDecision,result:Saved,overt
  function enqueue(job:Omit<PendingDecision,'requestId'>){
   if(!ready||paused.current)return false;
   if(jobs.current.length>=32){setError('32 choices are waiting to save. Wait for the connection to catch up.');return false}
-  try{persist([...jobs.current,{...job,requestId:randomId()}]);setError('');void drain();return true}
+  const known=revisions.current.get(job.asset.id);
+  const asset=known!==undefined&&known>job.asset.revision?{...job.asset,revision:known}:job.asset;
+  try{persist([...jobs.current,{...job,asset,requestId:randomId()}]);setError('');void drain();return true}
   catch{paused.current=true;setError('Could not retain the choice locally. Review is paused; no choice was advanced.');return false}
  }
  return {enqueue,pending,error,ready,retry:()=>{paused.current=false;setError('');void drain()}};

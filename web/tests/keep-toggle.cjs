@@ -6,9 +6,13 @@ const assert=require('node:assert/strict');
 const photo=(id,name)=>({id,path:`/archive/2010/2010-09/2010-09-07/${name}`,capturedAt:Date.parse('2010-09-07T12:00:00Z')/1000+id,kind:'image',source:'archive',size:100,status:'unreviewed',favourite:false,revision:0,alternativeCount:0,relatedCount:0,day:'2010-09-07'});
 const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
 
-(async()=>{
-  const browser=await chromium.launch({channel:'chrome',headless:true});
+// It runs twice: as fast as the machine allows, then with the CPU slowed
+// twentyfold, which widens the moment between a save being answered and the
+// page drawing that answer, where a quick next choice once reused the older
+// revision and was refused.
+async function run(browser,slowdown){
   const page=await browser.newPage({viewport:{width:1280,height:800}});
+  if(slowdown>1)await (await page.context().newCDPSession(page)).send('Emulation.setCPUThrottlingRate',{rate:slowdown});
   await page.clock.setFixedTime(new Date('2026-09-07T10:00:00'));
   const writes=[];
   await page.route('**/api/**',route=>{
@@ -22,7 +26,7 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   const viewer=page.getByRole('dialog',{name:'Photo review'});
   const keep=viewer.locator('.rvact.keep');
   const heart=viewer.locator('.rvact.fav');
-  const settled=async n=>{for(let i=0;i<50&&writes.length<n;i++)await page.waitForTimeout(50);assert.equal(writes.length,n,'decision count');return writes[n-1]};
+  const settled=async n=>{for(let i=0;i<50*slowdown&&writes.length<n;i++)await page.waitForTimeout(50);assert.equal(writes.length,n,'decision count');return writes[n-1]};
 
   await page.goto(`${base}/on/09-07/photo/1`);
   await viewer.waitFor();
@@ -61,7 +65,14 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   assert.deepEqual((({status,favourite})=>({status,favourite}))(await settled(8)),{status:'unreviewed',favourite:true},'a heart on a removed photo brings it back');
   // Each choice builds on the revision the previous one saved, even when it
   // was made before the server had confirmed that previous choice.
-  assert.deepEqual(writes.map(write=>[write.assetId,write.expectedRevision]),[0,1,2,3,4,5,6,7].map(revision=>[1,revision]));
+  assert.deepEqual(writes.map(write=>[write.assetId,write.expectedRevision]),[0,1,2,3,4,5,6,7].map(revision=>[1,revision]),`revisions chain at ${slowdown}x slower`);
+  await page.close();
+}
+
+(async()=>{
+  const browser=await chromium.launch({channel:'chrome',headless:true});
+  await run(browser,1);
+  await run(browser,20);
   await browser.close();
   console.log('keep toggle: ok');
 })().catch(error=>{console.error(error);process.exit(1)});
