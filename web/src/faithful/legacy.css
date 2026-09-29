@@ -1878,23 +1878,28 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .chip.flagged { background: color-mix(in oklab, var(--warn) 50%, var(--bg-4)); color: #fff; }
 .chip.done { background: color-mix(in oklab, var(--good) 60%, var(--bg-4)); color: #fff; }
 
-/* Upgrades: the archive copy and the Takeout candidate, side by side. */
+/* Upgrades: the archive copy and the Takeout candidate, side by side, two
+   pairs to a row on a wide screen. Each photo is shown whole, letterboxed,
+   because a crop would hide what the better copy adds. */
+.uppairs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr)); align-items: start; gap: 1rem; }
 .pair {
-  margin: 0 0 1rem; padding: .8rem;
+  min-width: 0; padding: .75rem;
   background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
 }
-.pair.settled { opacity: .6; }
-.phead { margin: 0 0 .6rem; font-size: 12.5px; color: var(--muted); }
-.sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--gap); }
-.card.side { position: relative; margin: 0; background: var(--bg-3); border-radius: var(--radius); overflow: hidden; }
-.card.side img { width: 100%; display: block; aspect-ratio: 1; object-fit: cover; }
-.card.side.better { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--good) 60%, transparent); }
-.card.side .fn, .card.side .sz {
-  display: block; padding: 0 .5rem; font-size: 11.5px; color: var(--muted);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.card.side .fn { padding-top: .4rem; color: var(--text); }
-.card.side .sz { padding-bottom: .4rem; }
+.pair.settled { opacity: .65; }
+.phead { display: flex; align-items: center; gap: .5rem; min-width: 0; margin: 0 0 .6rem; font-size: 12.5px; color: var(--muted); }
+.phead strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.phead .meta { flex: none; }
+.phead .tag { flex: none; margin-left: auto; }
+.sides { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.upcopy { min-width: 0; margin: 0; background: var(--bg-3); border-radius: var(--radius-sm); overflow: hidden; }
+.upcopy > a { display: block; }
+.upcopy img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: contain; background: var(--bg-4); }
+.upcopy.better { outline: 2px solid color-mix(in oklab, var(--good) 60%, transparent); outline-offset: -2px; }
+.upcopy figcaption { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .5rem; padding: .4rem .55rem .45rem; font-size: 11.5px; color: var(--muted); }
+.upcopy .fn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.upcopy .sz { font-variant-numeric: tabular-nums; }
+.pair .gact { margin-top: .6rem; }
 .allfiles { margin: .7rem 0 0; font-size: 12px; color: var(--faint); }
 .gact { display: flex; align-items: center; gap: .7rem; margin: .7rem 0 0; flex-wrap: wrap; }
 .gact form { margin: 0; }

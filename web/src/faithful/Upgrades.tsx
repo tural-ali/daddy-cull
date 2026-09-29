@@ -38,24 +38,23 @@ export function Upgrades({initial}:{initial:UpgradePage}){
     <section className="dupehead">
       <h1>Upgrades</h1>
       <p className="ysum"><b>{page.total.toLocaleString()}</b> photos with a better copy · <b>{page.pending.toLocaleString()}</b> still to decide · <b>{page.accepted.toLocaleString()}</b> added so far, <b>{bytes(page.bytes)}</b></p>
-      <p className="hint">Each pair is the same photograph: the archive copy on the left and Google’s higher-resolution copy on the right. Adding creates <strong>NAME (hi-res).ext</strong> beside the original. It never replaces or deletes either source.</p>
     </section>
     {message&&<p className="flash" role="status">{message}</p>}
     {error&&<p className="note warn" role="alert">{error}</p>}
     {page.groups.length===0&&<p className="empty">No confirmed upgrades are indexed.</p>}
-    {page.groups.map(group=>{
+    <div className="uppairs">{page.groups.map(group=>{
       const best=group.copies.find(copy=>copy.available)||group.copies[0];
       if(!best)return null;
       const extra=group.copies.length-1;
       const rightAsset=group.acceptedAsset||best.asset;
       return <section className={`pair${group.accepted?' settled':''}`} key={group.archive.id}>
-        <div className="phead"><span className="gnum">{best.ratio.toFixed(1)}×</span> <strong>{name(group.archive.path)}</strong> <span className="meta">{group.day} · captured {best.date.slice(0,10).replaceAll(':','-')}</span>{group.accepted&&<span className="tag done"> added as {name(group.accepted)}</span>}</div>
+        <div className="phead"><span className="gnum">{best.ratio.toFixed(1)}×</span><strong title={name(group.archive.path)}>{name(group.archive.path)}</strong><span className="meta">{group.day}</span>{group.accepted&&<span className="tag done" title={`Added as ${name(group.accepted)}`}>Added</span>}</div>
         <div className="sides">
-          <figure className="card side"><a href={`/api/media/${group.archive.id}/original`} target="_blank" rel="noreferrer"><Media asset={group.archive}/></a><figcaption><span className="fn">in the archive</span><span className="sz">{group.pixels}</span></figcaption></figure>
-          <figure className="card side better"><a href={`/api/media/${rightAsset.id}/original`} target="_blank" rel="noreferrer"><Media asset={rightAsset}/></a><figcaption><span className="fn">{group.accepted?'added to the archive':`Google · ${best.album}`}</span><span className="sz">{best.pixels}</span><span className="tag flag">{best.ratio.toFixed(1)}× pixels</span>{!group.accepted&&!best.available&&<span className="tag other">file missing</span>}{extra>0&&<span className="tag other">+{extra} album {extra===1?'copy':'copies'}</span>}</figcaption></figure>
+          <figure className="upcopy"><a href={`/api/media/${group.archive.id}/original`} target="_blank" rel="noreferrer"><Media asset={group.archive}/></a><figcaption><span className="fn">in the archive</span><span className="sz">{group.pixels}</span></figcaption></figure>
+          <figure className="upcopy better"><a href={`/api/media/${rightAsset.id}/original`} target="_blank" rel="noreferrer"><Media asset={rightAsset}/></a><figcaption><span className="fn">{group.accepted?'added to the archive':`Google · ${best.album}`}</span><span className="sz">{best.pixels}</span>{!group.accepted&&!best.available&&<span className="tag other">file missing</span>}{extra>0&&<span className="tag other">+{extra} album {extra===1?'copy':'copies'}</span>}</figcaption></figure>
         </div>
-        {!group.accepted&&best.available&&<div className="gact"><button className="btn primary" disabled={busy!==null} onClick={()=>void accept(group,best)}>{busy===group.archive.id?<Busy label="Verifying and copying…" state="working"/>:'Add the higher-resolution copy'}</button><span className="hint">Copied and SHA-256 verified beside the original. The Google file stays untouched.</span></div>}
+        {!group.accepted&&best.available&&<div className="gact"><button className="btn primary" disabled={busy!==null} onClick={()=>void accept(group,best)}>{busy===group.archive.id?<Busy label="Verifying and copying…" state="working"/>:'Add the higher-resolution copy'}</button></div>}
       </section>;
-    })}
+    })}</div>
   </>;
 }
