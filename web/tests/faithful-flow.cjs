@@ -13,6 +13,10 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
   // "/" opens today's date, and the fixtures are for 7 September.
   await page.clock.setFixedTime(new Date('2026-09-07T10:00:00'));
   const writes=[],individualWrites=[],fetched=[];
+  // A choice's write is held unanswered until the test lets it go, so the
+  // viewer can be seen to move on without waiting for it.
+  let answered=0,release;
+  const held=new Promise(resolve=>{release=resolve});
   await page.route('**/api/**',async route=>{
     const request=route.request(),url=new URL(request.url());
     fetched.push(url.pathname);
@@ -25,7 +29,7 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
     if(url.pathname==='/api/duplicates')return route.fulfill({json:[{hash:'abcdef0123456789abcdef0123456789',size:100,reclaimable:100,members:[first,copy]}]});
     if(url.pathname==='/api/year')return route.fulfill({json:{months:Array.from({length:12},(_,month)=>({name:new Date(Date.UTC(2000,month,1)).toLocaleString('en',{month:'long',timeZone:'UTC'}),cells:Array.from({length:31},(_day,index)=>({md:`${String(month+1).padStart(2,'0')}-${String(index+1).padStart(2,'0')}`,dom:index+1,years:month===8&&index===6?2:0,files:month===8&&index===6?2:0,done:0,waiting:month===8&&index===6?2:0,state:month===8&&index===6?'todo':'none'}))})),prog:{dates:1,done:0,part:0,filesDone:0,files:2},today:'09-07',streak:0,week:{days:0,seconds:0}}});
     if(url.pathname==='/api/decisions/batch'){writes.push(request.postDataJSON());return route.fulfill({json:[{revision:1,previousStatus:'unreviewed',previousFavourite:false},{revision:1,previousStatus:'unreviewed',previousFavourite:false}]})}
-    if(url.pathname==='/api/decisions'){const body=request.postDataJSON();individualWrites.push(body);await new Promise(resolve=>setTimeout(resolve,200));return route.fulfill({json:{revision:body.expectedRevision+1,previousStatus:'unreviewed',previousFavourite:false}})}
+    if(url.pathname==='/api/decisions'){const body=request.postDataJSON();individualWrites.push(body);await held;answered++;return route.fulfill({json:{revision:body.expectedRevision+1,previousStatus:'unreviewed',previousFavourite:false}})}
     if(url.pathname.startsWith('/api/media/'))return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><rect width="800" height="800" fill="#526b52"/></svg>'});
     if(url.pathname==='/api/tasks')return route.fulfill({json:{tasks:[],active:0}});
     throw new Error(`${request.method()} ${url.pathname}`);
@@ -55,10 +59,10 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
   await page.locator('.yhead ~ .gal .mo').first().click();
   await page.getByRole('dialog',{name:'Photo review'}).waitFor();
   assert.equal(new URL(page.url()).pathname,'/on/09-07/photo/1','the preview has its own address');
-  const started=Date.now();
   await page.keyboard.press('k');
   await page.locator('.rvpos').filter({hasText:'2 / 4'}).waitFor();
-  assert.ok(Date.now()-started<180,'viewer waited for the network before advancing');
+  assert.equal(answered,0,'viewer waited for the network before advancing');
+  release();
   assert.equal(new URL(page.url()).pathname,'/on/09-07/photo/2','the address follows the photo');
   // Info, once open, stays open from photo to photo.
   await page.keyboard.press('i');
