@@ -12,6 +12,8 @@ export type Asset = { id:number; path:string; capturedAt:number; kind:string; so
    * itself is as it was. Width and height are before the turn. */
   turn?:number };
 export type Page = {assets:Asset[];next:string};
+/** What one file records about itself, read from the file on request. */
+export type FileDetails = {camera?:string;lens?:string;shutter?:string;aperture?:number;iso?:number;focal?:number;software?:string;width?:number;height?:number;located:boolean;modified:string};
 export type Saved = {revision:number;previousStatus:Status;previousFavourite:boolean};
 /** The frame listens for this and reads its counts again: the Bin badge, the
  * dates reviewed and the review streak. Anything that may have put a file into

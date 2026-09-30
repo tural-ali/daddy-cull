@@ -314,11 +314,34 @@ export function Today({initial}:{initial:TodayData}){
     const name=face?fileName(face):'the photo';
     try{
       await Promise.all(partners.map(partner=>setPaired(raw,partner,paired)));
-      files.forEach(id=>patchAsset(id,{stack:paired?files.filter(other=>other!==id):undefined}));
+      // The RAW keeps the exports not named, as the server does, so taking
+      // one export out leaves the others stacked with it.
+      const members=new Set([raw,...assets.find(asset=>asset.id===raw)?.stack??[]]);
+      partners.forEach(partner=>{if(paired)members.add(partner);else members.delete(partner)});
+      if(members.size===1)members.clear();
+      members.forEach(id=>patchAsset(id,{stack:[...members].filter(other=>other!==id)}));
+      files.filter(id=>!members.has(id)).forEach(id=>patchAsset(id,{stack:undefined}));
       if(remember)history.record({kind:'pair',label:paired?`stacked ${name} with its RAW`:`separated ${name} from its RAW`,raw,partners,before:!paired,after:paired});
       if(remember)setMessage(paired?`${name} and its RAW are one photo again.`:`${name} and its RAW are separate photos now.`);
       return true;
     }catch(error){setMessage((error as Error).message);return false}
+  }
+  /** Removes one file of a stack and leaves the rest as they are: the file
+   * leaves the stack and goes to the Bin. A RAW takes its exports' stack with
+   * it, since a stack is a RAW and what was exported from it. */
+  async function removeFormat(face:Asset,file:Asset,remember=true){
+    const files=stackOf(face,behind);
+    const raw=files.find(item=>item.kind==='raw');
+    if(!raw||!files.includes(file))return false;
+    const partners=file===raw?files.filter(item=>item!==raw).map(item=>item.id):[file.id];
+    if(!await pairing(raw.id,partners,false,false))return false;
+    if(!save(file,'cull',false,false,false)){void pairing(raw.id,partners,true,false);return false}
+    const rest=files.filter(item=>item!==file);
+    if(remember){
+      history.record({kind:'format',label:`removed only the ${fileFormat(file)} of ${fileName(face)}`,raw:raw.id,partners,file:snapshot(file)});
+      setMessage(`Marked ${fileName(file)} for the Bin. ${file===raw&&rest.length>1?`The ${rest.map(fileFormat).join(' and ')} stay, as separate photos now.`:`The ${rest.map(fileFormat).join(' and ')} ${rest.length===1?'stays':'stay'}.`}`);
+    }
+    return true;
   }
   // Undo puts every file of the last action back as it was, through the same
   // queue as any choice, so it is journaled and confirmed the same way. A file
@@ -332,6 +355,17 @@ export function Today({initial}:{initial:TodayData}){
     }
     if(entry.kind==='pair'){
       void pairing(entry.raw,entry.partners,entry[direction],false);
+      return true;
+    }
+    if(entry.kind==='format'){
+      const file=assets.find(asset=>asset.id===entry.file.id);
+      if(!file)return false;
+      if(direction==='after'){
+        void pairing(entry.raw,entry.partners,false,false).then(split=>{if(split)save(file,'cull',false,false,false)});
+        return true;
+      }
+      if(!save(file,entry.file.status,entry.file.favourite,false,false))return false;
+      void pairing(entry.raw,entry.partners,true,false);
       return true;
     }
     if(entry.kind==='progress'){
@@ -572,6 +606,6 @@ export function Today({initial}:{initial:TodayData}){
     </Snacks>}
     {cheer&&<Celebration tally={cheer} nextHref={`/on/${initial.next}`} nextLabel={calendarLabel(initial.next)} onClose={()=>setCheer(null)}/>}
     {viewing!==null&&<Viewer assets={walked} initialID={viewing} onClose={photo.close} onMove={moved} onSave={save} onPatch={patchAsset} onRecord={history.record} onTurn={(asset,quarters)=>turn([asset],quarters)}
-      behindOf={asset=>behind.get(asset.id)} onSeparate={(still,files)=>{const raw=files.find(file=>file.kind==='raw');if(raw)void pairing(raw.id,[still,...files].filter(file=>file!==raw).map(file=>file.id),false)}}/>}
+      behindOf={asset=>behind.get(asset.id)} onRemoveFormat={(still,file)=>void removeFormat(still,file)} onSeparate={(still,files)=>{const raw=files.find(file=>file.kind==='raw');if(raw)void pairing(raw.id,[still,...files].filter(file=>file!==raw).map(file=>file.id),false)}}/>}
   </>;
 }

@@ -129,6 +129,14 @@ import VisibilityOff from '@material-symbols/svg-400/outlined/visibility_off.svg
 import VisibilityOffFill from '@material-symbols/svg-400/outlined/visibility_off-fill.svg?raw';
 import Refresh from '@material-symbols/svg-400/outlined/refresh.svg?raw';
 import RefreshFill from '@material-symbols/svg-400/outlined/refresh-fill.svg?raw';
+import Camera from '@material-symbols/svg-400/outlined/photo_camera.svg?raw';
+import CameraFill from '@material-symbols/svg-400/outlined/photo_camera-fill.svg?raw';
+import Edit from '@material-symbols/svg-400/outlined/edit.svg?raw';
+import EditFill from '@material-symbols/svg-400/outlined/edit-fill.svg?raw';
+import Located from '@material-symbols/svg-400/outlined/location_on.svg?raw';
+import LocatedFill from '@material-symbols/svg-400/outlined/location_on-fill.svg?raw';
+import Unlocated from '@material-symbols/svg-400/outlined/location_off.svg?raw';
+import UnlocatedFill from '@material-symbols/svg-400/outlined/location_off-fill.svg?raw';
 
 const icons={
   photo:[Photo,PhotoFill],
@@ -195,6 +203,10 @@ const icons={
   library_add:[LibraryAdd,LibraryAddFill],
   visibility_off:[VisibilityOff,VisibilityOffFill],
   refresh:[Refresh,RefreshFill],
+  photo_camera:[Camera,CameraFill],
+  edit:[Edit,EditFill],
+  location_on:[Located,LocatedFill],
+  location_off:[Unlocated,UnlocatedFill],
 } as const;
 
 export type IconName=keyof typeof icons;

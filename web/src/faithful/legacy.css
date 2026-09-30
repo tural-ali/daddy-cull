@@ -3048,3 +3048,24 @@ ul.answers { margin: 0; padding: 0; list-style: none; display: grid; gap: .5rem;
 }
 /* A phone's top bar has no room for it; Settings brings the guides back. */
 @media (width <= 600px) { .guide ul { padding-left: 1.2rem; } .guidebtn { display: none; } }
+
+/* Remove on a photo of several files: the one shown, or all of them. It
+   hangs under the bar as the More menu does. */
+.rvask { min-width: 300px; max-width: min(360px, calc(100vw - 24px)); }
+.rvask p { margin: 4px 16px 8px; font-size: 13px; line-height: 18px; color: #c4c7c5; }
+.rvask [role="menuitem"] { height: auto; min-height: 56px; padding: 8px 16px; }
+.rvask [role="menuitem"] > span:not(.kbds) { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rvask [role="menuitem"] b { font-weight: 400; }
+.rvask [role="menuitem"] small { font-size: 12px; color: #9a9d9b; overflow: hidden; text-overflow: ellipsis; }
+.rvask [role="menuitem"]:focus-visible { outline: 2px solid rgb(255 255 255 / 70%); outline-offset: -2px; }
+
+/* Each file of a stack in Info switches the stage to it. */
+.rvinfo .ihint { margin: 0 0 4px; font-size: 13px; line-height: 18px; color: #9a9d9b; }
+.rvinfo .irow.ifile {
+  width: calc(100% + 24px); margin: 0 -12px; padding: 10px 12px;
+  font: inherit; text-align: left; color: inherit;
+  background: none; border: 0; border-radius: 8px; cursor: pointer;
+}
+.rvinfo .irow.ifile:hover { background: rgb(255 255 255 / 6%); }
+.rvinfo .irow.ifile[aria-pressed="true"] { background: rgb(255 255 255 / 10%); }
+.rvinfo .irow.ifile:focus-visible { outline: 2px solid rgb(255 255 255 / 70%); outline-offset: -2px; }

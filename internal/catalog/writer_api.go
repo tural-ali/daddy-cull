@@ -221,6 +221,7 @@ func (s *Store) MediaRoutes(m *api.Mux, roots MediaRoots, upstream, posters stri
 	switch {
 	case local:
 		m.Handle(media, s.LocalMediaHandler(roots))
+		s.DetailsRoute(m, roots)
 		m.Handle(api.Route{
 			Method: "GET", Path: "/api/bin-media/{id}/{mode}", Tag: "Media", Needs: api.Read,
 			Summary:  "Get a file from the earlier app's Bin",

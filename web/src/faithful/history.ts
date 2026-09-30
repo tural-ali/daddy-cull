@@ -7,6 +7,9 @@ export type HistoryEntry=
   |{kind:'decisions';label:string;before:Snapshot[];after:Snapshot[]}
   |{kind:'progress';label:string;days:string[];before:'pending'|'done';after:'pending'|'done';kept?:number[]}
   |{kind:'pair';label:string;raw:number;partners:number[];before:boolean;after:boolean}
+  // One file of a RAW and its exports removed on its own: it left the stack,
+  // with every export when it was the RAW, and went to the Bin.
+  |{kind:'format';label:string;raw:number;partners:number[];file:Snapshot}
   |{kind:'turn';label:string;ids:number[];quarters:number};
 
 /** How far back a day's review can be unwound. */
