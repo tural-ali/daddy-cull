@@ -38,13 +38,16 @@ type PhoneDeletionResult struct {
 	Favourite     int `json:"favourite"`
 	InBin         int `json:"inBin"`
 	NotCatalogued int `json:"notCatalogued"`
+	// LiveVideo counts the videos of Live Photos, which are never marked on
+	// their own: they go to the Bin with their photo, deleted on the phone too.
+	LiveVideo     int `json:"liveVideo"`
 	Changed       int `json:"changed"`
 	HandledBefore int `json:"handledBefore"`
 }
 
 func (r PhoneDeletionResult) String() string {
-	return fmt.Sprintf("marked for the Bin %d, already marked %d, kept in Cull %d, favourites %d, in the Bin %d, not catalogued %d, changed since %d, handled before %d",
-		r.Marked, r.AlreadyMarked, r.Kept, r.Favourite, r.InBin, r.NotCatalogued, r.Changed, r.HandledBefore)
+	return fmt.Sprintf("marked for the Bin %d, already marked %d, kept in Cull %d, favourites %d, in the Bin %d, not catalogued %d, Live Photo videos %d, changed since %d, handled before %d",
+		r.Marked, r.AlreadyMarked, r.Kept, r.Favourite, r.InBin, r.NotCatalogued, r.LiveVideo, r.Changed, r.HandledBefore)
 }
 
 type phoneDeletion struct {
@@ -141,6 +144,18 @@ func (s *Store) markPhoneDeletion(ctx context.Context, d phoneDeletion, result *
 	 FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id WHERE a.source_id='archive' AND a.relative_path=?`, d.archivePath).Scan(&assetID, &size, &status, &favourite, &revision, &binning)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
+	}
+	live := strings.HasPrefix(d.archivePath, "/archive/"+liveFolder+"/")
+	if assetID.Valid && !live {
+		if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM live_clips WHERE clip_id=?)", assetID.Int64).Scan(&live); err != nil {
+			return err
+		}
+	}
+	// Nothing is written for one, so the table keeps the outcomes an older
+	// release knows and a rollback can still open the catalogue.
+	if live {
+		result.LiveVideo++
+		return nil
 	}
 	var outcome string
 	switch {

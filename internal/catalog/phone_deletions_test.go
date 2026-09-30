@@ -110,3 +110,28 @@ func TestPhoneDeletionsRefuseABadLineBeforeMarkingAnything(t *testing.T) {
 		t.Fatalf("marked %d before refusing: %v", n, err)
 	}
 }
+
+// A Live Photo's video, deleted on the phone with its photo, is never marked
+// on its own, filed in .live-photos or left beside the photo: the photo takes
+// it to the Bin. It does not stop the photos after it being marked.
+func TestPhoneDeletionsLeaveLivePhotoVideosToTheirPhoto(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	root := liveArchive(t)
+	if _, err := s.ScanArchive(ctx, root); err != nil {
+		t.Fatal(err)
+	}
+	line := func(rel string, size int) string {
+		return root + "/" + rel + "\t" + strconv.Itoa(size) + "\tsam\t" + rel + "\t2026-09-28T01:00:00+00:00\n"
+	}
+	input := line("2026/2026-09/2026-09-26/IMG_5472_HEVC.MOV", 11) +
+		line(".live-photos/2026/2026-09/2026-09-26/IMG_5472.MP4", 11) +
+		line("2026/2026-09/2026-09-26/IMG_5472.HEIC", 5)
+	got, err := s.MarkPhoneDeletions(ctx, root, strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (PhoneDeletionResult{Marked: 1, LiveVideo: 2}); got != want {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}

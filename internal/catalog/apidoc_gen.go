@@ -347,6 +347,7 @@ func init() {
 		"daddy-cull/next/internal/catalog.PairChoice.RawID":                 "RawID is the RAW file's id.",
 		"daddy-cull/next/internal/catalog.Paired":                           "Paired is whether an export now shows with its RAW.",
 		"daddy-cull/next/internal/catalog.Paired.Paired":                    "Paired is true when the two show as one photo, false when apart.",
+		"daddy-cull/next/internal/catalog.PhoneDeletionResult.LiveVideo":    "LiveVideo counts the videos of Live Photos, which are never marked on their own: they go to the Bin with their photo, deleted on the phone too.",
 		"daddy-cull/next/internal/catalog.PhotosAgentView":                  "PhotosAgentView is how the page describes the helper.",
 		"daddy-cull/next/internal/catalog.PhotosAgentView.Access":           "Access is the Photos access macOS gives the helper, as it last reported it: authorized, limited, denied, restricted, notDetermined or unknown. Only authorized lets a check run.",
 		"daddy-cull/next/internal/catalog.PhotosAgentView.LastSeen":         "LastSeen is when the helper last called in, in RFC 3339 UTC; omitted when it has not since this server started.",
