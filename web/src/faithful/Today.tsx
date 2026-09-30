@@ -1,4 +1,4 @@
-import {useEffect,useEffectEvent,useMemo,useRef,useState,type ReactNode} from 'react';
+import {useCallback,useEffect,useEffectEvent,useMemo,useRef,useState,type ReactNode} from 'react';
 import {binChanged,type Asset,type Status} from '../api';
 import {Media} from '../Media';
 import {useDecisionQueue} from '../useDecisionQueue';
@@ -483,16 +483,25 @@ export function Today({initial}:{initial:TodayData}){
     short:shortLabel(initial.md,dayPage?.slice(0,4)),
     done:dateDone,years:years.length,yearsDone:doneYears,previous:initial.previous,next:initial.next});
   // A link to a file that shows behind another opens the photo of its stack.
-  const viewing=viewer===null?null:[...behind].find(([,files])=>files.some(file=>file.id===viewer))?.[0]??viewer;
-  // The viewer walks the files the grid showed when it opened. A choice that
-  // takes a file out of the filter keeps it in the walk until the viewer
-  // closes, so the next file is the grid's next, and nothing the filter hid
-  // (a file removed earlier, say) ever comes up.
-  const walk=useRef<ReadonlySet<number>|'all'|null>(null);
-  if(viewing===null)walk.current=null;
-  else if(walk.current===null)walk.current=filters.size>0&&shownIDs.has(viewing)?shownIDs:'all';
-  const frozen=walk.current;
-  const walked=useMemo(()=>frozen===null||frozen==='all'?tiles:tiles.filter(asset=>frozen.has(asset.id)),[tiles,frozen]);
+  const photoOf=(id:number)=>[...behind].find(([,files])=>files.some(file=>file.id===id))?.[0]??id;
+  const viewing=viewer===null?null:photoOf(viewer);
+  // Opened from a filtered grid, the viewer walks the files the filter shows,
+  // as the grid does: a choice that takes a file out of the filter takes it
+  // out of the walk too, once the viewer has moved off it, and nothing the
+  // filter hid (a file removed earlier, say) ever comes up. The file on screen
+  // stays until then, so a choice that does not move on leaves it in view.
+  const filtering=useRef<boolean|null>(null);
+  if(viewing===null)filtering.current=null;
+  else if(filtering.current===null)filtering.current=filters.size>0&&shownIDs.has(viewing);
+  const filtered=filtering.current===true;
+  // Which file that is: the address follows the viewer without the page
+  // hearing of it, so a filtered walk keeps its own note.
+  const [onScreen,setOnScreen]=useState<number|null>(null);
+  if(viewing===null&&onScreen!==null)setOnScreen(null);
+  const addressMoved=photo.moved;
+  const moved=useCallback((id:number)=>{if(filtering.current)setOnScreen(id);addressMoved(id)},[addressMoved]);
+  const inView=onScreen===null?viewing:photoOf(onScreen);
+  const walked=useMemo(()=>filtered?tiles.filter(asset=>asset.id===inView||shownIDs.has(asset.id)):tiles,[tiles,filtered,inView,shownIDs]);
   usePageFilters(assets.length>0?{
     options:filterChips.map(chip=>({...chip,on:filters.has(chip.id),count:tiles.filter(asset=>matches(asset,new Set([chip.id]))).length})),
     toggle:id=>toggleFilter(id as Filter),clear:()=>saveFilters(new Set()),
@@ -556,7 +565,7 @@ export function Today({initial}:{initial:TodayData}){
       {tip&&assets.length>0&&viewing===null&&<div className="snack" role="status">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>{undoKeys.undo}</b> undo, <b>{undoKeys.redo}</b> redo, <b>?</b> for the rest</div>}
     </Snacks>}
     {cheer&&<Celebration tally={cheer} nextHref={`/on/${initial.next}`} nextLabel={calendarLabel(initial.next)} onClose={()=>setCheer(null)}/>}
-    {viewing!==null&&<Viewer assets={walked} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={save} onPatch={patchAsset} onRecord={history.record} onTurn={(asset,quarters)=>turn([asset],quarters)}
+    {viewing!==null&&<Viewer assets={walked} initialID={viewing} onClose={photo.close} onMove={moved} onSave={save} onPatch={patchAsset} onRecord={history.record} onTurn={(asset,quarters)=>turn([asset],quarters)}
       behindOf={asset=>behind.get(asset.id)} onSeparate={(still,files)=>{const raw=files.find(file=>file.kind==='raw');if(raw)void pairing(raw.id,[still,...files].filter(file=>file!==raw).map(file=>file.id),false)}}/>}
   </>;
 }
