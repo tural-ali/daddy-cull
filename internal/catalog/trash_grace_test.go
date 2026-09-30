@@ -165,6 +165,52 @@ func TestDeletingAMarkedPhotographMovesItOutOfTheArchiveFirst(t *testing.T) {
 	}
 }
 
+// A deletion cut short by a restart is asked for again by the same cards. If
+// the writer had already moved the marked file into the Bin, the card it was
+// asked for is now that batch's, and the deletion carries on from there; if it
+// had already scheduled the file, the deletion is done and says so.
+func TestDeletingAgainAfterARestartFinishesTheJob(t *testing.T) {
+	ctx := context.Background()
+	t.Run("moved, not yet scheduled", func(t *testing.T) {
+		f := graceFixture(t, 7)
+		items, err := f.s.Trash(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var marked []TrashItem
+		for _, item := range items {
+			if item.Key == "marked:1" {
+				marked = append(marked, item)
+			}
+		}
+		if _, err = f.trash.quarantine(ctx, marked); err != nil {
+			t.Fatal(err)
+		}
+		result, err := f.trash.Delete(ctx, []string{"marked:1"}, "DELETE 1")
+		if err != nil || result.Done != 1 || result.KeptDays != 7 || len(result.Failures) != 0 {
+			t.Fatalf("delete after the move: %+v %v", result, err)
+		}
+		report := f.deleting(t)
+		if len(report.Items) != 1 || report.Items[0].Name != "A.jpg" || report.Items[0].Source != "bin" {
+			t.Fatalf("waiting: %+v", report.Items)
+		}
+	})
+	t.Run("already scheduled", func(t *testing.T) {
+		f := graceFixture(t, 7)
+		if _, err := f.trash.Delete(ctx, []string{"marked:1"}, "DELETE 1"); err != nil {
+			t.Fatal(err)
+		}
+		before := f.scheduled(t)
+		result, err := f.trash.Delete(ctx, []string{"marked:1"}, "DELETE 1")
+		if err != nil || result.Done != 1 || result.KeptDays != 7 || len(result.Failures) != 0 {
+			t.Fatalf("delete asked again: %+v %v", result, err)
+		}
+		if f.scheduled(t) != before || len(f.deleting(t).Items) != 1 {
+			t.Fatalf("scheduled %d, was %d", f.scheduled(t), before)
+		}
+	})
+}
+
 // Shortening the grace period applies to what is already waiting, which is
 // what a setting called "keep deleted files for N days" says.
 func TestShorteningTheGracePeriodAppliesToFilesAlreadyWaiting(t *testing.T) {

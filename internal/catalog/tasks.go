@@ -51,6 +51,12 @@ const (
 // one writer plan takes.
 const taskBatch = engineBatch
 
+// taskBatchBytes also closes a batch once it holds this much, so a task of
+// long videos, which the writer reads in full to check them before and after
+// moving, still shows its progress every minute or so rather than sitting at
+// nothing done until the whole batch is through.
+const taskBatchBytes = 1 << 30
+
 // taskLimit bounds one task, so a single request cannot queue without end.
 const taskLimit = 20000
 
@@ -606,16 +612,21 @@ func binChunks(items []TrashItem) []taskItem {
 		groups[i] = append(groups[i], item)
 	}
 	queued := make([]taskItem, 0, len(items))
-	chunk, size := 0, 0
+	chunk, size, bytes := 0, 0, int64(0)
 	for _, group := range groups {
-		if size > 0 && size+len(group) > taskBatch {
+		var weight int64
+		for _, item := range group {
+			weight += item.Size
+		}
+		if size > 0 && (size+len(group) > taskBatch || bytes+weight > taskBatchBytes) {
 			chunk++
-			size = 0
+			size, bytes = 0, 0
 		}
 		for _, item := range group {
 			queued = append(queued, taskItem{chunk: chunk, key: item.Key, group: item.Group, name: item.Name, size: item.Size})
 		}
 		size += len(group)
+		bytes += weight
 	}
 	return queued
 }

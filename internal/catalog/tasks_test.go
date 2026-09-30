@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -385,4 +386,22 @@ func mapValues(m map[string]TrashItem) []TrashItem {
 		items = append(items, item)
 	}
 	return items
+}
+
+// Long videos go to the writer a gigabyte or so at a time, so their task shows
+// progress as it goes; a group is never split, however big.
+func TestBinChunksCloseAtAGigabyte(t *testing.T) {
+	card := func(key, group string, size int64) TrashItem { return TrashItem{Key: key, Group: group, Size: size} }
+	items := []TrashItem{
+		card("marked:1", "marked:1", 600<<20), card("marked:2", "marked:2", 300<<20), card("marked:3", "marked:3", 300<<20),
+		card("bin:p:4", "bin:p", 800<<20), card("bin:p:5", "bin:p", 800<<20),
+		card("marked:6", "marked:6", 1<<20),
+	}
+	chunks := []int{}
+	for _, item := range binChunks(items) {
+		chunks = append(chunks, item.chunk)
+	}
+	if want := []int{0, 0, 1, 2, 2, 3}; !slices.Equal(chunks, want) {
+		t.Fatalf("chunks %v, want %v", chunks, want)
+	}
 }

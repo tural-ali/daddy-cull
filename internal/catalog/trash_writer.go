@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -102,7 +103,7 @@ func resolveTrash(ctx context.Context, keys []string, list func(context.Context)
 	}
 	groups := map[string]bool{}
 	for _, key := range keys {
-		item, ok := byKey[key]
+		item, ok := findTrash(byKey, all, key)
 		if !ok {
 			return nil, errTrashChanged
 		}
@@ -115,6 +116,29 @@ func resolveTrash(ctx context.Context, keys []string, list func(context.Context)
 		}
 	}
 	return selected, nil
+}
+
+// findTrash looks a card up by its key. A marked file the writer has since
+// moved into the Bin is the same file under its batch's key, so a request cut
+// short by a restart and asked again still finds what it asked for.
+func findTrash(byKey map[string]TrashItem, all []TrashItem, key string) (TrashItem, bool) {
+	if item, ok := byKey[key]; ok {
+		return item, true
+	}
+	id, ok := strings.CutPrefix(key, "marked:")
+	if !ok {
+		return TrashItem{}, false
+	}
+	asset, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return TrashItem{}, false
+	}
+	for _, item := range all {
+		if item.assetID == asset && item.Kind != "sidecar" {
+			return item, true
+		}
+	}
+	return TrashItem{}, false
 }
 
 // Selection reports how many cards an action on these keys would affect once
@@ -212,14 +236,52 @@ func (t *TrashWriter) RestoreFile(ctx context.Context, key string) (TrashResult,
 func (t *TrashWriter) Delete(ctx context.Context, keys []string, confirmation string) (TrashResult, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	items, err := t.resolve(ctx, keys, t.s.Trash)
+	// Cards already waiting out the grace period were deleted by an earlier
+	// request for them that a restart cut short before it could answer.
+	waiting, err := t.deletingItems(ctx)
 	if err != nil {
 		return TrashResult{}, err
 	}
-	if confirmation != DeleteConfirmation(len(items)) {
-		return TrashResult{}, fmt.Errorf("deletion was not confirmed for these %d files", len(items))
+	byKey := make(map[string]TrashItem, len(waiting))
+	for _, item := range waiting {
+		byKey[item.Key] = item
 	}
-	return t.remove(ctx, items)
+	var done []TrashItem
+	rest := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if item, ok := findTrash(byKey, waiting, key); ok {
+			done = append(done, item)
+			continue
+		}
+		rest = append(rest, key)
+	}
+	var items []TrashItem
+	if len(rest) > 0 {
+		if items, err = t.resolve(ctx, rest, t.s.Trash); err != nil {
+			return TrashResult{}, err
+		}
+	}
+	if confirmation != DeleteConfirmation(len(items)+len(done)) {
+		return TrashResult{}, fmt.Errorf("deletion was not confirmed for these %d files", len(items)+len(done))
+	}
+	result := TrashResult{Failures: []TrashFailure{}}
+	if len(items) > 0 {
+		if result, err = t.remove(ctx, items); err != nil {
+			return result, err
+		}
+	}
+	if len(done) > 0 {
+		grace, err := t.s.GraceDays(ctx)
+		if err != nil {
+			return result, err
+		}
+		result.KeptDays = grace
+		for _, item := range done {
+			result.Done++
+			result.Bytes += item.Size
+		}
+	}
+	return result, nil
 }
 
 // PurgeNow deletes files already deleted from the Bin without waiting for the
