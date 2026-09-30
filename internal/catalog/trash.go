@@ -45,6 +45,9 @@ type TrashItem struct {
 	Size int64 `json:"size"`
 	// Sidecars counts the sidecar files that move with the card.
 	Sidecars int `json:"sidecars"`
+	// Live is true for a Live Photo whose video moves with the card; the
+	// video is counted in Size, not in Sidecars.
+	Live bool `json:"live,omitempty"`
 	// RemovedAt is when the file entered the Bin, or for a marked file when
 	// it was marked, in RFC 3339. It is empty when no time was recorded.
 	RemovedAt string `json:"removedAt"`
@@ -242,7 +245,9 @@ func binPlanItems(plan BinPlan) []TrashItem {
 		}
 		for n, index := range indexes {
 			item.Size += plan.Files[index].Size
-			if n > 0 {
+			if plan.Files[index].Live {
+				item.Live = true
+			} else if n > 0 {
 				item.Sidecars++
 			}
 		}

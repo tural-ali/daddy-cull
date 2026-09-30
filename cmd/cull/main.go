@@ -236,6 +236,13 @@ func main() {
 		return
 	}
 	if !*writer {
+		// Live Photo clips leave the indexes below, so they are paired first.
+		// Without the archive to read, the pairs the last scan found stand.
+		if *archiveMedia != "" {
+			if _, err := s.IndexLiveClips(ctx, *archiveMedia); err != nil {
+				log.Printf("live photos: %v", err)
+			}
+		}
 		if err := s.IndexRelated(ctx); err != nil {
 			log.Fatal(err)
 		}

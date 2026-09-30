@@ -331,6 +331,7 @@ func (s *Store) readHeaders(ctx context.Context, roots MediaRoots) (int, error) 
 	 WHERE a.kind='video' AND a.size_bytes>0
 	   AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored')
 	   AND NOT EXISTS(SELECT 1 FROM missing_assets m WHERE m.asset_id=a.id)
+	   AND a.id NOT IN (`+liveClipAssets+`)
 	   AND (f.asset_id IS NULL OR f.size_bytes!=a.size_bytes)
 	 ORDER BY a.id
 	 LIMIT ?`, headerBatch)
@@ -377,6 +378,7 @@ const footageTwins = `twins AS (
 	 WHERE f.playback_hash IS NOT NULL
 	   AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored')
 	   AND NOT EXISTS(SELECT 1 FROM missing_assets m WHERE m.asset_id=a.id)
+	   AND a.id NOT IN (` + liveClipAssets + `)
 	 GROUP BY f.media_bytes,f.playback_hash HAVING count(*)>1
 )`
 
@@ -388,6 +390,7 @@ func (s *Store) hashFootage(ctx context.Context, roots MediaRoots) (int, error) 
 	 WHERE f.footage_hash IS NULL
 	   AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored')
 	   AND NOT EXISTS(SELECT 1 FROM missing_assets m WHERE m.asset_id=a.id)
+	   AND a.id NOT IN (`+liveClipAssets+`)
 	 ORDER BY f.media_bytes,f.playback_hash,a.id
 	 LIMIT ?`, footageBatch)
 	if err != nil {

@@ -87,6 +87,8 @@ import Videocam from '@material-symbols/svg-400/outlined/videocam.svg?raw';
 import VideocamFill from '@material-symbols/svg-400/outlined/videocam-fill.svg?raw';
 import RawOn from '@material-symbols/svg-400/outlined/raw_on.svg?raw';
 import RawOnFill from '@material-symbols/svg-400/outlined/raw_on-fill.svg?raw';
+import MotionPhotos from '@material-symbols/svg-400/outlined/motion_photos_on.svg?raw';
+import MotionPhotosFill from '@material-symbols/svg-400/outlined/motion_photos_on-fill.svg?raw';
 import Folder from '@material-symbols/svg-400/outlined/folder.svg?raw';
 import FolderFill from '@material-symbols/svg-400/outlined/folder-fill.svg?raw';
 import Schedule from '@material-symbols/svg-400/outlined/schedule.svg?raw';
@@ -182,6 +184,7 @@ const icons={
   image:[Image,ImageFill],
   videocam:[Videocam,VideocamFill],
   raw_on:[RawOn,RawOnFill],
+  motion_photos_on:[MotionPhotos,MotionPhotosFill],
   folder:[Folder,FolderFill],
   schedule:[Schedule,ScheduleFill],
   today:[Today,TodayFill],

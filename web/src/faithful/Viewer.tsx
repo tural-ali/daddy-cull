@@ -1,4 +1,4 @@
-import {useEffect,useEffectEvent,useLayoutEffect,useMemo,useRef,useState,type MouseEvent} from 'react';
+import {useEffect,useEffectEvent,useLayoutEffect,useMemo,useRef,useState,type CSSProperties,type MouseEvent,type RefObject} from 'react';
 import {SessionVideo} from '../SessionVideo';
 import {Icon,type IconName} from '../Icon';
 import {binChanged,type Asset,type FileDetails,type Status} from '../api';
@@ -80,6 +80,13 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   const stack=current&&others?[current,...others]:[];
   // What the stage draws: the photo, or a file behind it when asked for.
   const onStage=stack[side]??current;
+  // A Live Photo plays its video over the still when asked, as a phone plays
+  // it on a press, then shows the still again. Moving on stops it.
+  const live=onStage?.live?onStage:current?.live?current:undefined;
+  const [playing,setPlaying]=useState<number|null>(null);
+  if(playing!==null&&playing!==live?.id)setPlaying(null);
+  const livePlays=live!==undefined&&playing===live.id;
+  const playLive=()=>{if(live)setPlaying(value=>value===live.id?null:live.id)};
   // How far the reviewer turned it in Cull; the file itself is as it was.
   const turn=onStage?.turn??0;
   // A picture zoomed while turned a quarter needs its own size to make room
@@ -269,7 +276,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       // clocks are coarse, so the same tick counts as before.
       if(event.timeStamp<=openedAt)return;
       const key=event.key.toLowerCase();
-      if(['arrowright','arrowleft','x','k','f','i','z','c','r','g','h','escape',' ','?','[',']','1','2','3','4','5','6','7','8','9'].includes(key))event.preventDefault();
+      if(['arrowright','arrowleft','x','k','f','i','z','c','r','l','g','h','escape',' ','?','[',']','1','2','3','4','5','6','7','8','9'].includes(key))event.preventDefault();
       if(menu){if(key==='escape')setMenu(false);return}
       if(ask){
         if(key==='escape')setAsk(false);
@@ -297,6 +304,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       else if(key==='f')favourite();
       else if(key==='i')setInfo(value=>!value);
       else if(key==='z')setZoom(value=>!value);
+      else if(key==='l')playLive();
       else if(key==='h')setBare(value=>!value);
       else if(key==='c')void openCompare();
       else if(key==='r'&&others)setSide(value=>(value+1)%stack.length);
@@ -332,6 +340,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
         {others?<div className="rvpair" role="group" aria-label="Show which file of this photo" {...tipProps('Each file of this photo','R')}>
           {stack.map((file,index)=><button type="button" key={file.id} aria-pressed={index===side} title={file.path.split('/').pop()} onClick={()=>setSide(index)}>{format(file)}</button>)}
         </div>:format(current)&&<span className="rvformat" title={name.split('.').pop()?.toUpperCase()}>{format(current)}</span>}
+        {live&&<button type="button" className={`rvact live${livePlays?' on':''}`} aria-label={livePlays?'Stop the Live Photo':'Play the Live Photo'} aria-pressed={livePlays} {...tipProps(livePlays?'Stop':'Play Live Photo','L')} onClick={playLive}><Icon name="motion_photos_on" filled={livePlays}/></button>}
         {similar>0&&<button type="button" className="rvact cmp" aria-label="Compare similar photos" {...tipProps('Compare','C')} onClick={()=>void openCompare()}><Icon name="compare"/></button>}
         {onTurn&&<button type="button" className="rvact turn" aria-label="Rotate clockwise" {...tipProps('Rotate clockwise',']')} onClick={()=>onTurn(current,1)}><Icon name="rotate_right"/></button>}
         <button type="button" className="rvact zoom" aria-label="Zoom" aria-pressed={zoom} {...tipProps('Zoom','Z')} onClick={()=>setZoom(value=>!value)}><Icon name="zoom_in" filled={zoom}/></button>
@@ -360,6 +369,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       <button type="button" className="rvnav prev" aria-label="Previous" {...tipProps('Previous','ArrowLeft')} onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
       {broken?.id===onStage.id?<div className="rvgone" role="status"><b>{broken.gone?'This file is no longer in the archive':'This file could not be shown'}</b><span>{broken.gone?'It was moved or removed on the server since the last scan. It leaves review at the next nightly scan.':'Try again in a moment.'}</span></div>
         :current.kind==='video'?<SessionVideo ref={media} key={current.id} data-turn={turn||undefined} controls={!turn} autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onLoadedData={()=>setShown(current.id)} onError={()=>failed(current.id)}/>:<img ref={media} key={onStage.id} data-turn={turn||undefined} src={preview(onStage)} alt={onStage.path.split('/').pop()} onLoad={()=>setShown(current.id)} onError={()=>failed(onStage.id)}/>}
+      {live&&livePlays&&current.kind!=='video'&&broken?.id!==onStage.id&&<LiveClip key={live.id} src={`/api/media/${live.id}/live`} still={media} turn={turn} onDone={()=>setPlaying(null)} onFail={()=>{setPlaying(null);setError('The Live Photo video could not be played.')}}/>}
       {current.kind==='video'&&turn!==0&&broken?.id!==onStage.id&&<TurnedControls key={current.id} video={media}/>}
       <button type="button" className="rvnav next" aria-label="Next" {...tipProps('Next','ArrowRight')} onClick={event=>{event.stopPropagation();step(1)}}>›</button>
     </div>
@@ -383,9 +393,26 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- 1 to 9 focus a frame from the keyboard
       <figure className={index===focus?'on':''} key={asset.id} onClick={()=>setFocus(index)}><img src={preview(asset)} alt={asset.path.split('/').pop()}/><span className="pick">{index+1}</span><figcaption>{asset.path.split('/').pop()} · {asset.status}</figcaption></figure>)}</div><div className="cfacts"><div className="verdict tied"><b>Possible copies or companion files</b><ul><li>Inspect before choosing</li><li>No file moves from this screen</li></ul></div></div><div className="cbot"><button type="button" className="rvbtn" onClick={()=>void saveGroup('keep-all')}>Keep all</button><button type="button" className="rvbtn cull" onClick={()=>void saveGroup('keep-focus')}>Keep the focused one, remove the rest</button><button type="button" className="rvbtn cull cmpall" onClick={()=>void saveGroup('cull-all')}>Remove all</button></div></div>}
     {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- a click dismisses the sheet; ? and Esc do the same */}
-    {help&&<div className="rvkeys" onClick={()=>setHelp(false)}><table><tbody><tr><td>→ ←</td><td>next / previous</td></tr><tr><td>K</td><td>keep and continue, again to undo</td></tr><tr><td>X</td><td>remove (clears keep and favourite), again to undo</td></tr>{others&&onRemoveFormat&&<tr><td>X then O / X</td><td>remove only the file shown / the whole photo</td></tr>}<tr><td>F</td><td>favourite</td></tr><tr><td>I</td><td>info panel</td></tr><tr><td>Z</td><td>zoom</td></tr>{onTurn&&<tr><td>] / [</td><td>rotate clockwise / anticlockwise, in Cull only</td></tr>}<tr><td>H</td><td>hide the controls, again to show them</td></tr><tr><td>C</td><td>compare a group</td></tr>{others&&<tr><td>R</td><td>show the next file of this photo, such as its RAW</td></tr>}<tr><td>{undoKeys.undo} / {undoKeys.redo}</td><td>{onRecord?'undo / redo the last choice':'undo / redo, on the day page'}</td></tr><tr><td>G / Esc / Space</td><td>back to the grid</td></tr><tr><td>?</td><td>this list</td></tr></tbody></table></div>}
+    {help&&<div className="rvkeys" onClick={()=>setHelp(false)}><table><tbody><tr><td>→ ←</td><td>next / previous</td></tr><tr><td>K</td><td>keep and continue, again to undo</td></tr><tr><td>X</td><td>remove (clears keep and favourite), again to undo</td></tr>{others&&onRemoveFormat&&<tr><td>X then O / X</td><td>remove only the file shown / the whole photo</td></tr>}<tr><td>F</td><td>favourite</td></tr><tr><td>I</td><td>info panel</td></tr><tr><td>Z</td><td>zoom</td></tr>{live&&<tr><td>L</td><td>play the Live Photo, again to stop</td></tr>}{onTurn&&<tr><td>] / [</td><td>rotate clockwise / anticlockwise, in Cull only</td></tr>}<tr><td>H</td><td>hide the controls, again to show them</td></tr><tr><td>C</td><td>compare a group</td></tr>{others&&<tr><td>R</td><td>show the next file of this photo, such as its RAW</td></tr>}<tr><td>{undoKeys.undo} / {undoKeys.redo}</td><td>{onRecord?'undo / redo the last choice':'undo / redo, on the day page'}</td></tr><tr><td>G / Esc / Space</td><td>back to the grid</td></tr><tr><td>?</td><td>this list</td></tr></tbody></table></div>}
     {error&&<div className="toast err">{error}</div>}
     </div>
     {flight&&<img ref={flyer} className="rvfly" src={flight.src} alt="" style={{left:flight.from.left,top:flight.from.top,width:flight.from.width,height:flight.from.height,borderRadius:flight.mode==='open'?flight.radius:0}}/>}
   </div>;
+}
+
+// LiveClip plays a Live Photo's video over its still, at the still's size and
+// turn, with sound, as a phone plays it on a press. A click stops it early.
+function LiveClip({src,still,turn,onDone,onFail}:{src:string;still:RefObject<HTMLElement|null>;turn:number;onDone:()=>void;onFail:()=>void}){
+  const [frame,setFrame]=useState<CSSProperties|null>(null);
+  useLayoutEffect(()=>{
+    const image=still.current;
+    if(!image)return;
+    const place=()=>setFrame({left:image.offsetLeft,top:image.offsetTop,width:image.offsetWidth,height:image.offsetHeight});
+    place();
+    const observer=new ResizeObserver(place);
+    observer.observe(image);
+    return()=>observer.disconnect();
+  },[still]);
+  // oxlint-disable-next-line jsx-a11y/media-has-caption -- a Live Photo is a few seconds of the moment, with no words to caption
+  return <video className="rvlive" style={frame??{visibility:'hidden'}} data-turn={turn||undefined} src={src} autoPlay playsInline onEnded={onDone} onError={onFail} onClick={event=>{event.stopPropagation();onDone()}}/>;
 }

@@ -221,6 +221,13 @@ func (s *Store) MediaRoutes(m *api.Mux, roots MediaRoots, upstream, posters stri
 	switch {
 	case local:
 		m.Handle(media, s.LocalMediaHandler(roots))
+		m.Handle(api.Route{
+			Method: "GET", Path: "/api/media/{id}/live", Tag: "Media", Needs: api.Read,
+			Summary:  "Get a Live Photo's video",
+			Doc:      "The clip of a Live Photo, by the photo's id: a file marked live in any list. The original .MOV where there is one, converted to a playable video where the browser cannot play it.",
+			Params:   []api.Param{api.PathInt("id", "The photo's id in the catalogue.", "1")},
+			Produces: "video/*", Errors: []api.Error{notFound},
+		}, s.LiveClipHandler(roots))
 		s.DetailsRoute(m, roots)
 		s.ReadSidecarsFrom(roots)
 		m.Handle(api.Route{

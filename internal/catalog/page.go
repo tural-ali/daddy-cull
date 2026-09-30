@@ -39,6 +39,9 @@ type Asset struct {
 	// HEIC or TIFF files exported beside it, on the pages that show them as
 	// one photo.
 	Stack []int64 `json:"stack,omitempty"`
+	// Live marks a Live Photo: the photo has a clip, served at
+	// /api/media/{id}/live, which goes wherever the photo goes.
+	Live bool `json:"live,omitempty"`
 	// New marks a file that reached the archive after its day was reviewed
 	// and still waits for a decision, on the day page.
 	New bool `json:"new,omitempty"`
@@ -118,7 +121,7 @@ func (s *Store) page(ctx context.Context, token, kind, source string, limit int,
 	} else if err := s.read.QueryRowContext(ctx, "SELECT COALESCE(MAX(id),0) FROM assets").Scan(&c.MaxID); err != nil {
 		return p, err
 	}
-	query := assetSelect + " WHERE (a.captured_at,a.id)>(?,?) AND a.id<=? AND NOT EXISTS (SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored')"
+	query := assetSelect + " WHERE (a.captured_at,a.id)>(?,?) AND a.id<=? AND NOT EXISTS (SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored') AND a.id NOT IN (" + liveClipAssets + ")"
 	args := []any{c.Time, c.ID, c.MaxID}
 	if status != "" {
 		query += " AND COALESCE(d.status,'unreviewed')=?"

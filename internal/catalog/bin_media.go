@@ -191,7 +191,7 @@ func (s *Store) binnedFile(ctx context.Context, source, id string, index int) (r
 			return "", "", false
 		}
 		var plan BinPlan
-		if json.Unmarshal([]byte(body), &plan) != nil || plan.ID != id || index >= len(plan.Files) || plan.Files[index].Phase != "bin" || !safeRelative(plan.Files[index].Original) {
+		if json.Unmarshal([]byte(body), &plan) != nil || plan.ID != id || index >= len(plan.Files) || plan.Files[index].Phase != "bin" || !binnable(plan.Files[index]) {
 			return "", "", false
 		}
 		return "/archive/" + stored(&plan, index), plan.Files[index].Original, true

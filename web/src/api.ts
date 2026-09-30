@@ -4,6 +4,9 @@ export type Asset = { id:number; path:string; capturedAt:number; kind:string; so
   stack?:number[];
   /** Reached the archive after its day was reviewed, and still waits. */
   new?:boolean;
+  /** A Live Photo: its clip plays from /api/media/{id}/live, and goes
+   * wherever the photo goes. */
+  live?:boolean;
   /** How long a video runs, in seconds, once the server has read it. */
   duration?:number;
   /** The picture's size as it is shown, once the server has read it. */

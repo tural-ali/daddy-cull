@@ -163,6 +163,17 @@ CREATE TABLE IF NOT EXISTS raw_pair_splits (
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
  PRIMARY KEY(raw_id,partner_id)
 );
+-- The video of each Live Photo, found by name in .live-photos/ or beside the
+-- photo, and rebuilt from the folders at every scan; see live_photos.go.
+-- clip_id is the video's own catalogue entry, when it has one.
+CREATE TABLE IF NOT EXISTS live_clips (
+ photo_id INTEGER NOT NULL REFERENCES assets(id),
+ clip TEXT NOT NULL,
+ clip_id INTEGER REFERENCES assets(id),
+ size_bytes INTEGER NOT NULL,
+ PRIMARY KEY(photo_id,clip)
+);
+CREATE INDEX IF NOT EXISTS live_clips_asset ON live_clips(clip_id) WHERE clip_id IS NOT NULL;
 CREATE TABLE IF NOT EXISTS video_durations (asset_id INTEGER PRIMARY KEY REFERENCES assets(id), size_bytes INTEGER NOT NULL, seconds REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS media_shapes (asset_id INTEGER PRIMARY KEY REFERENCES assets(id), size_bytes INTEGER NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL);
 -- How far the reviewer turned a file in Cull, in quarter turns clockwise. The

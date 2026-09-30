@@ -56,7 +56,8 @@ type archiveScanFile struct {
 // ScanArchive adds media under root's YYYY/YYYY-MM/YYYY-MM-DD folders that the
 // catalogue does not hold, as archive assets under "/archive/...". It reads
 // directory entries and stat metadata only, never file content, and skips
-// hidden files and folders such as .live-photos. It changes no existing asset:
+// hidden files and folders such as .live-photos, whose Live Photo clips it
+// pairs with their photos instead (see live_photos.go). It changes no existing asset:
 // catalogued files it no longer finds are recorded in missing_assets, which
 // keeps them out of the calendar and related groups until they return.
 func (s *Store) ScanArchive(ctx context.Context, root string) (ArchiveScanResult, error) {
@@ -258,6 +259,20 @@ func (s *Store) ScanArchive(ctx context.Context, root string) (ArchiveScanResult
 	}
 	if err = tx.Commit(); err != nil {
 		return result, err
+	}
+	// Live Photo clips are paired by the folders' listings, which change
+	// without the catalogue changing when a clip is filed into .live-photos.
+	// A change leaves the clips out of the indexes below, so it needs them
+	// rebuilt as much as a new file does.
+	live, err := s.IndexLiveClips(ctx, resolved)
+	if err != nil {
+		return result, err
+	}
+	if live && pending == 0 {
+		if _, err = s.write.ExecContext(ctx, "INSERT INTO settings(key,value) VALUES('archive_reindex_pending','1') ON CONFLICT(key) DO UPDATE SET value=excluded.value"); err != nil {
+			return result, err
+		}
+		pending = 1
 	}
 	if pending == 0 {
 		return result, nil

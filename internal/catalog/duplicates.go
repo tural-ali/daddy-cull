@@ -304,6 +304,7 @@ const liveCandidates = `live AS (
 	 WHERE a.size_bytes>0
 	   AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored')
 	   AND NOT EXISTS(SELECT 1 FROM missing_assets m WHERE m.asset_id=a.id)
+	   AND a.id NOT IN (` + liveClipAssets + `)
 ),
 colliding AS (SELECT size_bytes FROM live GROUP BY size_bytes HAVING count(*)>1)`
 

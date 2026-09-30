@@ -125,6 +125,10 @@ type TodayData struct {
 	Memories int `json:"memories"`
 	// Bytes is the size of those files together, in bytes.
 	Bytes int64 `json:"bytes"`
+	// Clips maps the catalogue id of each Live Photo clip that was
+	// catalogued as a file of its own to its photo, so a link to the clip
+	// opens the photo.
+	Clips map[int64]int64 `json:"clips,omitempty"`
 }
 
 // DayProgressChange marks one year's day reviewed or not.
@@ -169,7 +173,7 @@ func archiveDay(path string, capturedAt int64) (string, bool) {
 }
 
 func (s *Store) IndexCalendar(ctx context.Context) error {
-	rows, err := s.read.QueryContext(ctx, "SELECT id,relative_path,captured_at FROM assets WHERE source_id='archive' AND id NOT IN (SELECT asset_id FROM missing_assets)")
+	rows, err := s.read.QueryContext(ctx, "SELECT id,relative_path,captured_at FROM assets WHERE source_id='archive' AND id NOT IN (SELECT asset_id FROM missing_assets) AND id NOT IN ("+liveClipAssets+")")
 	if err != nil {
 		return err
 	}
@@ -350,6 +354,16 @@ func (s *Store) Today(ctx context.Context, md string) (TodayData, error) {
 	}
 	if err := s.markStacks(ctx, all); err != nil {
 		return data, err
+	}
+	if err := s.markLive(ctx, all); err != nil {
+		return data, err
+	}
+	clips, err := s.liveClipsOf(ctx, all)
+	if err != nil {
+		return data, err
+	}
+	if len(clips) > 0 {
+		data.Clips = clips
 	}
 	if err := s.markShapes(ctx, all); err != nil {
 		return data, err

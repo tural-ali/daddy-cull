@@ -26,7 +26,9 @@ import {tracked} from '../saving';
 // fresh counts files that reached the archive after the day was reviewed and
 // still wait; each carries new.
 export type TodayYear={day:string;year:number;files:number;bytes:number;status:'pending'|'done';assets:Asset[];fresh?:number};
-export type TodayData={md:string;label:string;previous:string;next:string;years:TodayYear[];memories:number;bytes:number};
+export type TodayData={md:string;label:string;previous:string;next:string;years:TodayYear[];memories:number;bytes:number;
+  /** The Live Photo videos catalogued as files of their own, each to the photo it plays for. */
+  clips?:Record<string,number>};
 // located is only read for videos compared by their footage. sidecars is what
 // the copy's own sidecars record, the ones the Bin takes with it; it is absent
 // when they were not read, which is not the same as none.
@@ -158,6 +160,8 @@ export function Today({initial}:{initial:TodayData}){
     try{if(next==='oldest')localStorage.removeItem(orderKey);else localStorage.setItem(orderKey,next)}catch{/* kept for this visit only */}
   }
   const [selected,setSelected]=useState<number|null>(null);
+  // The one tile whose Live Photo is playing, muted, in the grid.
+  const [liveTile,setLiveTile]=useState<number|null>(null);
   // The keyboard tip comes up as a snackbar in the corner and goes on its
   // own; moving between days does not bring it back, a refresh does.
   const [tip,setTip]=useState(false);
@@ -178,7 +182,7 @@ export function Today({initial}:{initial:TodayData}){
   const [duplicateGroups,setDuplicateGroups]=useState<DuplicateGroup[]>([]);
   const [keepers,setKeepers]=useState<Record<string,number>>({});
   const history=useHistory();
-  const photo=usePhotoURL(id=>initial.years.some(year=>year.assets.some(asset=>String(asset.id)===id)));
+  const photo=usePhotoURL(id=>initial.clips?.[id]!==undefined||initial.years.some(year=>year.assets.some(asset=>String(asset.id)===id)));
   const viewer=photo.open===null?null:Number(photo.open);
   // The years in the order shown. The grid, the arrow keys and the viewer all
   // walk this, so reading the oldest year first reviews it first too.
@@ -523,8 +527,12 @@ export function Today({initial}:{initial:TodayData}){
   usePageDate({md:initial.md,label:pageLabel,
     short:shortLabel(initial.md,dayPage?.slice(0,4)),
     done:dateDone,years:years.length,yearsDone:doneYears,previous:initial.previous,next:initial.next});
-  // A link to a file that shows behind another opens the photo of its stack.
-  const photoOf=(id:number)=>[...behind].find(([,files])=>files.some(file=>file.id===id))?.[0]??id;
+  // A link to a file that shows behind another opens the photo of its stack,
+  // and a link to a Live Photo's video opens its photo.
+  const photoOf=(id:number)=>{
+    const still=initial.clips?.[id]??id;
+    return [...behind].find(([,files])=>files.some(file=>file.id===still))?.[0]??still;
+  };
   const viewing=viewer===null?null:photoOf(viewer);
   // Opened from a filtered grid, the viewer walks the files the filter shows,
   // as the grid does: a choice that takes a file out of the filter takes it
@@ -596,8 +604,9 @@ export function Today({initial}:{initial:TodayData}){
         onFocus={event=>{if(event.target===event.currentTarget)setSelected(asset.id)}}
         onKeyDown={event=>{if(event.target===event.currentTarget&&(event.key==='Enter'||event.key===' ')){event.preventDefault();openOrPick(asset,event.shiftKey)}}}>
         <Media asset={asset}/>
+        {liveTile===asset.id&&<video className="actual-media liveclip" src={`/api/media/${asset.id}/live`} autoPlay muted playsInline aria-hidden="true" onEnded={()=>setLiveTile(null)} onError={()=>{setLiveTile(null);setMessage('The Live Photo video could not be played.')}}/>}
         <Pick checked={picks.picked.has(asset.id)} label={`Select ${fileName(asset)}`} onToggle={extend=>picks.toggle(place.get(asset.id)??0,extend)}/>
-        <div className="bdg end">{asset.new&&asset.status==='unreviewed'&&<span className="b new">new</span>}{behind.has(asset.id)&&stackFormats(stackOf(asset,behind)).map(format=><span className="b pair" key={format}>{format}</span>)}</div>
+        <div className="bdg end">{asset.live&&<button type="button" className="b live" aria-label={liveTile===asset.id?'Stop the Live Photo':'Play the Live Photo'} aria-pressed={liveTile===asset.id} onClick={event=>{event.stopPropagation();setLiveTile(id=>id===asset.id?null:asset.id)}}><Icon name="motion_photos_on" filled={liveTile===asset.id}/>Live</button>}{asset.new&&asset.status==='unreviewed'&&<span className="b new">new</span>}{behind.has(asset.id)&&stackFormats(stackOf(asset,behind)).map(format=><span className="b pair" key={format}>{format}</span>)}</div>
         <button type="button" className="tfav" disabled={!queue.ready} aria-pressed={asset.favourite} aria-label={asset.favourite?'Remove from favourites':'Favourite'} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite)}}><Icon name="favorite" filled={asset.favourite}/></button>
         {(asset.duration||asset.kind==='video')&&<span className="dur" aria-label={asset.duration?`Video, ${runningTime(asset.duration)}`:'Video'}>{asset.duration?runningTime(asset.duration):<Icon name="play_circle" filled/>}</span>}
         {asset.status==='cull'&&<div className="undo"><span>Removed</span><button type="button" className="act" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,'unreviewed')}}>Undo</button></div>}

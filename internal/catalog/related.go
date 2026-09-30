@@ -31,7 +31,7 @@ func relatedKey(p string) string {
 // It runs before serving requests; the transaction keeps prior results intact
 // if indexing fails. A repeated run preserves every review decision.
 func (s *Store) IndexRelated(ctx context.Context) error {
-	rows, e := s.read.QueryContext(ctx, "SELECT a.id,COALESCE(anchor.relative_path,a.relative_path) FROM assets a LEFT JOIN assets anchor ON anchor.id=a.anchor_id WHERE a.id NOT IN (SELECT asset_id FROM missing_assets)")
+	rows, e := s.read.QueryContext(ctx, "SELECT a.id,COALESCE(anchor.relative_path,a.relative_path) FROM assets a LEFT JOIN assets anchor ON anchor.id=a.anchor_id WHERE a.id NOT IN (SELECT asset_id FROM missing_assets) AND a.id NOT IN ("+liveClipAssets+")")
 	if e != nil {
 		return e
 	}

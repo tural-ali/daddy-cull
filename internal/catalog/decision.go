@@ -116,6 +116,13 @@ func decideTx(ctx context.Context, tx *sql.Tx, d Decision) (Saved, error) {
 	if blocked > 0 {
 		return result, ErrInBin
 	}
+	var clip int
+	if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM live_clips WHERE clip_id=?", d.AssetID).Scan(&clip); err != nil {
+		return result, err
+	}
+	if clip > 0 {
+		return result, ErrLiveClip
+	}
 	var revision int64
 	err = tx.QueryRowContext(ctx, "SELECT COALESCE(d.status,'unreviewed'),COALESCE(d.favourite,0),COALESCE(d.revision,0) FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id WHERE a.id=?", d.AssetID).Scan(&result.PreviousStatus, &result.PreviousFavourite, &revision)
 	if errors.Is(err, sql.ErrNoRows) {

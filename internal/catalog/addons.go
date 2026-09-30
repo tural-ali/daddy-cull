@@ -132,6 +132,7 @@ func (s *Store) LibraryStats(ctx context.Context) (LibraryStats, error) {
 	rows, err := s.read.QueryContext(ctx, `SELECT a.kind='video',count(*),coalesce(sum(a.size_bytes),0) FROM assets a
 		WHERE a.source_id='archive'
 		  AND NOT EXISTS(SELECT 1 FROM missing_assets m WHERE m.asset_id=a.id)
+		  AND a.id NOT IN (`+liveClipAssets+`)
 		  AND NOT EXISTS(SELECT 1 FROM file_state f WHERE f.asset_id=a.id AND f.state!='restored')
 		GROUP BY a.kind='video'`)
 	if err != nil {

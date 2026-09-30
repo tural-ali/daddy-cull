@@ -979,6 +979,26 @@ main.wide, main:has(.gal, .rows, .calendar) { max-width: 100%; }
 .bdg .b.new  { background: color-mix(in oklab, var(--dot) 88%, #000); color: #fff; }
 .bdg .b.pair { letter-spacing: .04em; }
 
+/* A Live Photo says so as the phone does, and the badge is the way to play
+   it, so it takes pointer events back like the badges below. */
+.bdg .b.live {
+  pointer-events: auto; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: .1rem .4rem .1rem .22rem; border: 0;
+  font: inherit; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  transition: background var(--ease), color var(--ease);
+}
+.bdg .b.live .icon, .bdg .b.live .icon svg { width: 13px; height: 13px; }
+.bdg .b.live:hover, .bdg .b.live[aria-pressed="true"] { background: #f2f3f6; color: #111317; }
+.bdg .b.live:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+main.selecting .bdg .b.live { pointer-events: none; }
+/* Its video plays over the still, filling the tile the way the still does. */
+.mo > video.liveclip {
+  position: absolute; top: 0; left: 0; z-index: 1;
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  pointer-events: none;
+}
+
 /* The badge that counts the files is also the way into the comparison, so it -
    and only it - takes pointer events back from the container above. Everything
    else in .bdg stays inert so it never steals a click from the photograph. */
@@ -1510,6 +1530,12 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   width: auto; height: auto;
   object-fit: contain; display: block;
   transition: opacity 110ms linear;
+}
+/* A Live Photo's video over its still, at the still's box and turn. */
+.rvstage video.rvlive {
+  position: absolute; z-index: 1;
+  max-width: none; max-height: none;
+  object-fit: cover; cursor: pointer;
 }
 /* In place of a file the server no longer has. */
 .rvgone {
