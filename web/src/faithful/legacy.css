@@ -2340,6 +2340,8 @@ button.danger:not(.btn, .iconbtn) {
 .dupegroup.skipped .dupetiles { opacity: .4; }
 .dupegrouphead { display: flex; align-items: baseline; flex-wrap: wrap; gap: .25rem .9rem; margin: 0 0 1rem; }
 .dupegrouphead h2 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+/* How the copies are known to be copies, where it is not byte for byte. */
+.dupeproof { font-size: 13px; color: var(--muted); }
 .dupelink {
   padding: 0; border: 0; background: none; cursor: pointer;
   font: inherit; font-size: 15px; font-weight: 500; color: var(--accent);
@@ -2418,7 +2420,7 @@ button.danger:not(.btn, .iconbtn) {
 .dupelabel > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .dupetile.keeper .dupelabel { color: var(--text); }
 .dupeflag {
-  flex: none; padding: .05rem .35rem; border-radius: 3px; font-size: 10.5px;
+  flex: none; padding: .05rem .35rem; border-radius: 3px; font-size: 10.5px; white-space: nowrap;
   color: var(--warn); background: color-mix(in oklab, var(--warn) 16%, transparent);
 }
 

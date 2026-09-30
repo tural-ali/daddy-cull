@@ -50,7 +50,7 @@ Every page has a short guide at the top, and <kbd>?</kbd> lists every key.
 |---|---|
 | **Today** | Every photo and video taken on this date, in every year. Mark the date reviewed when done. |
 | **Year** | A calendar of every date with photos, how far you have got, and a red dot on dates with new arrivals. |
-| **Duplicates** | Byte-identical copies of a file in different folders, found by comparing full hashes. Similar-looking shots are not duplicates here. Pick the copy to keep; the rest go to the Bin. |
+| **Duplicates** | Byte-identical copies of a file in different folders, found by comparing full hashes, and copies of a video whose pictures and sound are identical but whose metadata differs, such as the same clip downloaded twice. Re-encoded, trimmed or edited videos and similar-looking shots are not duplicates here. Pick the copy to keep; the rest go to the Bin. |
 | **Apple Photos** | Carries what you removed and favourited across to the Photos app, and so to iCloud, once you press Apply. Removals go to Recently Deleted. Optional. |
 | **Log** | Every decision, newest first. A removal can be undone while the file is still in the Bin. |
 | **Bin** | Everything removed, restorable until the Bin retention period set in Settings ends. |

@@ -51,6 +51,9 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
   assert.equal(await rows.nth(0).locator('.xpath .dim').innerText(),'/archive/','the folders both copies share are dimmed');
   if(process.env.SHOTS)await page.locator('.xdupes').screenshot({path:`${process.env.SHOTS}/copy-group.png`});
   await page.setViewportSize({width:390,height:844});
+  // The page lays itself out again after the resize, so the check waits for
+  // that, and still fails on a group that never fits.
+  await page.waitForFunction(()=>![...document.querySelectorAll('.xdupes *')].some(node=>node.getBoundingClientRect().right>391),null,{timeout:3000}).catch(()=>{});
   const wide=await page.evaluate(()=>[...document.querySelectorAll('.xdupes *')].filter(node=>node.getBoundingClientRect().right>391).slice(0,6).map(node=>`${node.tagName}.${node.className} ${Math.round(node.getBoundingClientRect().right)}`));
   assert.deepEqual(wide,[],`the group fits a phone: ${JSON.stringify(wide)}`);
   if(process.env.SHOTS)await page.locator('.xdupes').screenshot({path:`${process.env.SHOTS}/copy-group-phone.png`});

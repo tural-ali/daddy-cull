@@ -41,30 +41,37 @@ function noise(path:string,size:number){
   return score;
 }
 
-type Rule='clean'|'oldest'|'newest';
+export type Rule='clean'|'oldest'|'newest';
 const RULES:{key:Rule;label:string;hint:string}[]=[
   {key:'clean',label:'Plainest filename',hint:'Keeps the copy whose name carries no collision suffix and is not its own byte count, which is normally the original.'},
   {key:'oldest',label:'Oldest capture date',hint:'Keeps the earliest dated copy and drops later re-imports of it.'},
   {key:'newest',label:'Newest capture date',hint:'Keeps the most recently dated copy.'},
 ];
 
-function pick(members:DuplicateMember[],size:number,rule:Rule):DuplicateMember{
+/** The copy to keep by a rule. A copy that records where it was taken comes
+ * before one that does not, whatever the rule: keeping the other would lose
+ * the place. */
+export function pick(members:DuplicateMember[],rule:Rule):DuplicateMember{
   const ranked=[...members];
-  if(rule==='oldest')ranked.sort((a,b)=>a.capturedAt-b.capturedAt||noise(a.path,size)-noise(b.path,size));
-  else if(rule==='newest')ranked.sort((a,b)=>b.capturedAt-a.capturedAt||noise(a.path,size)-noise(b.path,size));
-  else ranked.sort((a,b)=>noise(a.path,size)-noise(b.path,size)||a.path.localeCompare(b.path));
+  const place=(a:DuplicateMember,b:DuplicateMember)=>Number(b.located)-Number(a.located);
+  const plain=(a:DuplicateMember,b:DuplicateMember)=>noise(a.path,a.size)-noise(b.path,b.size);
+  if(rule==='oldest')ranked.sort((a,b)=>place(a,b)||a.capturedAt-b.capturedAt||plain(a,b));
+  else if(rule==='newest')ranked.sort((a,b)=>place(a,b)||b.capturedAt-a.capturedAt||plain(a,b));
+  else ranked.sort((a,b)=>place(a,b)||plain(a,b)||a.path.localeCompare(b.path));
   return ranked[0];
 }
 
-function why(keeper:DuplicateMember,members:DuplicateMember[],size:number,rule:Rule){
+function why(keeper:DuplicateMember,members:DuplicateMember[],rule:Rule){
   const others=members.filter(member=>member.id!==keeper.id);
+  if(keeper.located&&others.some(member=>!member.located))
+    return others.length===1?'it records where it was taken and the other copy does not':'it records where it was taken and other copies do not';
   if(others.some(member=>member.path.includes('/.culled/'))&&!keeper.path.includes('/.culled/'))
     return 'the other copy sits in .culled, which was condemned once already';
   if(rule==='oldest')return 'it has the earliest capture date here';
   if(rule==='newest')return 'it has the latest capture date here';
-  if(others.some(member=>{const digits=/-(\d{4,})\.[^.]+$/.exec(name(member.path));return digits!==null&&Number(digits[1])===size}))
+  if(others.some(member=>{const digits=/-(\d{4,})\.[^.]+$/.exec(name(member.path));return digits!==null&&Number(digits[1])===member.size}))
     return "the other copy's name ends in its own byte count, which only an ingest script writes";
-  if(others.every(member=>noise(member.path,size)>noise(keeper.path,size)+1))
+  if(others.every(member=>noise(member.path,member.size)>noise(keeper.path,keeper.size)+1))
     return 'its name carries no collision suffix, so it is most likely the original';
   return 'it sorts first, and nothing in these names distinguishes them';
 }
@@ -99,9 +106,9 @@ function labelsOf(members:DuplicateMember[]){
 }
 
 // Every tile in a group draws the same preview. The copies are byte-identical,
-// so it is the same picture by definition, and one URL means one read off the
+// or hold the same footage, so it is the same picture by definition, and one URL means one read off the
 // network mount however many copies there are.
-function Tile({member,previewID,size,label,keeper,disabled,onKeep}:{member:DuplicateMember;previewID:number;size:number;label:string;keeper:boolean;disabled:boolean;onKeep:()=>void}){
+function Tile({member,previewID,label,keeper,placeless,disabled,onKeep}:{member:DuplicateMember;previewID:number;label:string;keeper:boolean;placeless:boolean;disabled:boolean;onKeep:()=>void}){
   const [ratio,setRatio]=useState(0);
   const [playing,setPlaying]=useState(false);
   const [failed,setFailed]=useState(false);
@@ -125,12 +132,12 @@ function Tile({member,previewID,size,label,keeper,disabled,onKeep}:{member:Dupli
           <button type="button" className="dupechoose" aria-pressed={keeper} disabled={disabled}
             aria-label={keeper?`Keeping ${label}`:`Keep ${label} instead`} title={keeper?`Keeping ${shown(member.path)}`:`Keep ${shown(member.path)} instead`} onClick={onKeep}/>
           <span className={`dupemark ${keeper?'keep':'bin'}`}><Icon name={keeper?'check':'delete'}/></span>
-          <span className="dupesize">{bytes(size)}</span>
+          <span className="dupesize">{bytes(member.size)}</span>
           {member.kind==='video'&&<button type="button" className="duplay" aria-label={`Play ${name(member.path)}`} onClick={()=>setPlaying(true)}><Icon name="play_circle" filled/></button>}
         </>}
       </figure>
     </div>
-    <p className="dupelabel" title={shown(member.path)}><span>{label}</span>{member.path.includes('/.culled/')&&!label.includes('.culled')&&<span className="dupeflag">in .culled</span>}</p>
+    <p className="dupelabel" title={shown(member.path)}><span>{label}</span>{member.path.includes('/.culled/')&&!label.includes('.culled')&&<span className="dupeflag">in .culled</span>}{placeless&&<span className="dupeflag">no location</span>}</p>
   </li>;
 }
 
@@ -150,7 +157,7 @@ export function Duplicates({report}:{report:DuplicateReport}){
   // Newest first under date headings, as Apple Photos lists duplicates: a
   // date is what a reader recognises a picture by.
   const ordered=useMemo(()=>[...groups].sort((a,b)=>latestDay(b).localeCompare(latestDay(a))||b.reclaimable-a.reclaimable),[groups]);
-  const keeperOf=(group:DuplicateGroup)=>overrides[key(group)]??pick(group.members,group.size,rule).id;
+  const keeperOf=(group:DuplicateGroup)=>overrides[key(group)]??pick(group.members,rule).id;
 
   const active=ordered.filter(group=>!skipped.has(key(group)));
   const doomed=active.reduce((total,group)=>total+group.members.length-1,0);
@@ -189,7 +196,7 @@ export function Duplicates({report}:{report:DuplicateReport}){
     <h1>Duplicates</h1>
     <p className="ysum"><b>{groups.length.toLocaleString()}</b> {groups.length===1?'group':'groups'} · <b>{bytes(freeing)}</b> can be freed
       <span className="dim"> · {report.hashed.toLocaleString()} of {report.candidates.toLocaleString()} possible duplicates checked</span></p>
-    <p className="hint">Every group is byte-identical on a full hash, so the copies are the same file. Merging keeps the ticked copy and marks the rest for the Bin, where they stay restorable. Click another copy to keep that one instead.</p>
+    <p className="hint">Every group is proven on a full hash: the copies are byte-identical, or, for videos marked same footage, their pictures and sound are identical and only their metadata differs. Merging keeps the ticked copy and marks the rest for the Bin, where they stay restorable. Click another copy to keep that one instead.</p>
 
     {groups.length>0&&<div className="dupebulk">
       <label className="dupekeep">Keep
@@ -217,17 +224,20 @@ export function Duplicates({report}:{report:DuplicateReport}){
       const keeper=group.members.find(member=>member.id===keeperID)||group.members[0];
       const labels=labelsOf(group.members);
       const skip=skipped.has(groupKey);
-      const reason=overrides[groupKey]?'you picked it':why(keeper,group.members,group.size,rule);
+      const reason=overrides[groupKey]?'you picked it':why(keeper,group.members,rule);
+      // Only worth saying where one copy knows the place and another does not.
+      const located=group.members.some(member=>member.located);
       return <article className={`dupegroup${skip?' skipped':''}`} key={groupKey}>
         <header className="dupegrouphead">
           <h2>{datesOf(group.members)}</h2>
+          {group.proof==='footage'&&<span className="dupeproof" title="The pictures and sound are identical, byte for byte, and play the same way. Only the metadata differs, such as dates, names or where it is kept in the file.">Same footage, different metadata</span>}
           <button type="button" className="dupelink" disabled={busy||skip} title={`Keeps ${name(keeper.path)} because ${reason}, and marks the other ${group.members.length-1} for the Bin`} onClick={()=>void resolve([group])}>Merge {group.members.length} copies</button>
           <button type="button" className="dupelink quiet" disabled={busy} onClick={()=>setSkipped(current=>{const next=new Set(current);if(next.has(groupKey))next.delete(groupKey);else next.add(groupKey);return next})}>{skip?'Include':'Skip'}</button>
         </header>
         {/* One of N, never none: clicking a copy moves the tick to it, and no
             click can clear it, so a group can never have every copy marked. */}
-        <ul className="dupetiles">{group.members.map(member=><Tile key={member.id} member={member} previewID={group.members[0].id} size={group.size}
-          label={labels.get(member.id)??name(member.path)} keeper={member.id===keeperID} disabled={busy||skip}
+        <ul className="dupetiles">{group.members.map(member=><Tile key={member.id} member={member} previewID={group.members[0].id}
+          label={labels.get(member.id)??name(member.path)} keeper={member.id===keeperID} placeless={located&&!member.located} disabled={busy||skip}
           onKeep={()=>setOverrides(current=>({...current,[groupKey]:member.id}))}/>)}</ul>
       </article>;
     })}

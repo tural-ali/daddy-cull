@@ -4,6 +4,7 @@ import {Media} from '../Media';
 import {useDecisionQueue} from '../useDecisionQueue';
 import {calendarLabel} from './Year';
 import {Viewer} from './Viewer';
+import {pick} from './Duplicates';
 import {usePhotoURL} from './photoURL';
 import {Busy} from '../Busy';
 import {Icon,type IconName} from '../Icon';
@@ -26,8 +27,11 @@ import {tracked} from '../saving';
 // still wait; each carries new.
 export type TodayYear={day:string;year:number;files:number;bytes:number;status:'pending'|'done';assets:Asset[];fresh?:number};
 export type TodayData={md:string;label:string;previous:string;next:string;years:TodayYear[];memories:number;bytes:number};
-export type DuplicateMember=Asset&{day:string};
-export type DuplicateGroup={hash:string;size:number;reclaimable:number;members:DuplicateMember[]};
+// located is only read for videos compared by their footage.
+export type DuplicateMember=Asset&{day:string;located:boolean};
+// bytes: byte-identical on a full hash. footage: videos whose pictures and
+// sound are identical, whose metadata differs.
+export type DuplicateGroup={hash:string;proof:'bytes'|'footage';size:number;reclaimable:number;members:DuplicateMember[]};
 
 /** Whether a key went to a field being typed in, which the page's single
  * letter shortcuts must leave alone. */
@@ -470,7 +474,7 @@ export function Today({initial}:{initial:TodayData}){
       if(!response.ok)throw new Error('Could not load verified duplicates.');
       const groups:DuplicateGroup[]=await response.json();
       setDuplicateGroups(groups);
-      setKeepers(Object.fromEntries(groups.map(group=>[group.hash,group.members[0].id])));
+      setKeepers(Object.fromEntries(groups.map(group=>[group.hash,pick(group.members,'clean').id])));
     }).catch(error=>{if(!controller.signal.aborted)setMessage((error as Error).message)});
     return()=>controller.abort();
   },[initial.md]);
@@ -540,7 +544,9 @@ export function Today({initial}:{initial:TodayData}){
     {queue.error&&<p className="note warn" role="alert">{queue.error} <button className="btn small" onClick={queue.retry}>Retry the same save</button></p>}
     {years.length===0&&<p className="note">Nothing in the archive is filed under {initial.label}, so there is nothing to review.</p>}
     {duplicateGroups.length>0&&<section className="xdupes">
-      <h2>Same file, different folders <small>{duplicateGroups.length} {duplicateGroups.length===1?'group':'groups'} · byte-identical, verified by full hash</small></h2>
+      {duplicateGroups.every(group=>group.proof!=='footage')
+        ?<h2>Same file, different folders <small>{duplicateGroups.length} {duplicateGroups.length===1?'group':'groups'} · byte-identical, verified by full hash</small></h2>
+        :<h2>Copies <small>{duplicateGroups.length} {duplicateGroups.length===1?'group':'groups'} · verified by a full hash of each file, or of each video's footage</small></h2>}
       {duplicateGroups.map(group=><CopyGroup key={`${group.hash}:${group.size}`} group={group} keeperID={keepers[group.hash]??group.members[0].id} saving={saving} onChoose={id=>setKeepers(current=>({...current,[group.hash]:id}))} onResolve={()=>void resolveGroup(group)}/>)}
     </section>}
     {shownYears.filter(year=>filters.size===0||year.assets.some(asset=>shownIDs.has(asset.id))).map(year=>{

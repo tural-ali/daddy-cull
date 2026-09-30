@@ -189,6 +189,23 @@ CREATE TABLE IF NOT EXISTS asset_evidence (
 );
 CREATE INDEX IF NOT EXISTS asset_evidence_full_hash ON asset_evidence(full_hash) WHERE full_hash IS NOT NULL;
 CREATE INDEX IF NOT EXISTS asset_evidence_perceptual_hash ON asset_evidence(perceptual_hash) WHERE perceptual_hash IS NOT NULL;
+-- A video's footage, as footage.go reads it: its media data's length, the
+-- hash of how its header plays it, and once another video matches both, the
+-- hash of the footage itself. media_bytes is 0, and playback_hash NULL, for a
+-- file that is not a movie whose footage can be compared. A row read at a size
+-- the file no longer has is read again.
+CREATE TABLE IF NOT EXISTS asset_footage (
+ asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
+ size_bytes INTEGER NOT NULL,
+ mtime INTEGER NOT NULL,
+ media_bytes INTEGER NOT NULL,
+ playback_hash TEXT,
+ footage_hash TEXT,
+ located INTEGER NOT NULL DEFAULT 0 CHECK(located IN (0,1)),
+ read_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS asset_footage_playback ON asset_footage(media_bytes,playback_hash) WHERE playback_hash IS NOT NULL;
+CREATE INDEX IF NOT EXISTS asset_footage_hash ON asset_footage(footage_hash) WHERE footage_hash IS NOT NULL;
 CREATE TABLE IF NOT EXISTS legacy_culled (
  legacy_id INTEGER PRIMARY KEY,
  batch TEXT NOT NULL,

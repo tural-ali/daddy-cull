@@ -48,10 +48,16 @@ export function CopyGroup({group,keeperID,saving,onChoose,onResolve}:{group:Dupl
   const items:LightboxItem[]=group.members.map(member=>({key:String(member.id),base:`/api/media/${member.id}`,name:fileName(member.path),kind:member.kind,
     detail:`${formatOf(member)} · ${bytes(member.size)} · ${taken(member.capturedAt)} · ${shown(folderOf(member.path))}`,day:`/day/${member.day}`}));
   const others=group.members.length-1;
+  const footage=group.proof==='footage';
+  // Only worth saying where one copy knows the place and another does not.
+  const located=group.members.some(member=>member.located);
   return <div className="xgroup xcopy">
-    <p className="xmeta">{group.members.length} identical copies · {bytes(group.size)} each · <strong>{bytes(group.reclaimable)}</strong> reclaimable</p>
+    {footage
+      ?<p className="xmeta"><span className="b same" title="The pictures and sound are identical, byte for byte, and play the same way. Only the metadata differs, such as dates, names or where it is kept in the file.">Same footage</span>{group.members.length} copies · only the metadata differs · <strong>{bytes(group.reclaimable)}</strong> reclaimable</p>
+      :<p className="xmeta">{group.members.length} identical copies · {bytes(group.size)} each · <strong>{bytes(group.reclaimable)}</strong> reclaimable</p>}
     <div className="xbody">
-      {/* The copies are byte-identical, so one preview is every copy's. */}
+      {/* The copies are byte-identical, or hold the same footage, so one
+          preview is every copy's. */}
       <button type="button" className="xpeek" aria-label={video?`Play ${fileName(keeper.path)}`:`View ${fileName(keeper.path)} full size`} onClick={()=>setOpen(String(keeper.id))}>
         {failed?<span className="media-missing"><span>No preview</span><small>{formatOf(keeper)}</small></span>
           :<img src={`/api/media/${keeper.id}/preview`} alt="" loading="lazy" decoding="async" onError={()=>setFailed(true)}/>}
@@ -66,7 +72,7 @@ export function CopyGroup({group,keeperID,saving,onChoose,onResolve}:{group:Dupl
             const name=fileName(member.path);
             return <tr key={member.id} data-asset={member.id} className={chosen?'keeper':'binned'} onClick={event=>{if(!(event.target as HTMLElement).closest('button,input')&&!saving)onChoose(member.id)}}>
               <td className="xkeep"><input type="radio" name={`keep-${group.hash}`} checked={chosen} disabled={saving} aria-label={`Keep ${name}`} onChange={()=>onChoose(member.id)}/><span className="xfate">{chosen?'keep':'to Bin'}</span></td>
-              <td className="xname" title={name}>{name}{member.path.includes('/.culled/')&&<span className="dupeflag">in .culled</span>}</td>
+              <td className="xname" title={name}>{name}{member.path.includes('/.culled/')&&<span className="dupeflag">in .culled</span>}{located&&!member.located&&<span className="dupeflag">no location</span>}</td>
               <td>{formatOf(member)}</td>
               <td className="num">{bytes(member.size)}</td>
               <td className="xwhen">{taken(member.capturedAt)}</td>

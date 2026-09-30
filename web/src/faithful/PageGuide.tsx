@@ -32,8 +32,8 @@ const guides:Partial<Record<LegacyRoute,Guide>>={
     <>Click a date to review it. Reviewed dates are marked, and the Reviewed meter in the sidebar counts them.</>,
   ]},
   dupes:{title:'How duplicates work',points:[
-    <>Each group holds files with exactly the same bytes, in different places. Two photos that only look alike are not here: open one and press <K keys="C"/> to compare similar photos.</>,
-    <><b>Keep</b> chooses which copy stays in each group: the plainest name, the oldest or the newest. Click another copy to keep that one instead.</>,
+    <>Each group holds copies of one file: files with exactly the same bytes, or videos with the same pictures and sound whose metadata differs. Two photos that only look alike are not here: open one and press <K keys="C"/> to compare similar photos.</>,
+    <><b>Keep</b> chooses which copy stays in each group: the plainest name, the oldest or the newest, and a copy that records where it was taken before one that does not. Click another copy to keep that one instead.</>,
     <><b>Merge</b> moves the other copies to the Bin, where they can be restored. <b>Skip</b> leaves a group alone; <K keys="Shift+M"/> merges every group not skipped.</>,
   ]},
   upgrades:{title:'How upgrades work',points:[

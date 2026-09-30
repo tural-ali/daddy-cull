@@ -37,7 +37,7 @@ func TestExactDuplicatesUseFullHashEvidenceAcrossDates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(groups) != 1 || groups[0].Hash != "same" || len(groups[0].Members) != 3 || groups[0].Members[2].Day != "2015-04-03" || groups[0].Reclaimable != 200 {
+	if len(groups) != 1 || groups[0].Hash != "same" || groups[0].Proof != "bytes" || len(groups[0].Members) != 3 || groups[0].Members[2].Day != "2015-04-03" || groups[0].Reclaimable != 200 {
 		t.Fatalf("unexpected groups: %+v", groups)
 	}
 	if _, err = s.write.ExecContext(ctx, "INSERT INTO decisions(asset_id,status,favourite,revision) VALUES(1,'keep',0,1),(2,'cull',0,1),(3,'cull',0,1)"); err != nil {

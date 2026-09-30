@@ -3,11 +3,11 @@ const assert=require('node:assert/strict');
 // The Duplicates page laid out as Apple Photos: date headings newest first,
 // every copy on its own tile with its size, one preview read per set, and a
 // merge that keeps exactly the ticked copy.
-const member=(id,path,day,kind='image')=>({id,path,day,capturedAt:Date.parse(day)/1000,kind,size:2516582,status:'unreviewed',favourite:false,revision:0,source:'archive',relatedCount:0,alternativeCount:0});
+const member=(id,path,day,kind='image',size=2516582)=>({id,path,day,capturedAt:Date.parse(day)/1000,kind,size,status:'unreviewed',favourite:false,revision:0,source:'archive',relatedCount:0,alternativeCount:0});
 const report={candidates:6,hashed:6,settled:true,unproven:[],groups:[
   {hash:'aaaa',size:2516582,reclaimable:2516582,members:[member(91,'/archive/2025/2025-08/2025-08-05/IMG_1000.HEIC','2025-08-05'),member(92,'/archive/2025/2025-08/2025-08-05/IMG_1000 (1).HEIC','2025-08-05')]},
-  {hash:'bbbb',size:3565158,reclaimable:3565158,members:[member(93,'/archive/2026/2026-07/2026-07-26/IMG_2000.HEIC','2026-07-26'),member(94,'/archive/2026/2026-09/2026-09-05/IMG_2000.HEIC','2026-09-05')]},
-  {hash:'cccc',size:1363148,reclaimable:1363148,members:[member(95,'/archive/2024/2024-01/2024-01-02/CLIP.MOV','2024-01-02','video'),member(96,'/archive/2024/2024-01/2024-01-02/.culled/CLIP.MOV','2024-01-02','video')]},
+  {hash:'bbbb',size:3565158,reclaimable:3565158,members:[member(93,'/archive/2026/2026-07/2026-07-26/IMG_2000.HEIC','2026-07-26','image',3565158),member(94,'/archive/2026/2026-09/2026-09-05/IMG_2000.HEIC','2026-09-05','image',3565158)]},
+  {hash:'cccc',size:1363148,reclaimable:1363148,members:[member(95,'/archive/2024/2024-01/2024-01-02/CLIP.MOV','2024-01-02','video',1363148),member(96,'/archive/2024/2024-01/2024-01-02/.culled/CLIP.MOV','2024-01-02','video',1363148)]},
 ]};
 const svg=(w,h,fill)=>`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="${fill}"/></svg>`;
 (async()=>{

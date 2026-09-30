@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"sort"
 	"strconv"
 )
 
@@ -11,27 +12,40 @@ type DuplicateMember struct {
 	Asset
 	// Day is the day the file is filed under, as YYYY-MM-DD.
 	Day string `json:"day"`
+	// Located is true when a video records where it was taken. It is only
+	// read for videos compared by their footage, and is false for the rest.
+	Located bool `json:"located"`
 }
 
-// DuplicateGroup is a set of files whose bytes are identical, as proven by a
-// full hash of each. A group already settled, with one copy kept and every
-// other removed, is not listed.
+// DuplicateGroup is a set of files proven to be copies of one another. A
+// group already settled, with one copy kept and every other removed, is not
+// listed.
 type DuplicateGroup struct {
-	// Hash is the full hash the files share, as the catalogue holds it.
+	// Hash names the group: the full hash the files share, or for copies
+	// proven by their footage, "footage:" and the footage hash.
 	Hash string `json:"hash"`
-	// Size is each file's size, in bytes.
+	// Proof is how the copies are known to be copies: "bytes" when every file
+	// is byte-identical on a full hash, or "footage" when they are videos
+	// holding the same pictures and sound, played the same way, whose
+	// metadata differs.
+	Proof string `json:"proof"`
+	// Size is each file's size, in bytes, or for copies proven by their
+	// footage, the largest file's.
 	Size int64 `json:"size"`
-	// Reclaimable is the space keeping one copy would free, in bytes: Size
-	// times one less than the number of copies.
+	// Reclaimable is the space keeping one copy would free, in bytes, if the
+	// largest is the one kept.
 	Reclaimable int64 `json:"reclaimable"`
 	// Members are the copies still in the archive, ordered by day and then
 	// path.
 	Members []DuplicateMember `json:"members"`
 }
 
-// ExactDuplicates only returns byte-identical files backed by a cached full hash.
-// A month-day filter selects groups touching that calendar date while retaining
-// every copy elsewhere in the archive so the reviewer can make one informed choice.
+// ExactDuplicates returns the groups of files proven to be copies: files that
+// are byte-identical on a cached full hash, and videos whose footage is
+// identical, as footage.go proves it. A file proven a copy of another either
+// way is in that file's group. A month-day filter selects groups touching that
+// calendar date while retaining every copy elsewhere in the archive so the
+// reviewer can make one informed choice.
 func (s *Store) ExactDuplicates(ctx context.Context, md string, limit int) ([]DuplicateGroup, error) {
 	if md != "" {
 		if _, ok := validMonthDay(md); !ok {
@@ -41,62 +55,168 @@ func (s *Store) ExactDuplicates(ctx context.Context, md string, limit int) ([]Du
 	if limit < 1 || limit > 1000 {
 		return nil, ErrInvalid
 	}
-	rows, err := s.read.QueryContext(ctx, `WITH duplicate_keys AS (
-		SELECT evidence.full_hash AS hash,assets.size_bytes AS size,count(*) AS members,min(assets.relative_path) AS first_path
-		  FROM asset_evidence evidence
-		  JOIN assets ON assets.id=evidence.asset_id
-		  LEFT JOIN decisions key_decisions ON key_decisions.asset_id=assets.id
-		 WHERE evidence.full_hash IS NOT NULL AND evidence.full_hash!='' AND assets.size_bytes>0
-		   AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=assets.id AND fs.state!='restored')
+	rows, err := s.read.QueryContext(ctx, `WITH live AS (
+		SELECT a.id,a.size_bytes FROM assets a
+		 WHERE a.size_bytes>0
+		   AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored')
 		   -- Counted only where it can be shown: a copy with no day, such as one
 		   -- the archive scan found gone, would leave a "group" of one.
-		   AND EXISTS(SELECT 1 FROM asset_days key_day WHERE key_day.asset_id=assets.id)
-		 GROUP BY evidence.full_hash,assets.size_bytes
-		HAVING count(*)>1
-		   AND NOT (sum(CASE WHEN key_decisions.status='cull' THEN 1 ELSE 0 END)=count(*)-1 AND sum(CASE WHEN key_decisions.status='keep' THEN 1 ELSE 0 END)=1)
-		   AND EXISTS(
-			SELECT 1 FROM asset_evidence touching
-			JOIN assets touching_asset ON touching_asset.id=touching.asset_id
-			JOIN asset_days touching_day ON touching_day.asset_id=touching.asset_id
-			WHERE touching.full_hash=evidence.full_hash
-			  AND touching_asset.size_bytes=assets.size_bytes
-			  AND (?='' OR substr(touching_day.day,6,5)=?)
-			  AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=touching_asset.id AND fs.state!='restored')
-		)
-		 ORDER BY first_path
-		 LIMIT ?
+		   AND EXISTS(SELECT 1 FROM asset_days d WHERE d.asset_id=a.id)
+	),
+	byte_keys AS (
+		SELECT e.full_hash AS hash,l.size_bytes AS size FROM live l JOIN asset_evidence e ON e.asset_id=l.id
+		 WHERE e.full_hash IS NOT NULL AND e.full_hash!=''
+		 GROUP BY e.full_hash,l.size_bytes HAVING count(*)>1
+	),
+	footage_keys AS (
+		SELECT f.footage_hash AS hash FROM live l JOIN asset_footage f ON f.asset_id=l.id AND f.size_bytes=l.size_bytes
+		 WHERE f.footage_hash IS NOT NULL
+		 GROUP BY f.footage_hash HAVING count(*)>1
 	)
-	SELECT a.id,a.relative_path,a.captured_at,a.kind,a.size_bytes,COALESCE(d.status,'unreviewed'),COALESCE(d.favourite,0),COALESCE(d.revision,0),a.source_id,(SELECT count(*) FROM assets alt WHERE alt.anchor_id=a.id),`+relatedCount+`,keys.hash,ad.day,keys.size,keys.members
-	  FROM duplicate_keys keys
-	  JOIN asset_evidence evidence ON evidence.full_hash=keys.hash
-	  JOIN assets a ON a.id=evidence.asset_id AND a.size_bytes=keys.size
+	SELECT a.id,a.relative_path,a.captured_at,a.kind,a.size_bytes,COALESCE(d.status,'unreviewed'),COALESCE(d.favourite,0),COALESCE(d.revision,0),a.source_id,(SELECT count(*) FROM assets alt WHERE alt.anchor_id=a.id),`+relatedCount+`,
+	       ad.day,CASE WHEN bk.hash IS NULL THEN '' ELSE bk.hash END,CASE WHEN fk.hash IS NULL THEN '' ELSE fk.hash END,COALESCE(f.located,0)
+	  FROM live l
+	  JOIN assets a ON a.id=l.id
 	  JOIN asset_days ad ON ad.asset_id=a.id
 	  LEFT JOIN decisions d ON d.asset_id=a.id
-	 WHERE NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored')
-	 ORDER BY keys.first_path,ad.day,a.relative_path`, md, md, limit)
+	  LEFT JOIN asset_evidence e ON e.asset_id=a.id
+	  LEFT JOIN byte_keys bk ON bk.hash=e.full_hash AND bk.size=a.size_bytes
+	  LEFT JOIN asset_footage f ON f.asset_id=a.id AND f.size_bytes=a.size_bytes
+	  LEFT JOIN footage_keys fk ON fk.hash=f.footage_hash
+	 WHERE bk.hash IS NOT NULL OR fk.hash IS NOT NULL
+	 ORDER BY a.relative_path,ad.day`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	groups := make([]DuplicateGroup, 0)
-	indices := make(map[string]int)
+	// Each file joins the files that share its full hash and the files that
+	// share its footage hash, and a group is every file joined this way.
+	type copyFile struct {
+		member                   DuplicateMember
+		fullHash, bytes, footage string
+	}
+	var files []copyFile
+	seen := make(map[int64]bool)
+	parent := make(map[string]string)
+	var find func(string) string
+	find = func(key string) string {
+		for parent[key] != key {
+			parent[key] = parent[parent[key]]
+			key = parent[key]
+		}
+		return key
+	}
+	join := func(a, b string) {
+		for _, key := range []string{a, b} {
+			if _, ok := parent[key]; !ok {
+				parent[key] = key
+			}
+		}
+		if ra, rb := find(a), find(b); ra != rb {
+			// The group takes the smaller name, so it is the same whichever
+			// order the files come in.
+			if rb < ra {
+				ra, rb = rb, ra
+			}
+			parent[rb] = ra
+		}
+	}
 	for rows.Next() {
-		var member DuplicateMember
-		var hash string
-		var size, count int64
-		if err = rows.Scan(&member.Asset.ID, &member.Asset.Path, &member.Asset.CapturedAt, &member.Asset.Kind, &member.Asset.Size, &member.Asset.Status, &member.Asset.Favourite, &member.Asset.Revision, &member.Asset.Source, &member.Asset.AlternativeCount, &member.Asset.RelatedCount, &hash, &member.Day, &size, &count); err != nil {
+		var file copyFile
+		var member = &file.member
+		if err = rows.Scan(&member.Asset.ID, &member.Asset.Path, &member.Asset.CapturedAt, &member.Asset.Kind, &member.Asset.Size, &member.Asset.Status, &member.Asset.Favourite, &member.Asset.Revision, &member.Asset.Source, &member.Asset.AlternativeCount, &member.Asset.RelatedCount, &member.Day, &file.bytes, &file.footage, &member.Located); err != nil {
 			return nil, err
 		}
-		key := hash + "\x00" + strconv.FormatInt(size, 10)
-		index, exists := indices[key]
-		if !exists {
-			index = len(groups)
-			indices[key] = index
-			groups = append(groups, DuplicateGroup{Hash: hash, Size: size, Reclaimable: size * (count - 1), Members: make([]DuplicateMember, 0, count)})
+		// A file filed under two days is one copy, shown under its first.
+		if seen[member.ID] {
+			continue
 		}
-		groups[index].Members = append(groups[index].Members, member)
+		seen[member.ID] = true
+		if file.bytes != "" {
+			file.fullHash = file.bytes
+			file.bytes = "bytes:" + file.bytes + ":" + strconv.FormatInt(member.Size, 10)
+		}
+		if file.footage != "" {
+			file.footage = "footage:" + file.footage
+		}
+		self := "file:" + strconv.FormatInt(member.ID, 10)
+		for _, key := range []string{file.bytes, file.footage} {
+			if key != "" {
+				join(self, key)
+			}
+		}
+		files = append(files, file)
 	}
-	return groups, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	type building struct {
+		group         DuplicateGroup
+		byteKeys      map[string]bool
+		fullHash      string
+		footage       string
+		total         int64
+		kept, removed int
+		touches       bool
+	}
+	var order []string
+	built := make(map[string]*building)
+	for _, file := range files {
+		root := find("file:" + strconv.FormatInt(file.member.ID, 10))
+		entry := built[root]
+		if entry == nil {
+			entry = &building{byteKeys: make(map[string]bool)}
+			built[root] = entry
+			order = append(order, root)
+		}
+		entry.group.Members = append(entry.group.Members, file.member)
+		entry.byteKeys[file.bytes] = true
+		entry.fullHash = file.fullHash
+		if file.footage != "" && (entry.footage == "" || file.footage < entry.footage) {
+			entry.footage = file.footage
+		}
+		entry.total += file.member.Size
+		entry.group.Size = max(entry.group.Size, file.member.Size)
+		switch file.member.Status {
+		case "keep":
+			entry.kept++
+		case "cull":
+			entry.removed++
+		}
+		if md == "" || (len(file.member.Day) == 10 && file.member.Day[5:] == md) {
+			entry.touches = true
+		}
+	}
+	groups := make([]DuplicateGroup, 0)
+	for _, root := range order {
+		entry := built[root]
+		members := entry.group.Members
+		if len(members) < 2 || !entry.touches || (entry.kept == 1 && entry.removed == len(members)-1) {
+			continue
+		}
+		group := entry.group
+		group.Reclaimable = entry.total - group.Size
+		// One full hash for every file makes them byte-identical, whatever
+		// else joined them.
+		if len(entry.byteKeys) == 1 && !entry.byteKeys[""] {
+			group.Proof = "bytes"
+			group.Hash = entry.fullHash
+		} else {
+			group.Proof = "footage"
+			group.Hash = entry.footage
+		}
+		sort.SliceStable(group.Members, func(i, j int) bool {
+			if group.Members[i].Day != group.Members[j].Day {
+				return group.Members[i].Day < group.Members[j].Day
+			}
+			return group.Members[i].Path < group.Members[j].Path
+		})
+		groups = append(groups, group)
+		if len(groups) == limit {
+			break
+		}
+	}
+	return groups, nil
 }
 
 // DuplicateCandidate is a set of live files that share a byte size but whose

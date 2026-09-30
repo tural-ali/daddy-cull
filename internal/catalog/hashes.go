@@ -40,8 +40,10 @@ func (s *Store) KeepHashes(ctx context.Context, roots MediaRoots) {
 		} else if hashed > 0 {
 			log.Printf("duplicate hashes: hashed %d in %s", hashed, time.Since(started).Round(time.Second))
 		}
+		// Videos are compared by their footage after, on the same disk.
+		more := s.keepFootage(ctx, roots)
 		// A full batch means there is more; go on at once.
-		if hashed < hashBatch && !s.waitForChange(ctx, seen, hashEvery) {
+		if hashed < hashBatch && !more && !s.waitForChange(ctx, seen, hashEvery) {
 			return
 		}
 		if ctx.Err() != nil {
