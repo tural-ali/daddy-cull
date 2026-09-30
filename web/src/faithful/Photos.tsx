@@ -63,7 +63,7 @@ function ago(value:string|undefined,now:string){
 // Files Cull Sync did not find, grouped by what it saw instead, so a reviewer
 // who knows a photograph is in Photos learns why it was not offered.
 const missingGroups:{why:string;title:(n:number)=>string;hint:string}[]=[
-  {why:'',title:n=>`${plural(n,'file')} not in this Mac's Photos library`,hint:'Cull Sync can only change the library signed in on this Mac. These may be in another family member\'s library, or already deleted from Photos.'},
+  {why:'',title:n=>`${plural(n,'file')} already gone from this Mac's Photos`,hint:'Nothing to do for these: Photos on this Mac does not have them, usually because they were deleted there already or never came from it. Cull Sync can only change the library signed in on this Mac, so a photo still in another family member\'s library has to be deleted there.'},
   {why:'shared-album',title:n=>`${plural(n,'file')} only in a shared album`,hint:'Cull Sync never changes a shared album. To remove one, delete it from the album in Photos.'},
   {why:'other-day',title:n=>`${plural(n,'file')} not found: Photos has the name only on another day`,hint:'Cameras reuse file numbers, so that is a different photograph and is left alone.'},
 ];
@@ -299,9 +299,12 @@ export function Photos(){
   // had, so it is not called a number to delete.
   const last=overview?.synced.last?<> · last synced {when(overview.synced.last)}</>:null;
   const found=view&&(view.state==='planned'||view.state==='queued_apply'||view.state==='applying')?view:null;
+  // Files Photos no longer has need nothing; those only in a shared album or
+  // under another day's photo are there but deliberately not touched.
+  const gone=found?found.missing.filter(item=>!item.why).length:0;
   const headline=found?<>
-    <b>{found.delete.length.toLocaleString()}</b> to delete from Photos · <b>{found.favourite.length.toLocaleString()}</b> favourite{found.favourite.length===1?'':'s'} to set
-    {found.missing.length>0&&<> · {found.missing.length.toLocaleString()} not in this Mac's Photos</>}{last}
+    <b>{found.delete.length.toLocaleString()}</b> still in Photos to delete · <b>{found.favourite.length.toLocaleString()}</b> favourite{found.favourite.length===1?'':'s'} to set
+    {gone>0&&<> · {gone.toLocaleString()} already gone from it</>}{found.missing.length>gone&&<> · {(found.missing.length-gone).toLocaleString()} left alone</>}{last}
   </>:view&&(view.state==='queued_check'||view.state==='checking')?<>Looking for <b>{view.toCheck.toLocaleString()}</b> {view.toCheck===1?'file':'files'} in Photos…{last}</>
     :overview===null?'Reading the catalogue…':<>
     <b>{overview.delete.toLocaleString()}</b> removed and <b>{overview.favourite.toLocaleString()}</b> favourite{overview.favourite===1?'':'s'} in Cull to look for in Photos{last}

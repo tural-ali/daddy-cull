@@ -52,7 +52,7 @@ const view=()=>({...job,created:now,updated:now,toCheck:1467,delete:job.state===
   assert.equal(checks,1,'opening the page checks Photos');
   job={...job,state:'planned',rev:2};
   await page.locator('.prow').first().waitFor();
-  assert.match(await headline(),/^3 to delete from Photos · 0 favourites to set · 1,464 not in this Mac's Photos · last synced 27 Sept, \d\d:00$/);
+  assert.match(await headline(),/^3 still in Photos to delete · 0 favourites to set · 1,464 already gone from it · last synced 27 Sept, \d\d:00$/);
   if(shots)await page.screenshot({path:`${shots}/photos-auto.png`});
 
   // Something unticked stays unticked when the server renews the plan.

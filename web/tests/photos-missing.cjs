@@ -43,7 +43,10 @@ const summary=()=>stage?{id:'J1',state:'checking',rev:1,stage,done:40,total:120}
   const groups=page.locator('details.pmore[data-why]');
   await groups.first().waitFor();
   assert.deepEqual(await groups.evaluateAll(nodes=>nodes.map(node=>node.dataset.why)),['none','shared-album','other-day']);
-  assert.equal(await page.locator('details[data-why="none"] summary').innerText(),"2 files not in this Mac's Photos library");
+  assert.equal(await page.locator('details[data-why="none"] summary').innerText(),"2 files already gone from this Mac's Photos");
+  // The headline says the files Photos no longer has need nothing, apart from
+  // the ones it has but leaves alone.
+  assert.equal((await page.locator('.ysum').innerText()).replace(/\s+/g,' '),'0 still in Photos to delete · 0 favourites to set · 2 already gone from it · 2 left alone');
   assert.equal(await page.locator('details[data-why="shared-album"] summary').innerText(),'1 file only in a shared album');
   assert.equal(await page.locator('details[data-why="other-day"] summary').innerText(),'1 file not found: Photos has the name only on another day');
 
