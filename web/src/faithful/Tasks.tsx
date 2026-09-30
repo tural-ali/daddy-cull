@@ -58,7 +58,7 @@ export function TasksButton(){
   useShortcut('T',()=>setOpen(current=>!current));
   const label=running.length>0?`Tasks, ${plural(running.length,'task')} running, ${Math.round(share*100)}% done`:'Tasks';
   return <div className="taskwrap">
-    <button ref={button} type="button" className={`iconbtn tasks${open?' on':''}${running.length>0?' busy':''}`} aria-label={label} {...tipProps('Tasks','T')}
+    <button ref={button} type="button" className={`iconbtn tasks${open?' on':''}${running.length>0?' running':''}`} aria-label={label} {...tipProps('Tasks','T')}
       aria-expanded={open} aria-haspopup="dialog" onClick={()=>setOpen(current=>!current)} style={{'--share':share} as CSSProperties}>
       <Icon name="pending_actions" filled={open}/>
       {running.length>0&&<svg className="taskring" viewBox="0 0 40 40" aria-hidden="true"><circle className="track" cx="20" cy="20" r="18"/><circle className="fill" cx="20" cy="20" r="18" pathLength="100"/></svg>}

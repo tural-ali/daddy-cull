@@ -319,7 +319,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .taskwrap { position: relative; flex: none; }
 .taskwrap > .calpop { left: 0; right: auto; width: 400px; padding: 16px 8px 8px; transform-origin: 22px 0; }
 .tasks { position: relative; }
-.tasks.busy { color: var(--accent); }
+.tasks.running { color: var(--accent); }
 .taskring { position: absolute; inset: 2px; width: 40px; height: 40px; transform: rotate(-90deg); pointer-events: none; }
 .taskring circle { fill: none; stroke-width: 2.5; }
 .taskring .track { stroke: color-mix(in oklab, var(--accent) 18%, transparent); }

@@ -69,6 +69,9 @@ const at='2026-09-28T09:00:00Z';
   assert.equal(await page.locator('.bingrid figure').count(),0,'the cards left without waiting');
   assert.deepEqual(posts[0],{path:'/api/tasks/bin',body:{action:'delete',keys:['marked:11','marked:12','marked:13'],confirmation:'DELETE 3'}});
   await page.locator('.taskring').waitFor();
+  // The icon stays centred inside the ring while a task runs.
+  const [ringBox,iconBox]=[await page.locator('.taskring').boundingBox(),await button.locator('.icon').boundingBox()];
+  assert.ok(Math.abs(ringBox.x+ringBox.width/2-(iconBox.x+iconBox.width/2))<0.5&&Math.abs(ringBox.y+ringBox.height/2-(iconBox.y+iconBox.height/2))<0.5,'the icon is centred in the ring');
   advance();
   await page.waitForFunction(()=>/1 task running, 33% done/.test(document.querySelector('.tasks')?.getAttribute('aria-label')??''));
 
