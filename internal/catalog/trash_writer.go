@@ -520,6 +520,11 @@ func (t *TrashWriter) binPlan(ctx context.Context, id string, purge bool) error 
 			return err
 		}
 	}
+	// A Live Photo video its photograph left in the archive, as batches made
+	// before the Bin took them did, is deleted with it, never after it.
+	if plan, err = t.bin.AdoptLiveClips(ctx, id); err != nil {
+		return err
+	}
 	_, err = t.bin.Run(ctx, id, "purge", DeleteConfirmation(len(plan.Files)))
 	return err
 }

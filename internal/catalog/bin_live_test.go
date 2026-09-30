@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -181,5 +182,137 @@ func TestALiveClipIsNotDeletedFromUnderAPhoto(t *testing.T) {
 	}
 	if !onDisk(t, root, ".live-photos/2026/2026-09/2026-09-26/IMG_5472.MP4") {
 		t.Fatal("the clip did not come back")
+	}
+}
+
+// A batch that went to the Bin before the Bin took Live Photo videos left
+// them in the archive. They join it, come back when it is restored, and are
+// deleted with it; one a photograph still in the archive shares stays.
+func TestLiveClipsLeftBehindJoinTheirPhotosInTheBin(t *testing.T) {
+	b, s, root := liveBinFixture(t)
+	ctx := context.Background()
+	filed := ".live-photos/2026/2026-09/2026-09-26/IMG_5472.MP4"
+	inline := "2026/2026-09/2026-09-26/IMG_5472_HEVC.MOV"
+	shared := ".live-photos/2022/2022-01/2022-01-07/IMG_6947_HEVC.MOV"
+	// The batches as the Bin made them before: the photos alone.
+	hidden := filepath.Join(t.TempDir(), "hidden")
+	for _, name := range []string{filed, inline, shared} {
+		if e := os.MkdirAll(filepath.Join(hidden, filepath.Dir(name)), 0o700); e != nil {
+			t.Fatal(e)
+		}
+		if e := os.Rename(filepath.Join(root, name), filepath.Join(hidden, name)); e != nil {
+			t.Fatal(e)
+		}
+	}
+	old, e := b.Preview(ctx, []int64{1})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if old, e = b.Run(ctx, old.ID, "quarantine", ""); e != nil {
+		t.Fatal(e)
+	}
+	heic, e := b.Preview(ctx, []int64{3})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if heic, e = b.Run(ctx, heic.ID, "quarantine", ""); e != nil {
+		t.Fatal(e)
+	}
+	for _, name := range []string{filed, inline, shared} {
+		if e := os.Rename(filepath.Join(hidden, name), filepath.Join(root, name)); e != nil {
+			t.Fatal(e)
+		}
+	}
+
+	// A move cut short is finished when asked again.
+	cut := true
+	b.checkpoint = func(label string) error {
+		if label == "after-link" && cut {
+			cut = false
+			return errors.New("power cut")
+		}
+		return nil
+	}
+	if _, e = b.AdoptAllLiveClips(ctx); e == nil {
+		t.Fatal("the cut was not noticed")
+	}
+	b.checkpoint = nil
+	n, e := b.AdoptAllLiveClips(ctx)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if n != 2 {
+		t.Errorf("%d videos moved in after the cut, want both of the photo's", n)
+	}
+	if old, e = b.load(old.ID); e != nil {
+		t.Fatal(e)
+	}
+	if got := strings.Join(liveFiles(old), " "); got != filed+" "+inline {
+		t.Fatalf("the batch took %q", got)
+	}
+	for _, f := range old.Files {
+		if f.Phase != "bin" || old.Error != "" {
+			t.Fatalf("%s is %s, error %q", f.Original, f.Phase, old.Error)
+		}
+	}
+	if onDisk(t, root, filed) || onDisk(t, root, inline) {
+		t.Fatal("a video stayed in the archive")
+	}
+	if state := fileState(t, s, 2); state != "bin" {
+		t.Errorf("the catalogued video is %q", state)
+	}
+	// The JPEG of the other exposure is in the archive, so their video stays.
+	if heic, e = b.load(heic.ID); e != nil {
+		t.Fatal(e)
+	}
+	if len(liveFiles(heic)) != 0 || !onDisk(t, root, shared) {
+		t.Fatal("the video the JPEG shares left with the HEIC")
+	}
+	if n, e = b.AdoptAllLiveClips(ctx); e != nil || n != 0 {
+		t.Fatalf("asked again, %d joined: %v", n, e)
+	}
+
+	if old, e = b.Run(ctx, old.ID, "restore", ""); e != nil {
+		t.Fatal(e)
+	}
+	if !onDisk(t, root, filed) || !onDisk(t, root, inline) {
+		t.Fatal("restoring the photo left its videos in the Bin")
+	}
+}
+
+// Deleting a batch from the Bin deletes the videos its photos left behind.
+func TestDeletingABatchTakesTheVideosItLeftBehind(t *testing.T) {
+	b, s, root := liveBinFixture(t)
+	ctx := context.Background()
+	clip := ".live-photos/2026/2026-09/2026-09-26/IMG_5472.MP4"
+	aside := filepath.Join(t.TempDir(), "IMG_5472.MP4")
+	if e := os.Rename(filepath.Join(root, clip), aside); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.Remove(filepath.Join(root, "2026/2026-09/2026-09-26/IMG_5472_HEVC.MOV")); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := s.write.Exec("DELETE FROM assets WHERE id=2"); e != nil {
+		t.Fatal(e)
+	}
+	p, e := b.Preview(ctx, []int64{1})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if p, e = b.Run(ctx, p.ID, "quarantine", ""); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.Rename(aside, filepath.Join(root, clip)); e != nil {
+		t.Fatal(e)
+	}
+	trash := NewTrashWriter(s, b, nil, nil)
+	if e = trash.binPlan(ctx, p.ID, true); e != nil {
+		t.Fatal(e)
+	}
+	if onDisk(t, root, clip) {
+		t.Fatal("the video outlived its photo")
+	}
+	if p, e = b.load(p.ID); e != nil || p.State != "purged" || len(liveFiles(p)) != 1 {
+		t.Fatalf("the batch: %+v %v", p, e)
 	}
 }

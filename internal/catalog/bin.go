@@ -1251,3 +1251,177 @@ func (b *BinEngine) List() ([]*BinPlan, error) {
 	}
 	return plans, rows.Err()
 }
+
+// AdoptLiveClips brings into a batch in the Bin the Live Photo videos its
+// photographs left in the archive, as every batch made before the Bin knew of
+// Live Photos did: a video goes wherever its photo goes, so it must not
+// outlive a photo deleted from the Bin. A video that a photograph still in the
+// archive shares stays with that one. Each video is fingerprinted and moved
+// with the same checks as the rest of the batch, restoring the batch or its
+// photo brings it back, and a move cut short is finished when asked again.
+func (b *BinEngine) AdoptLiveClips(ctx context.Context, id string) (result *BinPlan, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	p, e := b.load(id)
+	if e != nil {
+		return nil, e
+	}
+	defer func() {
+		if err != nil {
+			p.Error = err.Error()
+			_ = b.save(p)
+		}
+		result = p
+	}()
+	if p.State != "bin" {
+		return p, nil
+	}
+	var batch []int64
+	for _, a := range p.Assets {
+		if !returnedAsset(p, a) {
+			batch = append(batch, a.ID)
+		}
+	}
+	held := map[string]bool{}
+	for _, f := range p.Files {
+		if f.Phase != "returned" {
+			held[f.Original] = true
+		}
+	}
+	for _, a := range p.Assets {
+		if returnedAsset(p, a) {
+			continue
+		}
+		clips, _, e := b.liveClips(ctx, strings.TrimPrefix(a.Path, "/archive/"), batch, p.ID)
+		if e != nil {
+			return p, e
+		}
+		for _, clip := range clips {
+			if held[clip.path] {
+				continue
+			}
+			held[clip.path] = true
+			fp, e := b.fingerprint(ctx, clip.path)
+			if e != nil {
+				return p, e
+			}
+			fp.Sidecar, fp.Live, fp.LiveOf, fp.Clip = true, true, clip.photos, clip.id
+			if e = b.adopt(p, fp); e != nil {
+				return p, e
+			}
+		}
+	}
+	for i := range p.Files {
+		f := &p.Files[i]
+		if !f.Live || (f.Phase != "planned" && f.Phase != "moving") {
+			continue
+		}
+		if e = writableFolder(b.root, f.Original); e != nil {
+			return p, e
+		}
+		if e = writableFolder(b.root, stored(p, i)); e != nil {
+			return p, e
+		}
+		if e = b.checkLive(p, *f); e != nil {
+			return p, e
+		}
+		f.Phase = "moving"
+		if e = b.save(p); e != nil {
+			return p, e
+		}
+		if e = b.move(ctx, f.Original, stored(p, i), *f); e != nil {
+			return p, e
+		}
+		f.Phase = "bin"
+		if e = b.save(p); e != nil {
+			return p, e
+		}
+	}
+	if p.Error != "" {
+		p.Error = ""
+		return p, b.save(p)
+	}
+	return p, nil
+}
+
+// adopt adds a Live Photo video to a batch in the Bin, still in the archive,
+// in one transaction with the catalogue's note that it is the Bin's, as
+// reserve does for a new batch.
+func (b *BinEngine) adopt(p *BinPlan, f BinFile) error {
+	tx, e := b.s.write.Begin()
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback()
+	if f.Clip != 0 {
+		var n int
+		if e = tx.QueryRow("SELECT count(*) FROM file_state WHERE asset_id=? AND state!='restored' AND plan_id!=?", f.Clip, p.ID).Scan(&n); e != nil {
+			return e
+		}
+		if n > 0 {
+			return fmt.Errorf("file already belongs to a Bin operation: %s", f.Original)
+		}
+		if _, e = tx.Exec("INSERT INTO file_state VALUES(?,'bin',?) ON CONFLICT(asset_id) DO UPDATE SET state='bin',plan_id=excluded.plan_id", f.Clip, p.ID); e != nil {
+			return e
+		}
+	}
+	p.Files = append(p.Files, f)
+	raw, _ := json.Marshal(p)
+	if _, e = tx.Exec("UPDATE file_plans SET body=? WHERE id=?", string(raw), p.ID); e != nil {
+		p.Files = p.Files[:len(p.Files)-1]
+		return e
+	}
+	if e = tx.Commit(); e != nil {
+		p.Files = p.Files[:len(p.Files)-1]
+		return e
+	}
+	return nil
+}
+
+// AdoptAllLiveClips runs AdoptLiveClips on every batch in the Bin, and says
+// how many videos it moved in with their photos. A batch it cannot finish keeps its
+// error and the rest go on.
+func (b *BinEngine) AdoptAllLiveClips(ctx context.Context) (adopted int, err error) {
+	rows, e := b.s.read.QueryContext(ctx, "SELECT id FROM file_plans WHERE json_extract(body,'$.state')='bin' ORDER BY rowid")
+	if e != nil {
+		return 0, e
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if e = rows.Scan(&id); e != nil {
+			rows.Close()
+			return 0, e
+		}
+		ids = append(ids, id)
+	}
+	if e = rows.Close(); e != nil {
+		return 0, e
+	}
+	var failed []error
+	for _, id := range ids {
+		before, e := b.load(id)
+		if e != nil {
+			failed = append(failed, fmt.Errorf("batch %s: %w", id, e))
+			continue
+		}
+		p, e := b.AdoptLiveClips(ctx, id)
+		if e != nil {
+			failed = append(failed, fmt.Errorf("batch %s: %w", id, e))
+		}
+		if p != nil {
+			adopted += liveInBin(p) - liveInBin(before)
+		}
+	}
+	return adopted, errors.Join(failed...)
+}
+
+func liveInBin(p *BinPlan) int {
+	n := 0
+	for _, f := range p.Files {
+		if f.Live && f.Phase == "bin" {
+			n++
+		}
+	}
+	return n
+}

@@ -266,6 +266,17 @@ func main() {
 			log.Fatal(e)
 		}
 		defer engine.Close()
+		// Batches made before the Bin took Live Photo videos with their photos
+		// left the videos behind; they join their photos here.
+		go func() {
+			n, err := engine.AdoptAllLiveClips(ctx)
+			if n > 0 {
+				log.Printf("live photos: %d videos joined their photos in the Bin", n)
+			}
+			if err != nil {
+				log.Printf("live photos: %v", err)
+			}
+		}()
 		var legacyEngine *catalog.LegacyBinEngine
 		var screenshotWriter *catalog.ScreenshotWriter
 		if *disksRoot != "" {
