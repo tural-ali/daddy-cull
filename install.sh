@@ -6,10 +6,12 @@
 # or, from a checkout of the repository, ./install.sh, which builds it from
 # the source instead of downloading a release.
 #
-# It checks the Mac first and changes nothing if it falls short. Then it
-# installs Homebrew if it is missing, the programs Daddy Cull uses, and
-# Daddy Cull itself, starts it in the background and opens the setup page.
-# Running it again updates Daddy Cull and keeps its settings.
+# It checks the Mac and finds the release first, and changes nothing if
+# either falls short. Then it downloads and checks the release, installs
+# Homebrew if it is missing and the programs Daddy Cull uses, and only then
+# stops a running Daddy Cull, switches to the new version and starts it. If
+# the new version does not start, the one before it is put back and started
+# again. Running it again updates Daddy Cull and keeps its settings.
 #
 # Written for the bash that ships with macOS (3.2). Everything happens inside
 # main, called on the very last line, so a download cut short runs nothing.
@@ -181,12 +183,26 @@ build() {
   cp "$SOURCE/mac/daddy-cull" "$into/bin/daddy-cull"
 }
 
+release_base() { printf '%s/v%s' "${DADDY_CULL_RELEASES:-https://github.com/$REPO/releases/download}" "$VERSION"; }
+
+# release checks that the release $VERSION has what download needs, before
+# anything on this Mac is changed.
+release() {
+  local base name="daddy-cull-$VERSION-macos.tar.gz" file
+  base=$(release_base)
+  for file in "$name" SHA256SUMS; do
+    curl -fsSIL --max-time 30 "$base/$file" >/dev/null 2>&1 ||
+      fail "Daddy Cull $VERSION has no $file at $base. Nothing was changed."
+  done
+  say "Daddy Cull $VERSION is available."
+}
+
 # download downloads the release $VERSION into $1 and checks it.
 download() {
-  local into=$1 name="daddy-cull-$VERSION-macos.tar.gz" work
+  local into=$1 name="daddy-cull-$VERSION-macos.tar.gz" work base
   step "Downloading Daddy Cull $VERSION"
   work=$(mktemp -d -t daddy-cull)
-  local base="${DADDY_CULL_RELEASES:-https://github.com/$REPO/releases/download}/v$VERSION"
+  base=$(release_base)
   curl -fL --progress-bar "$base/$name" -o "$work/$name" || fail "could not download $base/$name"
   curl -fsSL "$base/SHA256SUMS" -o "$work/SHA256SUMS" || fail "could not download the checksums of $VERSION."
   (cd "$work" && grep " $name\$" SHA256SUMS | shasum -a 256 -c -s) || fail "the download is damaged: its checksum does not match. Try again."
@@ -202,26 +218,84 @@ newest() {
     sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p' | head -n 1
 }
 
-app() {
-  local into="$STATE/app/$VERSION"
+# stage puts the new version in $STATE/app/$VERSION.new and checks it is
+# whole, while any running version carries on.
+stage() {
+  STAGED="$STATE/app/$VERSION.new"
   mkdir -p "$STATE/app"
-  rm -rf "$into.new"
-  if [ -n "$SOURCE" ]; then build "$into.new"; else download "$into.new"; fi
-  if [ ! -x "$into.new/bin/cull" ] || [ ! -f "$into.new/web/index.html" ]; then
+  rm -rf "$STAGED"
+  if [ -n "$SOURCE" ]; then build "$STAGED"; else download "$STAGED"; fi
+  if [ ! -x "$STAGED/bin/cull" ] || [ ! -f "$STAGED/web/index.html" ]; then
     fail "the new version is incomplete."
   fi
-  chmod 755 "$into.new/bin/cull" "$into.new/bin/daddy-cull"
-  rm -rf "$into"
-  mv "$into.new" "$into"
+  chmod 755 "$STAGED/bin/cull" "$STAGED/bin/daddy-cull"
+}
+
+# activate stops a running Daddy Cull and makes the staged version current,
+# remembering the one before it for roll_back.
+activate() {
+  PREVIOUS=$(readlink "$STATE/app/current" 2>/dev/null || true)
+  if [ -f "$STATE/config.json" ] && launchctl print "gui/$(id -u)/$LABEL.web" >/dev/null 2>&1; then
+    WAS_RUNNING=true
+    "$STATE/app/current/bin/daddy-cull" stop >/dev/null 2>&1 || true
+  fi
+  local into="$STATE/app/$VERSION"
+  # The same version installed again: the copy it replaces is the one to go back to.
+  rm -rf "$into.previous"
+  if [ -d "$into" ]; then
+    mv "$into" "$into.previous"
+    [ "$PREVIOUS" != "$VERSION" ] || PREVIOUS="$VERSION.previous"
+  fi
+  mv "$STAGED" "$into"
+  STAGED=""
   ln -sfn "$VERSION" "$STATE/app/current"
-  # Only the running version is kept.
-  local old
-  for old in "$STATE/app"/*; do
-    case "$(basename "$old")" in current | checkout | "$VERSION") ;; *) rm -rf "$old" ;; esac
-  done
+  ACTIVATED=true
   if [ -n "$SOURCE" ]; then say "$SOURCE" >"$STATE/app/checkout"; else rm -f "$STATE/app/checkout"; fi
   ln -sfn "$STATE/app/current/bin/daddy-cull" "$BREW_PREFIX/bin/daddy-cull"
   say "Daddy Cull $("$STATE/app/current/bin/cull" -version) is in $STATE/app"
+}
+
+# roll_back puts back the version that was current before activate, and
+# starts it again if it was running.
+roll_back() {
+  "$STATE/app/current/bin/daddy-cull" stop >/dev/null 2>&1 || true
+  if [ -z "$PREVIOUS" ] || [ ! -d "$STATE/app/$PREVIOUS" ]; then
+    printf 'There was no earlier version to go back to. Run the installer again, or see daddy-cull logs.\n' >&2
+    return
+  fi
+  rm -rf "$STATE/app/$VERSION"
+  local back=$PREVIOUS
+  if [ "$PREVIOUS" = "$VERSION.previous" ]; then
+    mv "$STATE/app/$PREVIOUS" "$STATE/app/$VERSION"
+    back=$VERSION
+  fi
+  ln -sfn "$back" "$STATE/app/current"
+  if [ "$WAS_RUNNING" = true ] && "$STATE/app/current/bin/daddy-cull" start >/dev/null 2>&1; then
+    printf 'Put back Daddy Cull %s, which is running again.\n' "$back" >&2
+  else
+    printf 'Put back Daddy Cull %s. daddy-cull start starts it.\n' "$back" >&2
+  fi
+}
+
+# prune keeps the running version and the one before it.
+prune() {
+  local old name
+  for old in "$STATE/app"/*; do
+    name=$(basename "$old")
+    case "$name" in current | checkout | "$VERSION") continue ;; esac
+    # A copy of this same version is not worth keeping once it runs.
+    if [ "$name" = "$PREVIOUS" ] && [ "$name" != "$VERSION.previous" ]; then continue; fi
+    rm -rf "$old"
+  done
+}
+
+# finish runs on exit: a staged download that was never used is removed, and
+# a version that was switched to but did not get Daddy Cull running is
+# rolled back.
+finish() {
+  local status=$1
+  [ -z "$STAGED" ] || rm -rf "$STAGED"
+  if [ "$status" != 0 ] && [ "$ACTIVATED" = true ] && [ "$STARTED" != true ]; then roll_back; fi
 }
 
 settings() {
@@ -272,6 +346,8 @@ main() {
   export DADDY_CULL_LABEL="${DADDY_CULL_LABEL:-app.daddycull}"
   STATE=$DADDY_CULL_HOME PORT=$DADDY_CULL_PORT LABEL=$DADDY_CULL_LABEL
   ICLOUD=ask APPLE=ask ASSUME_YES=false OPEN=true UPDATE=false LIBRARY="" IMPORT="" VERSION=""
+  STAGED="" PREVIOUS="" WAS_RUNNING=false ACTIVATED=false STARTED=false
+  trap 'finish $?' EXIT
   while [ $# -gt 0 ]; do
     case "$1" in
       --with-icloud) ICLOUD=yes ;;
@@ -305,23 +381,27 @@ main() {
 
   say "Daddy Cull installer"
   requirements
-  homebrew
-  formulae
   if [ -n "$SOURCE" ]; then
     VERSION=$("$SOURCE/tools/version.sh")
-  elif [ -z "$VERSION" ]; then
-    VERSION=$(newest || true)
-    [ -n "$VERSION" ] || fail "could not find the newest release of $REPO."
+  else
+    if [ -z "$VERSION" ]; then
+      VERSION=$(newest || true)
+      [ -n "$VERSION" ] || fail "could not find the newest release of $REPO. Nothing was changed."
+    fi
+    release
+    stage
   fi
-  if [ -f "$STATE/config.json" ] && launchctl print "gui/$(id -u)/$LABEL.web" >/dev/null 2>&1; then
-    "$STATE/app/current/bin/daddy-cull" stop >/dev/null 2>&1 || true
-  fi
-  app
+  homebrew
+  formulae
+  [ -z "$SOURCE" ] || stage
   settings
+  activate
   optional
 
   step "Starting Daddy Cull"
-  "$STATE/app/current/bin/daddy-cull" start
+  "$STATE/app/current/bin/daddy-cull" start || fail "Daddy Cull $VERSION did not start."
+  STARTED=true
+  prune
 
   local page=""
   [ "$(plutil -extract "done" raw -o - "$STATE/config.json" 2>/dev/null || true)" = true ] || page=setup

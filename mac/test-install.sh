@@ -2,7 +2,8 @@
 # Installs Daddy Cull from this checkout the way someone would, then checks it
 # end to end: the services answer, Setup saves and launchd starts Cull again,
 # a photo dropped into Import is filed under the day it was taken, and
-# restart, update and uninstall work. The library and Import folder are made
+# restart, update and uninstall work. An update to a release that is missing
+# changes nothing, and one that does not start is rolled back. The library and Import folder are made
 # in a folder of their own, with one synthetic photo.
 #
 #   mac/test-install.sh                  install and check
@@ -90,6 +91,57 @@ setup >/dev/null
 step "Update from the checkout, keeping the settings"
 "$root/install.sh" --update --no-open
 setup | grep -q '"done":true'
+
+# A release is served from a folder, as GitHub would serve it, made from the
+# installed app. The installer runs from outside the checkout, as it does when
+# piped from curl.
+releases="$work/releases"
+release() {
+  local version=$1 from=$2 dir="$work/release-$1"
+  mkdir -p "$releases/v$version" "$dir"
+  cp -R "$from/" "$dir/daddy-cull-$version"
+  tar -czf "$releases/v$version/daddy-cull-$version-macos.tar.gz" -C "$dir" "daddy-cull-$version"
+  (cd "$releases/v$version" && shasum -a 256 "daddy-cull-$version-macos.tar.gz" >SHA256SUMS)
+}
+installer="$work/install.sh"
+cp "$root/install.sh" "$installer"
+current() { readlink "$state/app/current"; }
+before=$(current)
+
+step "A release that is not there changes nothing"
+if DADDY_CULL_RELEASES="file://$releases" /bin/bash "$installer" --update --no-open --release 9.9.8; then
+  echo "installed a release that does not exist" >&2; exit 1
+fi
+[ "$(current)" = "$before" ]
+[ ! -e "$state/app/9.9.8.new" ]
+setup >/dev/null
+echo ok
+
+step "A release that does not start is rolled back, and the one before runs again"
+release 9.9.9 "$state/app/current"
+cat >"$work/release-9.9.9/daddy-cull-9.9.9/bin/cull" <<'CULL'
+#!/bin/bash
+if [ "${1:-}" = -version ]; then echo 9.9.9; exit 0; fi
+exit 1
+CULL
+tar -czf "$releases/v9.9.9/daddy-cull-9.9.9-macos.tar.gz" -C "$work/release-9.9.9" daddy-cull-9.9.9
+(cd "$releases/v9.9.9" && shasum -a 256 daddy-cull-9.9.9-macos.tar.gz >SHA256SUMS)
+if DADDY_CULL_RELEASES="file://$releases" /bin/bash "$installer" --update --no-open --release 9.9.9; then
+  echo "a release that cannot start was left running" >&2; exit 1
+fi
+[ "$(current)" = "$before" ]
+[ ! -e "$state/app/9.9.9" ]
+wait_for "the version before to answer again" 30 setup
+setup | grep -q "\"version\":\"$("$root/tools/version.sh")\""
+echo ok
+
+step "A release that starts replaces the one before, which is kept"
+release 9.9.10 "$state/app/current"
+DADDY_CULL_RELEASES="file://$releases" /bin/bash "$installer" --update --no-open --release 9.9.10
+[ "$(current)" = 9.9.10 ]
+[ -d "$state/app/$before" ]
+setup | grep -q '"done":true'
+echo ok
 
 step "Uninstall keeps the photos and the catalogue"
 daddy-cull uninstall
