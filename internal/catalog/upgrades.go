@@ -46,6 +46,10 @@ type UpgradeGroup struct {
 	// photo, such as /archive/2020/2020-01/2020-01-02/A (hi-res).JPG, and is
 	// left out until one is.
 	Accepted string `json:"accepted,omitempty"`
+	// AcceptedFrom is the path of the Takeout copy that was accepted, one of
+	// the copies' asset paths, such as /upgrades/Takeout/Google Photos/Trip/A.JPG,
+	// and is left out until one is.
+	AcceptedFrom string `json:"acceptedFrom,omitempty"`
 	// AcceptedAsset is the accepted copy's file in the catalogue, once the
 	// catalogue has indexed it, and is left out otherwise.
 	AcceptedAsset *Asset `json:"acceptedAsset,omitempty"`
@@ -198,7 +202,7 @@ func (s *Store) Upgrades(ctx context.Context) (UpgradePage, error) {
 	rows, err := s.read.QueryContext(ctx, `SELECT
 		a.id,a.relative_path,a.captured_at,a.kind,a.size_bytes,COALESCE(d.status,'unreviewed'),COALESCE(d.favourite,0),COALESCE(d.revision,0),a.source_id,
 		(SELECT count(*) FROM assets alt WHERE alt.anchor_id=a.id),(SELECT count(*) FROM related_assets rel WHERE rel.asset_id=a.id),
-		c.archive_day,c.archive_pixels,COALESCE(h.accepted_as,''),
+		c.archive_day,c.archive_pixels,COALESCE(h.accepted_as,''),COALESCE(h.source_file,''),
 		s.id,s.relative_path,s.captured_at,s.kind,s.size_bytes,COALESCE(sd.status,'unreviewed'),COALESCE(sd.favourite,0),COALESCE(sd.revision,0),s.source_id,
 		(SELECT count(*) FROM assets alt WHERE alt.anchor_id=s.id),(SELECT count(*) FROM related_assets rel WHERE rel.asset_id=s.id),
 		c.source_pixels,c.ratio,c.capture_date,c.album,c.source_available
@@ -213,10 +217,10 @@ func (s *Store) Upgrades(ctx context.Context) (UpgradePage, error) {
 	indices := map[int64]int{}
 	for rows.Next() {
 		var archive, source Asset
-		var day, archivePixels, accepted, sourcePixels, captureDate, album string
+		var day, archivePixels, accepted, acceptedFrom, sourcePixels, captureDate, album string
 		var ratio float64
 		var available bool
-		values := []any{&archive.ID, &archive.Path, &archive.CapturedAt, &archive.Kind, &archive.Size, &archive.Status, &archive.Favourite, &archive.Revision, &archive.Source, &archive.AlternativeCount, &archive.RelatedCount, &day, &archivePixels, &accepted, &source.ID, &source.Path, &source.CapturedAt, &source.Kind, &source.Size, &source.Status, &source.Favourite, &source.Revision, &source.Source, &source.AlternativeCount, &source.RelatedCount, &sourcePixels, &ratio, &captureDate, &album, &available}
+		values := []any{&archive.ID, &archive.Path, &archive.CapturedAt, &archive.Kind, &archive.Size, &archive.Status, &archive.Favourite, &archive.Revision, &archive.Source, &archive.AlternativeCount, &archive.RelatedCount, &day, &archivePixels, &accepted, &acceptedFrom, &source.ID, &source.Path, &source.CapturedAt, &source.Kind, &source.Size, &source.Status, &source.Favourite, &source.Revision, &source.Source, &source.AlternativeCount, &source.RelatedCount, &sourcePixels, &ratio, &captureDate, &album, &available}
 		if err = rows.Scan(values...); err != nil {
 			return page, err
 		}
@@ -224,7 +228,7 @@ func (s *Store) Upgrades(ctx context.Context) (UpgradePage, error) {
 		if !found {
 			index = len(page.Groups)
 			indices[archive.ID] = index
-			page.Groups = append(page.Groups, UpgradeGroup{Archive: archive, Day: day, Pixels: archivePixels, Accepted: accepted, Copies: make([]UpgradeCopy, 0)})
+			page.Groups = append(page.Groups, UpgradeGroup{Archive: archive, Day: day, Pixels: archivePixels, Accepted: accepted, AcceptedFrom: acceptedFrom, Copies: make([]UpgradeCopy, 0)})
 			page.Total++
 			if accepted == "" {
 				page.Pending++

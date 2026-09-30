@@ -37,8 +37,9 @@ const guides:Partial<Record<LegacyRoute,Guide>>={
     <><b>Merge</b> moves the other copies to the Bin, where they can be restored. <b>Skip</b> leaves a group alone; <K keys="Shift+M"/> merges every group not skipped.</>,
   ]},
   upgrades:{title:'How upgrades work',points:[
-    <>Each pair is a photo in the library beside a copy of it from Google Takeout with more pixels.</>,
-    <><b>Add the higher-resolution copy</b> saves it next to the original with “(hi-res)” in its name. Nothing is replaced.</>,
+    <>Each pair is a photo in the library and the copy of it from Google Takeout with more pixels. <b>Add the higher-resolution copy</b> saves that copy next to the original with “(hi-res)” in its name. Nothing is replaced.</>,
+    <>Once both are in the library, <b>Keep</b> chooses which stays: the one with more pixels or the original. Click the other file to keep it instead.</>,
+    <><b>Merge</b> moves the other file to the Bin, where it can be restored. <b>Skip</b> leaves a pair alone; <K keys="Shift+M"/> merges every pair not skipped.</>,
   ]},
   shadows:{title:'What shadowed files are',points:[
     <>Files whose paths collide, so one can hide another: the same name in a different case, or a folder hidden behind a share. This page only shows them; nothing here changes a file.</>,

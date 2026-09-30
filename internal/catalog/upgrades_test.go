@@ -87,6 +87,12 @@ func TestUpgradeWriterCopiesVerifiesAndRetainsSource(t *testing.T) {
 	if err = store.read.QueryRow("SELECT accepted_as FROM upgrade_history WHERE archive_file='/archive/2020/2020-01/2020-01-02/A.JPG'").Scan(&accepted); err != nil || !strings.Contains(accepted, "A (hi-res).JPG") {
 		t.Fatalf("receipt missing: %q %v", accepted, err)
 	}
+	// The page says which Takeout copy the added file came from, so it can
+	// show that copy's pixels beside the original's.
+	page, err := store.Upgrades(context.Background())
+	if err != nil || page.Pending != 0 || page.Groups[0].Accepted != accepted || page.Groups[0].AcceptedFrom != "/upgrades/Takeout/Album/A.JPG" {
+		t.Fatalf("page after accepting: %+v %v", page, err)
+	}
 }
 
 func TestUpgradeWriterCollisionAndInterruptedCopyFailSafe(t *testing.T) {

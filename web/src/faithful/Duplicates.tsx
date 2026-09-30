@@ -1,7 +1,7 @@
 import {useMemo,useState,type CSSProperties} from 'react';
 import {SessionVideo} from '../SessionVideo';
 import type {DuplicateGroup} from './Today';
-import {binChanged} from '../api';
+import {binChanged,type Asset} from '../api';
 import {Busy} from '../Busy';
 import {Icon} from '../Icon';
 import {usePageActions} from './pageActions';
@@ -13,7 +13,7 @@ export type DuplicateCandidate={size:number;reclaimable:number;hashed:number;mem
 export type DuplicateReport={groups:DuplicateGroup[];unproven:DuplicateCandidate[];candidates:number;hashed:number;settled:boolean};
 
 function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
-function bytes(value:number){return value<1024**2?`${(value/1024).toFixed(1)} KB`:value<1024**3?`${(value/1024**2).toFixed(1)} MB`:`${(value/1024**3).toFixed(1)} GB`}
+export function bytes(value:number){return value<1024**2?`${(value/1024).toFixed(1)} KB`:value<1024**3?`${(value/1024**2).toFixed(1)} MB`:`${(value/1024**3).toFixed(1)} GB`}
 function name(path:string){return path.split('/').pop()||path}
 function folder(path:string){return path.slice(0,path.lastIndexOf('/'))||'/'}
 
@@ -76,7 +76,7 @@ function why(keeper:DuplicateMember,members:DuplicateMember[],rule:Rule){
   return 'it sorts first, and nothing in these names distinguishes them';
 }
 
-function dayLabel(day:string){
+export function dayLabel(day:string){
   const [year,month,date]=day.split('-').map(Number);
   return new Date(Date.UTC(year,month-1,date)).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
 }
@@ -108,7 +108,8 @@ function labelsOf(members:DuplicateMember[]){
 // Every tile in a group draws the same preview. The copies are byte-identical,
 // or hold the same footage, so it is the same picture by definition, and one URL means one read off the
 // network mount however many copies there are.
-function Tile({member,previewID,label,keeper,placeless,disabled,onKeep}:{member:DuplicateMember;previewID:number;label:string;keeper:boolean;placeless:boolean;disabled:boolean;onKeep:()=>void}){
+// detail goes before the size on the picture, such as the copy's pixels.
+export function Tile({member,previewID,label,detail,keeper,placeless,disabled,onKeep}:{member:Asset;previewID:number;label:string;detail?:string;keeper:boolean;placeless:boolean;disabled:boolean;onKeep:()=>void}){
   const [ratio,setRatio]=useState(0);
   const [playing,setPlaying]=useState(false);
   const [failed,setFailed]=useState(false);
@@ -132,13 +133,28 @@ function Tile({member,previewID,label,keeper,placeless,disabled,onKeep}:{member:
           <button type="button" className="dupechoose" aria-pressed={keeper} disabled={disabled}
             aria-label={keeper?`Keeping ${label}`:`Keep ${label} instead`} title={keeper?`Keeping ${shown(member.path)}`:`Keep ${shown(member.path)} instead`} onClick={onKeep}/>
           <span className={`dupemark ${keeper?'keep':'bin'}`}><Icon name={keeper?'check':'delete'}/></span>
-          <span className="dupesize">{bytes(member.size)}</span>
+          <span className="dupesize">{detail?`${detail} · `:''}{bytes(member.size)}</span>
           {member.kind==='video'&&<button type="button" className="duplay" aria-label={`Play ${name(member.path)}`} onClick={()=>setPlaying(true)}><Icon name="play_circle" filled/></button>}
         </>}
       </figure>
     </div>
     <p className="dupelabel" title={shown(member.path)}><span>{label}</span>{member.path.includes('/.culled/')&&!label.includes('.culled')&&<span className="dupeflag">in .culled</span>}{placeless&&<span className="dupeflag">no location</span>}</p>
   </li>;
+}
+
+/** Keeps one file of each set and marks the rest for the Bin, a few at a
+ * time. A failure says how many decisions were saved before it. */
+export async function keepOnly(sets:{keeper:Asset;members:Asset[];favourite:boolean}[]){
+  const changes=sets.flatMap(({keeper,members,favourite})=>members.map(member=>({assetId:member.id,status:member.id===keeper.id?'keep':'cull',favourite:member.id===keeper.id&&favourite,expectedRevision:member.revision,requestId:requestID()})));
+  let saved=0;
+  for(const batch of chunk(changes,PER_REQUEST)){
+    const response=await fetch('/api/decisions/batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(batch)});
+    if(!response.ok)throw new Error(response.status===409
+      ?`One of these files changed in another session. ${saved} decisions were saved; reload before continuing.`
+      :`The choices could not be confirmed. ${saved} decisions were saved; reload to check before continuing.`);
+    saved+=batch.length;
+  }
+  binChanged();
 }
 
 export function Duplicates({report}:{report:DuplicateReport}){
@@ -166,20 +182,11 @@ export function Duplicates({report}:{report:DuplicateReport}){
   async function resolve(chosen:DuplicateGroup[]){
     if(busy||chosen.length===0)return;
     setBusy(true);setError('');setMessage('');
-    const changes=chosen.flatMap(group=>{
-      const keeperID=keeperOf(group);
-      return group.members.map(member=>({assetId:member.id,status:member.id===keeperID?'keep':'cull',favourite:member.id===keeperID&&member.favourite,expectedRevision:member.revision,requestId:requestID()}));
-    });
-    let saved=0;
     try{
-      for(const batch of chunk(changes,PER_REQUEST)){
-        const response=await fetch('/api/decisions/batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(batch)});
-        if(!response.ok)throw new Error(response.status===409
-          ?`One of these files changed in another session. ${saved} decisions were saved; reload before continuing.`
-          :`The choices could not be confirmed. ${saved} decisions were saved; reload to check before continuing.`);
-        saved+=batch.length;
-      }
-      binChanged();
+      await keepOnly(chosen.map(group=>{
+        const keeper=group.members.find(member=>member.id===keeperOf(group))||group.members[0];
+        return {keeper,members:group.members,favourite:keeper.favourite};
+      }));
       const gone=new Set(chosen.map(key));
       const removed=chosen.reduce((total,group)=>total+group.members.length-1,0);
       const reclaimed=chosen.reduce((total,group)=>total+group.reclaimable,0);

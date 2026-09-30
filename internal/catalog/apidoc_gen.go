@@ -748,6 +748,7 @@ func init() {
 		"daddy-cull/next/internal/catalog.UpgradeGroup":                     "UpgradeGroup is an archive photo with its better copies from Takeout.",
 		"daddy-cull/next/internal/catalog.UpgradeGroup.Accepted":            "Accepted is the path in the archive of the better copy added beside the photo, such as /archive/2020/2020-01/2020-01-02/A (hi-res).JPG, and is left out until one is.",
 		"daddy-cull/next/internal/catalog.UpgradeGroup.AcceptedAsset":       "AcceptedAsset is the accepted copy's file in the catalogue, once the catalogue has indexed it, and is left out otherwise.",
+		"daddy-cull/next/internal/catalog.UpgradeGroup.AcceptedFrom":        "AcceptedFrom is the path of the Takeout copy that was accepted, one of the copies' asset paths, such as /upgrades/Takeout/Google Photos/Trip/A.JPG, and is left out until one is.",
 		"daddy-cull/next/internal/catalog.UpgradeGroup.Archive":             "Archive is the photo in the archive.",
 		"daddy-cull/next/internal/catalog.UpgradeGroup.Copies":              "Copies are the better copies, most pixels gained first.",
 		"daddy-cull/next/internal/catalog.UpgradeGroup.Day":                 "Day is the day the archive photo is filed under, as YYYY-MM-DD.",
