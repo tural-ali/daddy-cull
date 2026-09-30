@@ -4,7 +4,8 @@ const assert=require('node:assert/strict');
 // Upgrades lets you choose, as Duplicates does, which of a photo and the
 // higher-resolution copy added beside it stays: each pair shows both files
 // with their pixels and sizes, the one with more pixels ticked, and Merge
-// marks the other for the Bin. A pair already settled is not shown, a copy
+// marks the other for the Bin. A pair already settled, with either file or
+// both marked for the Bin, is not shown, a copy
 // the catalogue has not indexed yet is listed, and a photo whose copy is not
 // added yet still offers Add. Every name is a synthetic fixture.
 const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
@@ -29,8 +30,11 @@ const landscape='<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200
     if(url.pathname==='/api/upgrades')return route.fulfill({json:{groups:[
       group(1,{added:true,original:{favourite:true}}),
       group(4,{added:true,original:{status:'cull'}}),
+      // Both files removed: the picture itself went, and there is no pair
+      // left to merge, nor could either be decided on from the Bin.
+      group(6,{added:true,original:{status:'cull'},hires:{status:'cull'}}),
       group(5,{added:true,catalogued:false}),
-      group(2),group(3)],total:5,pending:2,accepted:3,bytes:15*1024**2}});
+      group(2),group(3)],total:6,pending:2,accepted:4,bytes:20*1024**2}});
     if(url.pathname==='/api/decisions/batch'){const body=request.postDataJSON();posted.push(['decide',body]);return route.fulfill({json:body.map(()=>({revision:4}))})}
     if(url.pathname==='/api/upgrade-actions/preview'){posted.push(['preview',request.postDataJSON()]);return route.fulfill({json:{id:'plan-2',archiveAssetId:2,sourceAssetId:1002,source:'s',destination:'2023/2023-04/2023-04-22/DSC02 (hi-res).jpg',size:5*1024**2,hash:'h',state:'planned',created:''}});}
     if(url.pathname==='/api/upgrade-actions/execute'){posted.push(['execute',request.postDataJSON()]);return route.fulfill({json:{id:'plan-2',archiveAssetId:2,sourceAssetId:1002,source:'s',destination:'2023/2023-04/2023-04-22/DSC02 (hi-res).jpg',size:5*1024**2,hash:'h',state:'accepted',created:''}});}
@@ -44,7 +48,7 @@ const landscape='<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200
 
   // The one open pair; the settled one is counted, not shown.
   assert.equal(await sets.count(),1,'only the unsettled pair is offered');
-  assert.equal((await page.locator('.ysum').innerText()).replace(/\s+/g,' '),'1 pair to settle · 1.0 KB can be freed · 3 copies added so far, 15.0 MB · 1 settled');
+  assert.equal((await page.locator('.ysum').innerText()).replace(/\s+/g,' '),'1 pair to settle · 1.0 KB can be freed · 4 copies added so far, 20.0 MB · 2 settled');
   const set=sets.first();
   assert.equal(await set.locator('h2').innerText(),'22 April 2023');
   assert.equal(await set.locator('.dupeproof').innerText(),'11.4× the pixels');
@@ -78,7 +82,7 @@ const landscape='<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200
   assert.deepEqual(posted[0][1].map(change=>[change.assetId,change.status,change.favourite,change.expectedRevision]),[[1,'keep',true,3],[501,'cull',false,3]]);
   assert.equal(await sets.count(),0);
   assert.match(await page.locator('.note.ok').innerText(),/Every upgraded photo is settled/);
-  assert.match((await page.locator('.ysum').innerText()).replace(/\s+/g,' '),/^0 pairs to settle · 0\.0 KB can be freed · 3 copies added so far, 15\.0 MB · 2 settled$/);
+  assert.match((await page.locator('.ysum').innerText()).replace(/\s+/g,' '),/^0 pairs to settle · 0\.0 KB can be freed · 4 copies added so far, 20\.0 MB · 3 settled$/);
 
   // Adding a copy moves the photo to the ones waiting for the catalogue.
   await pending.first().getByRole('button',{name:'Add the higher-resolution copy'}).click();
@@ -86,7 +90,7 @@ const landscape='<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200
   assert.deepEqual(posted.slice(1),[['preview',{archiveAssetId:2,sourceAssetId:1002}],['execute',{id:'plan-2'}]]);
   assert.equal(await pending.count(),1);
   assert.match(await page.locator('ul.plain').innerText(),/DSC02 \(hi-res\)\.jpg · beside DSC02\.JPG/);
-  assert.match((await page.locator('.ysum').innerText()).replace(/\s+/g,' '),/4 copies added so far, 20\.0 MB/);
+  assert.match((await page.locator('.ysum').innerText()).replace(/\s+/g,' '),/5 copies added so far, 25\.0 MB/);
 
   // On a phone everything fits the screen's width once the frame has settled.
   await page.setViewportSize({width:390,height:844});

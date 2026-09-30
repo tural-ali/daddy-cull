@@ -3,6 +3,8 @@ package catalog
 import (
 	"context"
 	"errors"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -108,5 +110,37 @@ func TestRemovingAFileWithdrawsItsFavourite(t *testing.T) {
 	}
 	if desired {
 		t.Fatal("Immich was asked to keep the heart on a removed file")
+	}
+}
+
+// A file in the Bin cannot be decided on until it is restored, and a batch
+// that names one saves nothing, so a page learns why rather than half-saving.
+// The HTTP answer says it is the Bin, not another tab, that is in the way.
+func TestDecidingAFileInTheBinIsRefused(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if err := s.Seed(ctx, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.write.ExecContext(ctx, "INSERT INTO file_state(asset_id,state,plan_id) VALUES(2,'bin','plan')"); err != nil {
+		t.Fatal(err)
+	}
+	_, refused := s.DecideBatch(ctx, []Decision{{RequestID: "request-1", AssetID: 1, Status: "keep"}, {RequestID: "request-2", AssetID: 2, Status: "keep"}})
+	if !errors.Is(refused, ErrInBin) || !errors.Is(refused, ErrConflict) {
+		t.Fatalf("got %v, want the Bin's refusal", refused)
+	}
+	p, err := s.Page(ctx, "", "", "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range p.Assets {
+		if a.Status != "unreviewed" {
+			t.Fatalf("file %d saved as %s from a refused batch", a.ID, a.Status)
+		}
+	}
+	w := httptest.NewRecorder()
+	failFor(w, refused, "")
+	if w.Code != 409 || !strings.Contains(w.Body.String(), "in the Bin") {
+		t.Fatalf("answered %d %s", w.Code, w.Body.String())
 	}
 }

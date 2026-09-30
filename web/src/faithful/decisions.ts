@@ -19,9 +19,13 @@ async function send(changes:Change[]):Promise<{revision:number}[]>{
   const saved:{revision:number}[]=[];
   for(let i=0;i<changes.length;i+=PER_REQUEST){
     const response=await fetch('/api/decisions/batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(changes.slice(i,i+PER_REQUEST))});
-    if(!response.ok)throw new Error(response.status===409
-      ?`One of these files changed in another session. ${saved.length} saved; reload before deciding again.`
-      :`The decision could not be confirmed. ${saved.length} saved; reload to check before continuing.`);
+    if(!response.ok){
+      // The server says why a choice was refused, such as a file in the Bin.
+      const reason=response.status===409?await response.json().then((body:{error?:string})=>body.error??'',()=>''):'';
+      throw new Error(response.status===409
+        ?`${reason||'One of these files changed in another session.'} ${saved.length.toLocaleString()} of ${changes.length.toLocaleString()} saved; reload before deciding again.`
+        :`The decision could not be confirmed. ${saved.length} saved; reload to check before continuing.`);
+    }
     saved.push(...await response.json() as {revision:number}[]);
   }
   binChanged();

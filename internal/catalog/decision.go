@@ -8,6 +8,10 @@ import (
 )
 
 var ErrConflict = errors.New("decision changed; reload before retrying")
+
+// ErrInBin refuses a choice on a file that is in the Bin, or on its way in or
+// out: its place is the Bin's to change until it is restored.
+var ErrInBin = fmt.Errorf("%w: file is in the Bin", ErrConflict)
 var ErrInvalid = errors.New("invalid request")
 
 // Decisions are metadata only. No filesystem capability exists in this package.
@@ -110,7 +114,7 @@ func decideTx(ctx context.Context, tx *sql.Tx, d Decision) (Saved, error) {
 		return result, err
 	}
 	if blocked > 0 {
-		return result, fmt.Errorf("%w: file is in a Bin operation", ErrConflict)
+		return result, ErrInBin
 	}
 	var revision int64
 	err = tx.QueryRowContext(ctx, "SELECT COALESCE(d.status,'unreviewed'),COALESCE(d.favourite,0),COALESCE(d.revision,0) FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id WHERE a.id=?", d.AssetID).Scan(&result.PreviousStatus, &result.PreviousFavourite, &revision)

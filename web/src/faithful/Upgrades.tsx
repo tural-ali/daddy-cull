@@ -38,9 +38,11 @@ function pairOf(group:UpgradeGroup):Pair|null{
   return {original:group.archive,added:group.acceptedAsset,day:group.day,originalPixels:group.pixels,addedPixels:from?.pixels??'',ratio:from?.ratio??0};
 }
 
-// Settled once one of the two is in the Bin and the other is not, as a
-// duplicate group is.
-const settled=(pair:Pair)=>(pair.original.status==='cull')!==(pair.added.status==='cull');
+// Settled once either file is marked for the Bin: one of the two, as a
+// duplicate group is settled, or both, when the picture itself was removed
+// and there is nothing left to choose between. A file in the Bin cannot be
+// decided on again until it is restored, so such a pair is never offered.
+const settled=(pair:Pair)=>pair.original.status==='cull'||pair.added.status==='cull';
 
 export function Upgrades({initial}:{initial:UpgradePage}){
   const [page,setPage]=useState(initial);
@@ -123,7 +125,7 @@ export function Upgrades({initial}:{initial:UpgradePage}){
     {message&&<p className="flash" role="status">{message}</p>}
     {error&&<p className="note warn" role="alert">{error}</p>}
     {page.groups.length===0&&<p className="empty">No confirmed upgrades are indexed.</p>}
-    {pairs.length>0&&open.length===0&&<p className="note ok">Every upgraded photo is settled: one of each pair is in the Bin.</p>}
+    {pairs.length>0&&open.length===0&&<p className="note ok">Every upgraded photo is settled: at least one file of each pair is marked for the Bin.</p>}
 
     {open.map(pair=>{
       const id=pair.original.id;

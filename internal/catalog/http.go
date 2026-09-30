@@ -47,6 +47,8 @@ func failFor(w http.ResponseWriter, err error, invalid string) {
 	switch {
 	case errors.Is(err, ErrInvalid):
 		api.Fail(w, 400, invalid)
+	case errors.Is(err, ErrInBin):
+		api.Fail(w, 409, "A file here is in the Bin, so it cannot be decided on here. Restore it from the Bin first.")
 	case errors.Is(err, ErrConflict):
 		api.Fail(w, 409, "This changed since the page read it, perhaps in another tab. Read it again and retry.")
 	case errors.Is(err, sql.ErrNoRows):
