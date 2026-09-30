@@ -117,7 +117,16 @@ func (b *BinEngine) Handler(secret string) http.Handler {
 			respond(w, nil, e)
 			return
 		}
-		p, e := b.Preview(r.Context(), v.IDs)
+		var p *BinPlan
+		var e error
+		switch {
+		case len(v.Videos) > 0 && len(v.IDs) > 0:
+			e = fmt.Errorf("send ids or videos, not both")
+		case len(v.Videos) > 0:
+			p, e = b.PreviewVideos(r.Context(), v.Videos)
+		default:
+			p, e = b.Preview(r.Context(), v.IDs)
+		}
 		respond(w, p, e)
 	})
 	mux.HandleFunc("POST /bin/execute", func(w http.ResponseWriter, r *http.Request) {

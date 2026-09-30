@@ -20,6 +20,11 @@ type BinSelection struct {
 	// IDs are the files' ids: in the catalogue for the Bin, or in the earlier
 	// app's Bin, from GET /api/legacy-bin, for that Bin.
 	IDs []int64 `json:"ids"`
+	// Videos, for the Bin and in place of ids, are Live Photo videos whose
+	// photo has gone, as paths in the archive under .live-photos, such as
+	// .live-photos/2022/2022-08/2022-08-03/IMG_6390_HEVC.MOV. A video a photo
+	// in the archive still has is refused: it goes with that photo.
+	Videos []string `json:"videos,omitempty"`
 }
 
 // PlanStep carries out a step of a plan made earlier.

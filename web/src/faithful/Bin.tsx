@@ -13,7 +13,8 @@ import {TASK_FINISHED,queueBin,type Task} from './taskQueue';
 
 /** One card in the Bin, whichever tool put the file there. */
 export type TrashItem={key:string;group:string;source:'marked'|'bin'|'legacy'|'screenshot';name:string;original:string;kind:string;size:number;sidecars:number;removedAt:string;preview?:string;disk?:string;
-  /** A Live Photo, whose video left and comes back with it. */
+  /** A Live Photo, whose video left and comes back with it, or, as a video,
+      a Live Photo's video whose photo had already gone. */
   live?:boolean};
 /** A file deleted from the Bin and still on disk until its grace period ends. */
 export type DeletingItem=TrashItem&{deletedAt:string;dueAt:string;attempts:number;lastError?:string};
@@ -261,7 +262,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
         const picked=picks.picked.has(item.group);
         const detail=waiting
           ?`${waiting.lastError?`Could not delete, will retry: ${waiting.lastError}`:`Goes ${countdown(waiting.dueAt)}`} · ${bytes(item.size)}`
-          :[bytes(item.size),item.live?'Live Photo':'',item.sidecars>0?`+${item.sidecars} sidecar${item.sidecars===1?'':'s'}`:'',item.removedAt?`removed ${removed(item.removedAt)}`:'',item.disk??''].filter(Boolean).join(' · ');
+          :[bytes(item.size),item.live?(item.kind==='video'?'Live Photo video':'Live Photo'):'',item.sidecars>0?`+${item.sidecars} sidecar${item.sidecars===1?'':'s'}`:'',item.removedAt?`removed ${removed(item.removedAt)}`:'',item.disk??''].filter(Boolean).join(' · ');
         return <RowTile key={item.key} className={`gone${picked?' picked':''}${waiting&&parse(waiting.dueAt)<=Date.now()?' due':''}`} title={`${item.name}\n${item.original}\n${detail}`}
           onClick={event=>{if(!picks.tap(index,event.shiftKey)){if(item.preview)photo.show(item.key);else picks.toggle(index,false)}}}>
           {item.preview?<FilePreview base={item.preview} name={item.name} kind={item.kind}/>

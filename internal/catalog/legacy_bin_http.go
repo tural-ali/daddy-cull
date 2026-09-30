@@ -81,6 +81,10 @@ func (b *LegacyBinEngine) Handler(secret string) http.Handler {
 			respond(w, nil, err)
 			return
 		}
+		if len(input.Videos) > 0 {
+			respond(w, nil, fmt.Errorf("the earlier app's Bin takes ids only"))
+			return
+		}
 		plan, err := b.Preview(r.Context(), input.IDs)
 		respond(w, plan, err)
 	})

@@ -186,8 +186,9 @@ func (t *TrashWriter) Restore(ctx context.Context, keys []string) (TrashResult, 
 
 // RestoreFile puts back exactly one photograph, sidecars included, leaving the
 // rest of its batch where it is. The writer's own batches can give back a
-// single photograph; a batch from another engine moves only as a whole, so a
-// file in one of those is refused unless it is alone in its batch.
+// single photograph; a batch from another engine, or of Live Photo videos
+// whose photos had gone, moves only as a whole, so a file in one of those is
+// refused unless it is alone in its batch.
 func (t *TrashWriter) RestoreFile(ctx context.Context, key string) (TrashResult, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -210,7 +211,7 @@ func (t *TrashWriter) RestoreFile(ctx context.Context, key string) (TrashResult,
 			members++
 		}
 	}
-	if item.Source != "bin" {
+	if item.Source != "bin" || item.assetID == 0 {
 		if members > 1 {
 			return TrashResult{}, fmt.Errorf("%s was moved with %d other files and can only be restored with them", item.Name, members-1)
 		}

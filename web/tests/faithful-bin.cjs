@@ -144,7 +144,17 @@ const fixture=()=>[
   assert.match(await failed.locator('li').innerText(),/^The app is not allowed to change the folder 2020\/2020-01\/2020-01-02; fix its permissions and try again\.\s+BATCH-ONE\.JPG, BATCH-TWO\.JPG, OLD-TOOL\.MOV, 2020-01-02_SHOT\.PNG$/);
   assert.equal(await page.getByText(/files? deleted from the Bin/).count(),0,'nothing deleted, nothing announced');
   await failed.screenshot({path:process.env.FAILSHOT||'/tmp/faithful-bin-locked.png'});
+
+  // A Live Photo's video whose photo had already gone is a card of its own,
+  // and says what it is; a Live Photo says it carries its video.
+  locked=false;
+  bin=[card('bin:cc:v0','bin:cc','bin','IMG_0001_HEVC.MOV',{kind:'video',live:true,original:'/archive/.live-photos/2020/IMG_0001_HEVC.MOV',preview:'/api/binned-media/bin/cc/0'}),
+    card('bin:dd:14','bin:dd','bin','IMG_0002.HEIC',{live:true})];
+  await page.reload();
+  await page.locator('.bingrid figure').nth(1).waitFor();
+  await page.getByRole('checkbox',{name:/^Select IMG_0001_HEVC\.MOV, 1\.0 MB · Live Photo video · removed /}).waitFor({timeout:2000});
+  await page.getByRole('checkbox',{name:/^Select IMG_0002\.HEIC, 1\.0 MB · Live Photo · removed /}).waitFor({timeout:2000});
   await page.screenshot({path:process.env.SHOT||'/tmp/faithful-bin.png'});
   await browser.close();
-  console.log(JSON.stringify({oneGallery:true,clickPreviews:true,previewAddress:true,backCloses:true,previewsForBothTools:true,batchSelectedTogether:true,shiftRange:true,restoreSelected:true,deleteAsksFirst:true,cancelSendsNothing:true,emptyNamesCount:true,graceSchedules:true,lockedFolderGrouped:true},null,2));
+  console.log(JSON.stringify({oneGallery:true,clickPreviews:true,previewAddress:true,backCloses:true,previewsForBothTools:true,batchSelectedTogether:true,shiftRange:true,restoreSelected:true,deleteAsksFirst:true,cancelSendsNothing:true,emptyNamesCount:true,graceSchedules:true,lockedFolderGrouped:true,liveVideoNamed:true},null,2));
 })().catch(error=>{console.error(error);process.exit(1)});

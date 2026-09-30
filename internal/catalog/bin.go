@@ -407,6 +407,56 @@ func (b *BinEngine) Preview(ctx context.Context, ids []int64) (*BinPlan, error) 
 	return p, nil
 }
 
+// PreviewVideos plans moving Live Photo videos whose photograph has gone into
+// the Bin by themselves: 1 to 20 paths in .live-photos, relative to the archive
+// root, such as .live-photos/2022/2022-08/2022-08-03/IMG_6390_HEVC.MOV. A video
+// that a photograph in the archive still has is refused; it goes to the Bin
+// with that photograph. Pairing is by name, as everywhere else, so a video
+// whose photograph has another name is the caller's to have checked.
+func (b *BinEngine) PreviewVideos(ctx context.Context, videos []string) (*BinPlan, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(videos) < 1 || len(videos) > 20 {
+		return nil, fmt.Errorf("select between 1 and 20 videos")
+	}
+	random := make([]byte, 16)
+	if _, e := rand.Read(random); e != nil {
+		return nil, e
+	}
+	p := &BinPlan{ID: hex.EncodeToString(random), State: "planned", Created: time.Now().UTC().Format(time.RFC3339), Assets: []BinAsset{}, Warnings: []string{}}
+	seen := map[string]bool{}
+	for _, video := range videos {
+		if seen[video] || !safeLiveClip(video) {
+			return nil, ErrInvalid
+		}
+		seen[video] = true
+		dir, stem, ok := livePhotoOf(video)
+		if !ok {
+			return nil, fmt.Errorf("not the video of a Live Photo: %s", video)
+		}
+		owners, e := b.liveOwners(ctx, dir, stem, "")
+		if e != nil {
+			return nil, e
+		}
+		if len(owners) > 0 {
+			return nil, fmt.Errorf("the Live Photo video belongs to a photo in the archive and goes to the Bin with it: %s", video)
+		}
+		fp, e := b.fingerprint(ctx, video)
+		if e != nil {
+			return nil, e
+		}
+		if e = b.s.read.QueryRowContext(ctx, "SELECT id FROM assets WHERE source_id='archive' AND relative_path=?", "/archive/"+video).Scan(&fp.Clip); e != nil && !errors.Is(e, sql.ErrNoRows) {
+			return nil, e
+		}
+		fp.Sidecar, fp.Live = true, true
+		p.Files = append(p.Files, fp)
+	}
+	if e := b.save(p); e != nil {
+		return nil, e
+	}
+	return p, nil
+}
+
 // binClip is a Live Photo video on its way into the Bin with its photograph.
 type binClip struct {
 	path   string

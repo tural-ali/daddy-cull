@@ -21,7 +21,8 @@ import (
 // with their sidecars, so selecting any member selects the whole group.
 type TrashItem struct {
 	// Key names the card; send it back to act on it. It is marked:<file id>,
-	// bin:<plan id>:<file id>, legacy:<earlier app's id> or shot:<plan id>.
+	// bin:<plan id>:<file id>, bin:<plan id>:v<index> for a Live Photo video
+	// whose photo had gone, legacy:<earlier app's id> or shot:<plan id>.
 	Key string `json:"key"`
 	// Group names the cards that move together: acting on one card acts on
 	// every card with the same Group. It is marked:<file id>, bin:<plan id>,
@@ -229,8 +230,9 @@ func (s *Store) screenshotsHeld(ctx context.Context) ([]ScreenshotPlan, error) {
 }
 
 // binPlanItems turns one writer batch into a card per photograph, with the
-// sidecars Preview recorded after it. A photograph given back on its own is
-// the archive's again and has no card.
+// sidecars Preview recorded after it, or into a card per video for a batch of
+// Live Photo videos whose photos had gone. A photograph given back on its own
+// is the archive's again and has no card.
 func binPlanItems(plan BinPlan) []TrashItem {
 	items := make([]TrashItem, 0, len(plan.Assets))
 	for _, asset := range plan.Assets {
@@ -259,6 +261,24 @@ func binPlanItems(plan BinPlan) []TrashItem {
 			item.Preview = "/api/media/" + strconv.FormatInt(asset.ID, 10)
 		}
 		items = append(items, item)
+	}
+	// A Live Photo video whose photo had already gone went in by itself, with
+	// no photograph to list it under, so it is a card of its own.
+	if len(plan.Assets) == 0 {
+		for index, file := range plan.Files {
+			if !file.Live || file.Phase == "restored" || file.Phase == "returned" {
+				continue
+			}
+			item := TrashItem{
+				Key: "bin:" + plan.ID + ":v" + strconv.Itoa(index), Group: "bin:" + plan.ID, Source: "bin",
+				Name: path.Base(file.Original), Original: "/archive/" + file.Original, Kind: "video",
+				Size: file.Size, Live: true, RemovedAt: plan.Created, planID: plan.ID,
+			}
+			if file.Phase == "bin" {
+				item.Preview = "/api/binned-media/bin/" + plan.ID + "/" + strconv.Itoa(index)
+			}
+			items = append(items, item)
+		}
 	}
 	return items
 }

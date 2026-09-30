@@ -316,3 +316,99 @@ func TestDeletingABatchTakesTheVideosItLeftBehind(t *testing.T) {
 		t.Fatalf("the batch: %+v %v", p, e)
 	}
 }
+
+// A Live Photo video whose photo has gone goes to the Bin by itself, as a card
+// of its own that comes back or is deleted like any other. One a photo in the
+// archive still has is refused, and so is anything outside .live-photos.
+func TestALiveVideoWhosePhotoHasGoneGoesToTheBinAlone(t *testing.T) {
+	b, s, root := liveBinFixture(t)
+	ctx := context.Background()
+	orphan := ".live-photos/2022/2022-08/2022-08-03/IMG_6390_HEVC.MOV"
+	full := filepath.Join(root, filepath.FromSlash(orphan))
+	if e := os.MkdirAll(filepath.Dir(full), 0o700); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(full, []byte("a Live Photo video"), 0o600); e != nil {
+		t.Fatal(e)
+	}
+	for _, refused := range [][]string{
+		{".live-photos/2022/2022-01/2022-01-07/IMG_6947_HEVC.MOV"},
+		{"2026/2026-09/2026-09-26/IMG_5472_HEVC.MOV"},
+		{".live-photos/../2026/2026-09/2026-09-26/IMG_5472_HEVC.MOV"},
+		{".live-photos/2022/2022-08/2022-08-03/IMG_6390.HEIC"},
+		{orphan, orphan},
+		{},
+	} {
+		if p, e := b.PreviewVideos(ctx, refused); e == nil {
+			t.Fatalf("%q was planned: %+v", refused, p)
+		}
+	}
+
+	p, e := b.PreviewVideos(ctx, []string{orphan})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if p, e = b.Run(ctx, p.ID, "quarantine", ""); e != nil || p.State != "bin" || onDisk(t, root, orphan) {
+		t.Fatalf("quarantine: %+v %v", p, e)
+	}
+	items, e := s.Trash(ctx)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var card *TrashItem
+	for i := range items {
+		if items[i].Group == "bin:"+p.ID {
+			card = &items[i]
+		}
+	}
+	if card == nil || card.Key != "bin:"+p.ID+":v0" || card.Kind != "video" || !card.Live || card.Original != "/archive/"+orphan || card.Preview != "/api/binned-media/bin/"+p.ID+"/0" {
+		t.Fatalf("the Bin shows %+v", card)
+	}
+	if relative, name, found := s.binnedFile(ctx, "bin", p.ID, 0); !found || name != orphan || !strings.HasPrefix(relative, "/archive/.culled/next/"+p.ID+"/") {
+		t.Fatalf("binned media %q %q %v", relative, name, found)
+	}
+
+	trash := NewTrashWriter(s, b, nil, nil)
+	if result, e := trash.RestoreFile(ctx, card.Key); e != nil || result.Done != 1 || !onDisk(t, root, orphan) {
+		t.Fatalf("restore: %+v %v", result, e)
+	}
+	if p, e = b.load(p.ID); e != nil || p.State != "restored" {
+		t.Fatalf("restored batch: %+v %v", p, e)
+	}
+
+	// A photo that turns up before the move keeps its video.
+	p, e = b.PreviewVideos(ctx, []string{orphan})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = os.MkdirAll(filepath.Join(root, "2022/2022-08/2022-08-03"), 0o700); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(filepath.Join(root, "2022/2022-08/2022-08-03/IMG_6390.HEIC"), []byte("its photo"), 0o600); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.write.Exec("INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(9,'/archive/2022/2022-08/2022-08-03/IMG_6390.HEIC',1,'image',9,'archive')"); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = b.Run(ctx, p.ID, "quarantine", ""); e == nil || !onDisk(t, root, orphan) {
+		t.Fatalf("the video left without its photo: %v", e)
+	}
+	if _, e = s.write.Exec("DELETE FROM assets WHERE id=9"); e != nil {
+		t.Fatal(e)
+	}
+
+	// Deleted, it is gone for good, the batch saying so for the Drive clone.
+	p, e = b.PreviewVideos(ctx, []string{orphan})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if p, e = b.Run(ctx, p.ID, "quarantine", ""); e != nil {
+		t.Fatal(e)
+	}
+	if e = trash.binPlan(ctx, p.ID, true); e != nil {
+		t.Fatal(e)
+	}
+	if p, e = b.load(p.ID); e != nil || p.State != "purged" || p.Files[0].Phase != "purged" || onDisk(t, root, orphan) {
+		t.Fatalf("purge: %+v %v", p, e)
+	}
+}
