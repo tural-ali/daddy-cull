@@ -18,8 +18,7 @@ type DuplicateMember struct {
 }
 
 // DuplicateGroup is a set of files proven to be copies of one another. A
-// group already settled, with one copy kept and every other removed, is not
-// listed.
+// group already settled, with every copy but one removed, is not listed.
 type DuplicateGroup struct {
 	// Hash names the group: the full hash the files share, or for copies
 	// proven by their footage, "footage:" and the footage hash.
@@ -52,6 +51,40 @@ func (s *Store) ExactDuplicates(ctx context.Context, md string, limit int) ([]Du
 			return nil, ErrInvalid
 		}
 	}
+	return s.copyGroups(ctx, limit, func(member DuplicateMember) bool {
+		return md == "" || (len(member.Day) == 10 && member.Day[5:] == md)
+	})
+}
+
+// SocialDuplicates returns the groups of copies, proven as ExactDuplicates
+// proves them, that hold a video still waiting on the Saved from social page,
+// with every copy of it wherever it is filed.
+func (s *Store) SocialDuplicates(ctx context.Context, limit int) ([]DuplicateGroup, error) {
+	rows, err := s.read.QueryContext(ctx, `SELECT social.asset_id FROM social_items social LEFT JOIN decisions d ON d.asset_id=social.asset_id
+		WHERE social.state='waiting'`+socialPending)
+	if err != nil {
+		return nil, err
+	}
+	waiting := make(map[int64]bool)
+	for rows.Next() {
+		var id int64
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		waiting[id] = true
+	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	return s.copyGroups(ctx, limit, func(member DuplicateMember) bool { return waiting[member.ID] })
+}
+
+// copyGroups returns the groups of copies with a file for which touches is
+// true.
+func (s *Store) copyGroups(ctx context.Context, limit int, touches func(DuplicateMember) bool) ([]DuplicateGroup, error) {
 	if limit < 1 || limit > 1000 {
 		return nil, ErrInvalid
 	}
@@ -151,13 +184,13 @@ func (s *Store) ExactDuplicates(ctx context.Context, md string, limit int) ([]Du
 		return nil, err
 	}
 	type building struct {
-		group         DuplicateGroup
-		byteKeys      map[string]bool
-		fullHash      string
-		footage       string
-		total         int64
-		kept, removed int
-		touches       bool
+		group    DuplicateGroup
+		byteKeys map[string]bool
+		fullHash string
+		footage  string
+		total    int64
+		removed  int
+		touches  bool
 	}
 	var order []string
 	built := make(map[string]*building)
@@ -177,13 +210,10 @@ func (s *Store) ExactDuplicates(ctx context.Context, md string, limit int) ([]Du
 		}
 		entry.total += file.member.Size
 		entry.group.Size = max(entry.group.Size, file.member.Size)
-		switch file.member.Status {
-		case "keep":
-			entry.kept++
-		case "cull":
+		if file.member.Status == "cull" {
 			entry.removed++
 		}
-		if md == "" || (len(file.member.Day) == 10 && file.member.Day[5:] == md) {
+		if touches(file.member) {
 			entry.touches = true
 		}
 	}
@@ -191,7 +221,9 @@ func (s *Store) ExactDuplicates(ctx context.Context, md string, limit int) ([]Du
 	for _, root := range order {
 		entry := built[root]
 		members := entry.group.Members
-		if len(members) < 2 || !entry.touches || (entry.kept == 1 && entry.removed == len(members)-1) {
+		// Every copy but one removed leaves nothing to choose, whether the one
+		// left was kept or is still to be decided.
+		if len(members) < 2 || !entry.touches || entry.removed == len(members)-1 {
 			continue
 		}
 		group := entry.group

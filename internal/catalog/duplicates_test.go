@@ -49,6 +49,64 @@ func TestExactDuplicatesUseFullHashEvidenceAcrossDates(t *testing.T) {
 	}
 }
 
+// A group where every copy but one is in the Bin has nothing left to choose,
+// whether the one left was kept or not.
+func TestExactDuplicatesSettleWhenOneCopyIsLeft(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	for id, path := range map[int]string{1: "/archive/2000/2000-01/2000-01-02/A.JPG", 2: "/archive/2000/2000-01/2000-01-02/A (2).JPG"} {
+		if _, err := s.write.ExecContext(ctx, "INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(?,?,1,'image',100,'archive')", id, path); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.write.ExecContext(ctx, "INSERT INTO asset_days(asset_id,day) VALUES(?,'2000-01-02'); INSERT INTO asset_evidence(asset_id,full_hash) VALUES(?,'same')", id, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.write.ExecContext(ctx, "INSERT INTO decisions(asset_id,status,favourite,revision) VALUES(2,'cull',0,1)"); err != nil {
+		t.Fatal(err)
+	}
+	if groups, err := s.ExactDuplicates(ctx, "", 100); err != nil || len(groups) != 0 {
+		t.Fatalf("a group with one copy left remained: %+v %v", groups, err)
+	}
+}
+
+// Saved from social offers the copies of the videos still waiting there, with
+// every copy wherever it is filed, and nothing once the video is decided.
+// Every name is a synthetic fixture.
+func TestSocialDuplicatesHoldAWaitingVideo(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	for _, item := range []struct {
+		id         int
+		path, hash string
+	}{
+		{1, "/archive/2021/2021-05/2021-05-14/clip.mp4", "social"},
+		{2, "/archive/2022/2022-01/2022-01-02/clip (2).mp4", "social"},
+		{3, "/archive/2021/2021-05/2021-05-14/IMG_0001.MOV", "camera"},
+		{4, "/archive/2021/2021-05/2021-05-14/IMG_0001 (2).MOV", "camera"},
+	} {
+		if _, err := s.write.ExecContext(ctx, "INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(?,?,1,'video',100,'archive')", item.id, item.path); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.write.ExecContext(ctx, "INSERT INTO asset_days(asset_id,day) VALUES(?,?); INSERT INTO asset_evidence(asset_id,full_hash) VALUES(?,?)", item.id, item.path[22:32], item.id, item.hash); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.write.ExecContext(ctx, "INSERT INTO social_items(asset_id,path,day,name,size_bytes,score,evidence,width,height,duration,state) VALUES(1,'/archive/2021/2021-05/2021-05-14/clip.mp4','2021-05-14','clip.mp4',100,12,'uuid filename',480,848,15,'waiting')"); err != nil {
+		t.Fatal(err)
+	}
+	groups, err := s.SocialDuplicates(ctx, 100)
+	if err != nil || len(groups) != 1 || groups[0].Hash != "social" || len(groups[0].Members) != 2 || groups[0].Members[1].Day != "2022-01-02" {
+		t.Fatalf("social copies: %+v %v", groups, err)
+	}
+	if _, err = s.write.ExecContext(ctx, "INSERT INTO decisions(asset_id,status,favourite,revision) VALUES(1,'keep',0,1)"); err != nil {
+		t.Fatal(err)
+	}
+	if groups, err = s.SocialDuplicates(ctx, 100); err != nil || len(groups) != 0 {
+		t.Fatalf("a decided video still offered its copies: %+v %v", groups, err)
+	}
+}
+
 func TestExactDuplicatesRejectInvalidDate(t *testing.T) {
 	s := testStore(t)
 	if _, err := s.ExactDuplicates(context.Background(), "02-30", 100); err == nil {

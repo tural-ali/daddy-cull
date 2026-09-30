@@ -28,6 +28,7 @@ const svg='<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect
         unreviewed:ofKind.filter(item=>item.status!=='keep').length,reviewed:ofKind.filter(item=>item.status==='keep').length,
         stills:shots.filter(onSide).filter(item=>item.kind==='image').length,recordings:shots.filter(onSide).filter(item=>item.kind==='video').length}});
     }
+    if(url.pathname==='/api/social-copies')return route.fulfill({json:[]});
     if(url.pathname==='/api/social'){
       const band=url.searchParams.get('band'),from=Number(url.searchParams.get('from'));
       asked.push(`social ${band}/${from}`);

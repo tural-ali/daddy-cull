@@ -142,7 +142,7 @@ func init() {
 		"daddy-cull/next/internal/catalog.DuplicateCandidate.Members":       "Members are the files of this size, ordered by path.",
 		"daddy-cull/next/internal/catalog.DuplicateCandidate.Reclaimable":   "Reclaimable is the most keeping one copy could free, in bytes, if every file turned out identical: Size times one less than the number of files.",
 		"daddy-cull/next/internal/catalog.DuplicateCandidate.Size":          "Size is the size the files share, in bytes.",
-		"daddy-cull/next/internal/catalog.DuplicateGroup":                   "DuplicateGroup is a set of files proven to be copies of one another. A group already settled, with one copy kept and every other removed, is not listed.",
+		"daddy-cull/next/internal/catalog.DuplicateGroup":                   "DuplicateGroup is a set of files proven to be copies of one another. A group already settled, with every copy but one removed, is not listed.",
 		"daddy-cull/next/internal/catalog.DuplicateGroup.Hash":              "Hash names the group: the full hash the files share, or for copies proven by their footage, \"footage:\" and the footage hash.",
 		"daddy-cull/next/internal/catalog.DuplicateGroup.Members":           "Members are the copies still in the archive, ordered by day and then path.",
 		"daddy-cull/next/internal/catalog.DuplicateGroup.Proof":             "Proof is how the copies are known to be copies: \"bytes\" when every file is byte-identical on a full hash, or \"footage\" when they are videos holding the same pictures and sound, played the same way, whose metadata differs.",

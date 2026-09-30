@@ -1,7 +1,8 @@
 import {useMemo,useState,type CSSProperties} from 'react';
 import {SessionVideo} from '../SessionVideo';
 import type {DuplicateGroup} from './Today';
-import {binChanged,type Asset} from '../api';
+import type {Asset} from '../api';
+import {requestID,sendDecisions} from './decisions';
 import {Busy} from '../Busy';
 import {Icon} from '../Icon';
 import {usePageActions} from './pageActions';
@@ -12,13 +13,10 @@ export type DuplicateMember=DuplicateGroup['members'][number];
 export type DuplicateCandidate={size:number;reclaimable:number;hashed:number;members:DuplicateMember[]};
 export type DuplicateReport={groups:DuplicateGroup[];unproven:DuplicateCandidate[];candidates:number;hashed:number;settled:boolean};
 
-function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
 export function bytes(value:number){return value<1024**2?`${(value/1024).toFixed(1)} KB`:value<1024**3?`${(value/1024**2).toFixed(1)} MB`:`${(value/1024**3).toFixed(1)} GB`}
 function name(path:string){return path.split('/').pop()||path}
 function folder(path:string){return path.slice(0,path.lastIndexOf('/'))||'/'}
 
-const PER_REQUEST=20;
-function chunk<T>(values:T[],size:number){const out:T[][]=[];for(let i=0;i<values.length;i+=size)out.push(values.slice(i,i+size));return out}
 
 // How much a filename reads as machine-written rather than original. The archive
 // has two known duplicate factories, Lightroom's cloud-download collisions and
@@ -142,19 +140,9 @@ export function Tile({member,previewID,label,detail,keeper,placeless,disabled,on
   </li>;
 }
 
-/** Keeps one file of each set and marks the rest for the Bin, a few at a
- * time. A failure says how many decisions were saved before it. */
+/** Keeps one file of each set and marks the rest for the Bin. */
 export async function keepOnly(sets:{keeper:Asset;members:Asset[];favourite:boolean}[]){
-  const changes=sets.flatMap(({keeper,members,favourite})=>members.map(member=>({assetId:member.id,status:member.id===keeper.id?'keep':'cull',favourite:member.id===keeper.id&&favourite,expectedRevision:member.revision,requestId:requestID()})));
-  let saved=0;
-  for(const batch of chunk(changes,PER_REQUEST)){
-    const response=await fetch('/api/decisions/batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(batch)});
-    if(!response.ok)throw new Error(response.status===409
-      ?`One of these files changed in another session. ${saved} decisions were saved; reload before continuing.`
-      :`The choices could not be confirmed. ${saved} decisions were saved; reload to check before continuing.`);
-    saved+=batch.length;
-  }
-  binChanged();
+  await sendDecisions(sets.flatMap(({keeper,members,favourite})=>members.map(member=>({assetId:member.id,status:member.id===keeper.id?'keep':'cull',favourite:member.id===keeper.id&&favourite,expectedRevision:member.revision,requestId:requestID()}))));
 }
 
 export function Duplicates({report}:{report:DuplicateReport}){

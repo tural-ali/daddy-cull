@@ -321,6 +321,29 @@ func (s *Store) addonRoutes(m *api.Mux) {
 		writeJSON(w, page)
 	})
 	m.HandleFunc(api.Route{
+		Method: "GET", Path: "/api/social-copies", Addon: AddonSocial, Tag: "Saved from social", Needs: api.Read,
+		Summary: "List copies of videos saved from social apps",
+		Doc:     "Groups of copies, proven as /api/duplicates proves them, that hold a video still waiting on the Saved from social page, with every copy wherever it is filed.",
+		Params: []api.Param{
+			api.Query("limit", "integer", "How many groups to return, 1 to 1000. 100 by default."),
+		},
+		Returns: []DuplicateGroup{},
+		Errors:  []api.Error{refused, unreadable},
+	}, func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		limit, ok := intParam(w, r, "limit", 100)
+		if !ok {
+			return
+		}
+		groups, err := s.SocialDuplicates(ctx, limit)
+		if err != nil {
+			failFor(w, err, "limit should be 1 to 1000.")
+			return
+		}
+		writeJSON(w, groups)
+	})
+	m.HandleFunc(api.Route{
 		Method: "GET", Path: "/api/shadows", Addon: AddonShadows, Tag: "Shadowed copies", Needs: api.Read,
 		Summary: "List shadowed copies",
 		Doc:     "Groups of files that share a path on different disks, where the array shows only one of them.",

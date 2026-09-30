@@ -52,6 +52,7 @@ const guides:Partial<Record<LegacyRoute,Guide>>={
   social:{title:'How saved-from-social works',points:[
     <>Videos that look saved from social apps rather than filmed, marked likely or not sure.</>,
     <>Select with the tick, then <K keys="K"/> keeps them or <K keys="X"/> moves them to the Bin. <K keys="Mod+Z"/> undoes.</>,
+    <><b>Copies</b> at the top are videos saved more than once. Settling a group moves the other copies to the Bin and leaves the one kept on the list, to judge like any other.</>,
   ]},
   photos:{title:'How Apple Photos works',points:[
     <>Carries what you remove and favourite here across to Photos on your Mac, through the small Cull Sync app.</>,
