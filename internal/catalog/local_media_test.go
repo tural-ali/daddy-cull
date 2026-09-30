@@ -111,6 +111,34 @@ func TestLocalMediaServesByteRangesForPlayback(t *testing.T) {
 	}
 }
 
+// Every original goes out with nosniff, so its type is what the browser plays
+// it as. The server's image has no /etc/mime.types, which left Go's table, with
+// no video in it, to answer application/octet-stream for every .MOV, a Live
+// Photo's included; a Mac has one, which is why only the server showed it.
+func TestLocalMediaNamesTheTypeOfEveryPlayableOriginal(t *testing.T) {
+	s := testStore(t)
+	root := t.TempDir()
+	want := map[string]string{
+		"IMG_0001.MOV": "video/quicktime", "IMG_0002_HEVC.mov": "video/quicktime",
+		"clip.mp4": "video/mp4", "clip.m4v": "video/mp4", "clip.webm": "video/webm",
+		"IMG_0003.JPG": "image/jpeg", "shot.png": "image/png",
+	}
+	id := 0
+	for name, kind := range want {
+		id++
+		if err := os.WriteFile(filepath.Join(root, name), []byte("0123456789"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.write.Exec("INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(?,?,1,?,10,'archive')", id, "/archive/"+name, strings.Split(kind, "/")[0]); err != nil {
+			t.Fatal(err)
+		}
+		got := serveMedia(t, s.LocalMediaHandler(MediaRoots{Archive: root}), strconv.Itoa(id), "original", http.Header{"Range": {"bytes=0-1"}})
+		if got.Code != http.StatusPartialContent || got.Header().Get("Content-Type") != kind {
+			t.Errorf("%s returned %d %q, want %q", name, got.Code, got.Header().Get("Content-Type"), kind)
+		}
+	}
+}
+
 // A video has no still a browser can render, so its preview is the captured
 // poster. Without one the answer is a plain 404 and the page keeps its own
 // fallback, rather than an <img> being handed a container it cannot decode.

@@ -19,6 +19,15 @@ import (
 // use, so the card keeps its honest "preview unavailable" state.
 var playableVideo = map[string]bool{".mp4": true, ".m4v": true, ".mov": true, ".webm": true}
 
+// originalType names the type of each playable video, and of the images, sent
+// as they are. The originals go out with nosniff, and the server's image has
+// no /etc/mime.types, so Go's own table, which has no video in it, would call
+// every .MOV application/octet-stream.
+var originalType = map[string]string{
+	".mov": "video/quicktime", ".mp4": "video/mp4", ".m4v": "video/mp4", ".webm": "video/webm",
+	".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif", ".avif": "image/avif",
+}
+
 // videoContainer lists every container a frame can be decoded from, which is a
 // wider set than the browser will play. It decides what gets a frame rather than
 // the catalogued kind, because kind is inherited from the earlier tool and 86
@@ -319,6 +328,9 @@ func (s *Store) serveMedia(w http.ResponseWriter, r *http.Request, roots MediaRo
 	}
 	w.Header().Set("Cache-Control", "private, max-age=300")
 	w.Header().Set("Accept-Ranges", "bytes")
+	if kind, named := originalType[extension]; named {
+		w.Header().Set("Content-Type", kind)
+	}
 	http.ServeContent(w, r, filepath.Base(relative), info.ModTime(), file)
 }
 
