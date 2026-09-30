@@ -1,6 +1,6 @@
 import {useMemo,useState,type CSSProperties} from 'react';
 import {SessionVideo} from '../SessionVideo';
-import type {DuplicateGroup} from './Today';
+import type {DuplicateGroup,SidecarFacts} from './Today';
 import type {Asset} from '../api';
 import {requestID,sendDecisions} from './decisions';
 import {Busy} from '../Busy';
@@ -46,23 +46,75 @@ const RULES:{key:Rule;label:string;hint:string}[]=[
   {key:'newest',label:'Newest capture date',hint:'Keeps the most recently dated copy.'},
 ];
 
+// What a copy's own sidecars record, in the order it would be missed: who is
+// in it, then its keywords, rating and caption, then having a sidecar at all.
+// Removing a copy takes its sidecars to the Bin with it.
+const LORE:{of:(facts:SidecarFacts)=>number;none:string;fewer?:string}[]=[
+  {of:facts=>facts.people,none:'no people tags',fewer:'fewer people tags'},
+  {of:facts=>facts.keywords,none:'no keywords',fewer:'fewer keywords'},
+  {of:facts=>facts.rating,none:'no rating',fewer:'lower rating'},
+  {of:facts=>Number(facts.captioned),none:'no caption'},
+  {of:facts=>facts.files,none:'no sidecar'},
+];
+
+/** Which of two copies' sidecars record more, first by what is hardest to
+ * redo: negative when a's do. Only compared where every copy's were read, so a
+ * copy not read yet is never ranked as having none. */
+function lore(members:DuplicateMember[]){
+  const known=members.every(member=>member.sidecars);
+  return (a:DuplicateMember,b:DuplicateMember)=>{
+    if(!known)return 0;
+    for(const {of} of LORE){const difference=of(b.sidecars!)-of(a.sidecars!);if(difference)return difference}
+    return 0;
+  };
+}
+
 /** The copy to keep by a rule. A copy that records where it was taken comes
- * before one that does not, whatever the rule: keeping the other would lose
- * the place. */
+ * before one that does not, and then the one whose sidecars record more,
+ * whatever the rule: keeping the other would lose the place, or the tags. */
 export function pick(members:DuplicateMember[],rule:Rule):DuplicateMember{
   const ranked=[...members];
   const place=(a:DuplicateMember,b:DuplicateMember)=>Number(b.located)-Number(a.located);
+  const tags=lore(members);
   const plain=(a:DuplicateMember,b:DuplicateMember)=>noise(a.path,a.size)-noise(b.path,b.size);
-  if(rule==='oldest')ranked.sort((a,b)=>place(a,b)||a.capturedAt-b.capturedAt||plain(a,b));
-  else if(rule==='newest')ranked.sort((a,b)=>place(a,b)||b.capturedAt-a.capturedAt||plain(a,b));
-  else ranked.sort((a,b)=>place(a,b)||plain(a,b)||a.path.localeCompare(b.path));
+  if(rule==='oldest')ranked.sort((a,b)=>place(a,b)||tags(a,b)||a.capturedAt-b.capturedAt||plain(a,b));
+  else if(rule==='newest')ranked.sort((a,b)=>place(a,b)||tags(a,b)||b.capturedAt-a.capturedAt||plain(a,b));
+  else ranked.sort((a,b)=>place(a,b)||tags(a,b)||plain(a,b)||a.path.localeCompare(b.path));
   return ranked[0];
+}
+
+/** What a copy lacks that another copy of it has, as short flags: its place,
+ * and the first thing its sidecars record less of than the richest copy's. */
+export function flagsOf(member:DuplicateMember,members:DuplicateMember[]):string[]{
+  const flags:string[]=[];
+  if(!member.located&&members.some(other=>other.located))flags.push('no location');
+  const tags=lore(members);
+  const richest=[...members].sort(tags)[0];
+  if(member.sidecars&&richest.sidecars&&tags(member,richest)>0){
+    const missing=LORE.find(({of})=>of(richest.sidecars!)>of(member.sidecars!))!;
+    flags.push(missing.of(member.sidecars)===0||!missing.fewer?missing.none:missing.fewer);
+  }
+  return flags;
+}
+
+function plural(count:number,one:string,many=`${one}s`){return `${count} ${count===1?one:many}`}
+
+/** What a copy's sidecars record, as a phrase: 2 people, 3 keywords, rated 4. */
+function recorded(facts:SidecarFacts){
+  const parts=[facts.people&&plural(facts.people,'person','people'),facts.keywords&&plural(facts.keywords,'keyword'),facts.rating&&`rated ${facts.rating}`,facts.captioned&&'a caption'].filter(Boolean);
+  return parts.join(', ');
 }
 
 function why(keeper:DuplicateMember,members:DuplicateMember[],rule:Rule){
   const others=members.filter(member=>member.id!==keeper.id);
   if(keeper.located&&others.some(member=>!member.located))
     return others.length===1?'it records where it was taken and the other copy does not':'it records where it was taken and other copies do not';
+  const tags=lore(members);
+  if(keeper.sidecars&&others.some(member=>tags(keeper,member)<0)){
+    const said=recorded(keeper.sidecars);
+    if(said)return `its sidecars record the most: ${said}`;
+    return others.length===1?'it has a sidecar of its own and the other copy does not':'it has a sidecar of its own and other copies do not';
+  }
   if(others.some(member=>member.path.includes('/.culled/'))&&!keeper.path.includes('/.culled/'))
     return 'the other copy sits in .culled, which was condemned once already';
   if(rule==='oldest')return 'it has the earliest capture date here';
@@ -107,7 +159,7 @@ function labelsOf(members:DuplicateMember[]){
 // or hold the same footage, so it is the same picture by definition, and one URL means one read off the
 // network mount however many copies there are.
 // detail goes before the size on the picture, such as the copy's pixels.
-export function Tile({member,previewID,label,detail,keeper,placeless,disabled,onKeep}:{member:Asset;previewID:number;label:string;detail?:string;keeper:boolean;placeless:boolean;disabled:boolean;onKeep:()=>void}){
+export function Tile({member,previewID,label,detail,keeper,flags,disabled,onKeep}:{member:Asset;previewID:number;label:string;detail?:string;keeper:boolean;flags:string[];disabled:boolean;onKeep:()=>void}){
   const [ratio,setRatio]=useState(0);
   const [playing,setPlaying]=useState(false);
   const [failed,setFailed]=useState(false);
@@ -136,7 +188,7 @@ export function Tile({member,previewID,label,detail,keeper,placeless,disabled,on
         </>}
       </figure>
     </div>
-    <p className="dupelabel" title={shown(member.path)}><span>{label}</span>{member.path.includes('/.culled/')&&!label.includes('.culled')&&<span className="dupeflag">in .culled</span>}{placeless&&<span className="dupeflag">no location</span>}</p>
+    <p className="dupelabel" title={shown(member.path)}><span>{label}</span>{member.path.includes('/.culled/')&&!label.includes('.culled')&&<span className="dupeflag">in .culled</span>}{flags.map(flag=><span key={flag} className="dupeflag">{flag}</span>)}</p>
   </li>;
 }
 
@@ -220,8 +272,6 @@ export function Duplicates({report}:{report:DuplicateReport}){
       const labels=labelsOf(group.members);
       const skip=skipped.has(groupKey);
       const reason=overrides[groupKey]?'you picked it':why(keeper,group.members,rule);
-      // Only worth saying where one copy knows the place and another does not.
-      const located=group.members.some(member=>member.located);
       return <article className={`dupegroup${skip?' skipped':''}`} key={groupKey}>
         <header className="dupegrouphead">
           <h2>{datesOf(group.members)}</h2>
@@ -232,7 +282,7 @@ export function Duplicates({report}:{report:DuplicateReport}){
         {/* One of N, never none: clicking a copy moves the tick to it, and no
             click can clear it, so a group can never have every copy marked. */}
         <ul className="dupetiles">{group.members.map(member=><Tile key={member.id} member={member} previewID={group.members[0].id}
-          label={labels.get(member.id)??name(member.path)} keeper={member.id===keeperID} placeless={located&&!member.located} disabled={busy||skip}
+          label={labels.get(member.id)??name(member.path)} keeper={member.id===keeperID} flags={flagsOf(member,group.members)} disabled={busy||skip}
           onKeep={()=>setOverrides(current=>({...current,[groupKey]:member.id}))}/>)}</ul>
       </article>;
     })}

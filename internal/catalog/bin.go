@@ -228,35 +228,52 @@ func (b *BinEngine) sidecars(p string) ([]string, []string, error) {
 	if e != nil {
 		return nil, nil, e
 	}
-	base := path.Base(p)
+	names := make([]string, len(entries))
+	for i, ent := range entries {
+		names[i] = ent.Name()
+	}
+	own, shared := ownSidecars(path.Base(p), names)
+	var found, warnings []string
+	for _, name := range own {
+		found = append(found, path.Join(dir, name))
+	}
+	for _, name := range shared {
+		warnings = append(warnings, "Shared sidecar stays in archive: "+path.Join(dir, name))
+	}
+	return found, warnings, nil
+}
+
+// ownSidecars picks, from the names in a file's folder, the sidecars that are
+// the file's own and go where it goes: name.ext.xmp always, and stem.xmp
+// unless another file shares the stem, as the photo and video of a Live Photo
+// do. Those shared ones stay where they are, and are returned apart.
+func ownSidecars(base string, names []string) (own, shared []string) {
 	stem := strings.TrimSuffix(base, path.Ext(base))
-	shared := false
-	for _, ent := range entries {
-		name := ent.Name()
+	together := false
+	for _, name := range names {
 		if name != base && !sidecarExt[strings.ToLower(strings.TrimPrefix(path.Ext(name), "."))] && strings.EqualFold(strings.TrimSuffix(name, path.Ext(name)), stem) {
-			shared = true
+			together = true
 		}
 	}
-	var found, warnings []string
-	for _, ent := range entries {
-		name := ent.Name()
+	for _, name := range names {
 		ext := strings.ToLower(strings.TrimPrefix(path.Ext(name), "."))
 		if !sidecarExt[ext] {
 			continue
 		}
 		prefix := strings.TrimSuffix(name, path.Ext(name))
 		if prefix == base {
-			found = append(found, path.Join(dir, name))
+			own = append(own, name)
 		} else if strings.EqualFold(prefix, stem) {
-			if shared {
-				warnings = append(warnings, "Shared sidecar stays in archive: "+path.Join(dir, name))
+			if together {
+				shared = append(shared, name)
 			} else {
-				found = append(found, path.Join(dir, name))
+				own = append(own, name)
 			}
 		}
 	}
-	return found, warnings, nil
+	return own, shared
 }
+
 func (b *BinEngine) save(p *BinPlan) error {
 	data, e := json.Marshal(p)
 	if e != nil {

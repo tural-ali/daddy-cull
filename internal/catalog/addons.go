@@ -341,6 +341,7 @@ func (s *Store) addonRoutes(m *api.Mux) {
 			failFor(w, err, "limit should be 1 to 1000.")
 			return
 		}
+		s.withSidecarFacts(ctx, groups)
 		writeJSON(w, groups)
 	})
 	m.HandleFunc(api.Route{

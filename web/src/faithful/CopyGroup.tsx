@@ -4,6 +4,7 @@ import {Lightbox,type LightboxItem} from './Lightbox';
 import {Kbd,keyProps,tipProps} from './keys';
 import {useShownPath} from './libraryPath';
 import type {DuplicateGroup} from './Today';
+import {flagsOf} from './Duplicates';
 
 type Member=DuplicateGroup['members'][number];
 
@@ -49,8 +50,6 @@ export function CopyGroup({group,keeperID,saving,onChoose,onResolve}:{group:Dupl
     detail:`${formatOf(member)} · ${bytes(member.size)} · ${taken(member.capturedAt)} · ${shown(folderOf(member.path))}`,day:`/day/${member.day}`}));
   const others=group.members.length-1;
   const footage=group.proof==='footage';
-  // Only worth saying where one copy knows the place and another does not.
-  const located=group.members.some(member=>member.located);
   return <div className="xgroup xcopy">
     {footage
       ?<p className="xmeta"><span className="b same" title="The pictures and sound are identical, byte for byte, and play the same way. Only the metadata differs, such as dates, names or where it is kept in the file.">Same footage</span>{group.members.length} copies · only the metadata differs · <strong>{bytes(group.reclaimable)}</strong> reclaimable</p>
@@ -70,13 +69,14 @@ export function CopyGroup({group,keeperID,saving,onChoose,onResolve}:{group:Dupl
             const chosen=member.id===keeper.id;
             const parts=folders[index];
             const name=fileName(member.path);
+            const flags=[...member.path.includes('/.culled/')?['in .culled']:[],...flagsOf(member,group.members)];
             return <tr key={member.id} data-asset={member.id} className={chosen?'keeper':'binned'} onClick={event=>{if(!(event.target as HTMLElement).closest('button,input')&&!saving)onChoose(member.id)}}>
               <td className="xkeep"><input type="radio" name={`keep-${group.hash}`} checked={chosen} disabled={saving} aria-label={`Keep ${name}`} onChange={()=>onChoose(member.id)}/><span className="xfate">{chosen?'keep':'to Bin'}</span></td>
-              <td className="xname" title={name}>{name}{member.path.includes('/.culled/')&&<span className="dupeflag">in .culled</span>}{located&&!member.located&&<span className="dupeflag">no location</span>}</td>
+              <td className="xname" title={name}><span className="xfile">{name}</span>{flags.length>0&&<span className="xflags">{flags.map(flag=><span key={flag} className="dupeflag">{flag}</span>)}</span>}</td>
               <td>{formatOf(member)}</td>
               <td className="num">{bytes(member.size)}</td>
               <td className="xwhen">{taken(member.capturedAt)}</td>
-              <td className="xpath" title={shown(member.path)}><span className="dim">{parts.slice(0,depth).join('/')}/</span>{parts.slice(depth).join('/')}</td>
+              <td className="xpath" title={shown(member.path)}><span className="dim">{parts.slice(0,depth).map((part,at)=><span key={at} className="xseg">{part}/</span>)}</span>{parts.slice(depth).map((part,at,rest)=><span key={at} className="xseg">{part}{at<rest.length-1?'/':''}</span>)}</td>
               <td className="xopen"><button type="button" className="iconbtn" aria-label={`${member.kind==='video'?'Play':'Open'} ${name}`} {...tipProps(member.kind==='video'?'Play this copy':'Open this copy')} onClick={()=>setOpen(String(member.id))}><Icon name={member.kind==='video'?'play_arrow':'open_in_new'}/></button></td>
             </tr>;
           })}</tbody>

@@ -15,6 +15,11 @@ type DuplicateMember struct {
 	// Located is true when a video records where it was taken. It is only
 	// read for videos compared by their footage, and is false for the rest.
 	Located bool `json:"located"`
+	// Sidecars is what the copy's own sidecars record, the ones that go to the
+	// Bin with it. It is left out when they could not be read in time, or
+	// there is no archive mount to read them from, which is not the same as a
+	// copy with no sidecars.
+	Sidecars *SidecarFacts `json:"sidecars,omitempty"`
 }
 
 // DuplicateGroup is a set of files proven to be copies of one another. A

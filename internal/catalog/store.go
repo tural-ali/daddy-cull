@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"syscall"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -38,6 +40,10 @@ const applicationID = 1129663538
 type Store struct {
 	read, write *sql.DB
 	immichWake  chan struct{}
+	// sidecarRoots is where copy groups read each copy's sidecars from, and
+	// sidecarCache what they read, by file. See sidecar_facts.go.
+	sidecarRoots atomic.Pointer[MediaRoots]
+	sidecarCache sync.Map
 }
 
 func Open(path string) (*Store, error) {

@@ -27,8 +27,11 @@ import {tracked} from '../saving';
 // still wait; each carries new.
 export type TodayYear={day:string;year:number;files:number;bytes:number;status:'pending'|'done';assets:Asset[];fresh?:number};
 export type TodayData={md:string;label:string;previous:string;next:string;years:TodayYear[];memories:number;bytes:number};
-// located is only read for videos compared by their footage.
-export type DuplicateMember=Asset&{day:string;located:boolean};
+// located is only read for videos compared by their footage. sidecars is what
+// the copy's own sidecars record, the ones the Bin takes with it; it is absent
+// when they were not read, which is not the same as none.
+export type SidecarFacts={files:number;people:number;keywords:number;rating:number;captioned:boolean};
+export type DuplicateMember=Asset&{day:string;located:boolean;sidecars?:SidecarFacts};
 // bytes: byte-identical on a full hash. footage: videos whose pictures and
 // sound are identical, whose metadata differs.
 export type DuplicateGroup={hash:string;proof:'bytes'|'footage';size:number;reclaimable:number;members:DuplicateMember[]};

@@ -394,6 +394,7 @@ func main() {
 		apiMux.Guard(addons.Guard)
 		s.Routes(apiMux)
 		s.MediaRoutes(apiMux, mediaRoots, *upstream, *socialPosters)
+		go s.WarmSidecarFacts(ctx)
 		s.WriterRoutes(apiMux, *binUpstream, secret)
 		s.IntakeRoutes(apiMux, *binUpstream, secret)
 		photos.Routes(apiMux)

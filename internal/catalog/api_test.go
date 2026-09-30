@@ -161,8 +161,8 @@ func checkGETs(t *testing.T, s *Store, upstream string, photos *PhotosHub, paths
 	}
 	// Routes that need something a test library cannot give them.
 	unsatisfiable := map[string]string{
-		"/api/photos/jobs/{job}": "needs a sync job from the Mac",
-		"/api/photos/setup/{id}": "needs a setup code from the Mac",
+		"/api/photos/jobs/{job}":   "needs a sync job from the Mac",
+		"/api/photos/setup/{id}":   "needs a setup code from the Mac",
 		"/api/assets/{id}/details": "needs the file on disk and the metadata reader; TestFileDetailsReadTheFileItself reads one",
 	}
 	checked := 0

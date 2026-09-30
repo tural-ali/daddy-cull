@@ -140,7 +140,7 @@ export function Upgrades({initial}:{initial:UpgradePage}){
         </header>
         <ul className="dupetiles">{[{file:pair.original,size:pair.originalPixels},{file:pair.added,size:pair.addedPixels}].map(({file,size})=>
           <Tile key={file.id} member={file} previewID={file.id} label={name(file.path)} detail={size?pixels(size):undefined}
-            keeper={file.id===keeper.id} placeless={false} disabled={busy||skip}
+            keeper={file.id===keeper.id} flags={[]} disabled={busy||skip}
             onKeep={()=>setOverrides(current=>({...current,[id]:file.id}))}/>)}</ul>
       </article>;
     })}

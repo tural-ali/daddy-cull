@@ -528,6 +528,7 @@ func (s *Store) Routes(m *api.Mux) {
 			failFor(w, err, "md should be MM-DD and limit 1 to 1000.")
 			return
 		}
+		s.withSidecarFacts(ctx, groups)
 		writeJSON(w, groups)
 	})
 	m.HandleFunc(api.Route{
@@ -552,6 +553,7 @@ func (s *Store) Routes(m *api.Mux) {
 			failFor(w, err, "md should be MM-DD and limit 1 to 1000.")
 			return
 		}
+		s.withSidecarFacts(ctx, report.Groups)
 		writeJSON(w, report)
 	})
 
