@@ -412,3 +412,73 @@ func TestALiveVideoWhosePhotoHasGoneGoesToTheBinAlone(t *testing.T) {
 		t.Fatalf("purge: %+v %v", p, e)
 	}
 }
+
+// A Live Photo video left beside its photograph after an identical copy was
+// filed in .live-photos goes to the Bin by itself, as the second copy it is:
+// the photograph keeps the filed one. One that differs, or has no filed copy,
+// stays; and the copy is not deleted for good once the filed one has gone.
+func TestASecondCopyOfALiveVideoBesideItsPhotoGoesToTheBin(t *testing.T) {
+	b, s, root := liveBinFixture(t)
+	ctx := context.Background()
+	write := func(rel, body string) {
+		t.Helper()
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if e := os.MkdirAll(filepath.Dir(full), 0o700); e != nil {
+			t.Fatal(e)
+		}
+		if e := os.WriteFile(full, []byte(body), 0o600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	photo, inline, filed := "2021/2021-07/2021-07-31/IMG_3903.HEIC", "2021/2021-07/2021-07-31/IMG_3903_HEVC.MOV", ".live-photos/2021/2021-07/2021-07-31/IMG_3903_HEVC.MOV"
+	write(photo, "its photo")
+	write(inline, "the video")
+	write(filed, "the video")
+	if _, e := s.write.Exec("INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(40,?,1,'image',9,'archive'),(41,?,1,'video',9,'archive')", "/archive/"+photo, "/archive/"+inline); e != nil {
+		t.Fatal(e)
+	}
+	// A different video beside its photo, and one with no filed copy, stay.
+	write("2021/2021-07/2021-07-31/IMG_3910.HEIC", "another photo")
+	write("2021/2021-07/2021-07-31/IMG_3910_HEVC.MOV", "one video")
+	write(".live-photos/2021/2021-07/2021-07-31/IMG_3910_HEVC.MOV", "another video")
+	write("2021/2021-05/2021-05-28/IMG_2165.HEIC", "a third photo")
+	write("2021/2021-05/2021-05-28/IMG_2165_HEVC.MOV", "a third video")
+	for _, refused := range []string{"2021/2021-07/2021-07-31/IMG_3910_HEVC.MOV", "2021/2021-05/2021-05-28/IMG_2165_HEVC.MOV", "../" + inline} {
+		if p, e := b.PreviewVideos(ctx, []string{refused}); e == nil {
+			t.Fatalf("%s was planned: %+v", refused, p)
+		}
+	}
+
+	p, e := b.PreviewVideos(ctx, []string{inline})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if f := p.Files[0]; !f.Live || f.Twin != filed || f.Clip != 41 || f.Original != inline {
+		t.Fatalf("planned %+v", f)
+	}
+	if p, e = b.Run(ctx, p.ID, "quarantine", ""); e != nil || p.State != "bin" || onDisk(t, root, inline) || !onDisk(t, root, filed) || !onDisk(t, root, photo) {
+		t.Fatalf("quarantine: %+v %v", p, e)
+	}
+
+	// With the filed copy gone, this one is the only video left: it is not
+	// deleted for good.
+	trash := NewTrashWriter(s, b, nil, nil)
+	if e = os.Rename(filepath.Join(root, filepath.FromSlash(filed)), filepath.Join(root, "moved-away.MOV")); e != nil {
+		t.Fatal(e)
+	}
+	if e = trash.binPlan(ctx, p.ID, true); e == nil {
+		t.Fatal("deleted the last copy of a Live Photo video")
+	}
+	if p, e = b.load(p.ID); e != nil || p.Files[0].Phase == "purged" {
+		t.Fatalf("after a refused delete: %+v %v", p, e)
+	}
+	if e = os.Rename(filepath.Join(root, "moved-away.MOV"), filepath.Join(root, filepath.FromSlash(filed))); e != nil {
+		t.Fatal(e)
+	}
+	if e = trash.binPlan(ctx, p.ID, true); e != nil {
+		t.Fatal(e)
+	}
+	if p, e = b.load(p.ID); e != nil || p.State != "purged" || !onDisk(t, root, filed) || !onDisk(t, root, photo) {
+		t.Fatalf("purge: %+v %v", p, e)
+	}
+}

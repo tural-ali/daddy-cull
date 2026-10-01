@@ -68,6 +68,11 @@ type BinFile struct {
 	// Clip is the video's own id in the catalogue, when it was catalogued as
 	// a file of its own. The catalogue holds it in the Bin with the batch.
 	Clip int64 `json:"clip,omitempty"`
+	// Twin is, for a second copy of a Live Photo video beside its photograph,
+	// the identical copy in .live-photos that stays with the photograph. It
+	// is checked to be there, with the same contents, before this copy is
+	// moved or deleted.
+	Twin string `json:"twin,omitempty"`
 }
 
 // BinPlan is a plan for moving files from the archive into the Bin, and what
@@ -407,12 +412,15 @@ func (b *BinEngine) Preview(ctx context.Context, ids []int64) (*BinPlan, error) 
 	return p, nil
 }
 
-// PreviewVideos plans moving Live Photo videos whose photograph has gone into
-// the Bin by themselves: 1 to 20 paths in .live-photos, relative to the archive
-// root, such as .live-photos/2022/2022-08/2022-08-03/IMG_6390_HEVC.MOV. A video
-// that a photograph in the archive still has is refused; it goes to the Bin
-// with that photograph. Pairing is by name, as everywhere else, so a video
-// whose photograph has another name is the caller's to have checked.
+// PreviewVideos plans moving Live Photo videos into the Bin by themselves: 1 to
+// 20 paths relative to the archive root. A video in .live-photos, such as
+// .live-photos/2022/2022-08/2022-08-03/IMG_6390_HEVC.MOV, is taken once its
+// photograph has gone; one a photograph in the archive still has is refused,
+// as it goes to the Bin with that photograph. A video beside its photograph,
+// such as 2022/2022-08/2022-08-03/IMG_6390_HEVC.MOV, is taken only as a second
+// copy of the one at the same place in .live-photos, identical to it, which
+// stays with the photograph. Pairing is by name, as everywhere else, so a
+// video whose photograph has another name is the caller's to have checked.
 func (b *BinEngine) PreviewVideos(ctx context.Context, videos []string) (*BinPlan, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -426,7 +434,8 @@ func (b *BinEngine) PreviewVideos(ctx context.Context, videos []string) (*BinPla
 	p := &BinPlan{ID: hex.EncodeToString(random), State: "planned", Created: time.Now().UTC().Format(time.RFC3339), Assets: []BinAsset{}, Warnings: []string{}}
 	seen := map[string]bool{}
 	for _, video := range videos {
-		if seen[video] || !safeLiveClip(video) {
+		inline := !safeLiveClip(video)
+		if seen[video] || inline && !safeRelative(video) {
 			return nil, ErrInvalid
 		}
 		seen[video] = true
@@ -434,16 +443,27 @@ func (b *BinEngine) PreviewVideos(ctx context.Context, videos []string) (*BinPla
 		if !ok {
 			return nil, fmt.Errorf("not the video of a Live Photo: %s", video)
 		}
-		owners, e := b.liveOwners(ctx, dir, stem, "")
-		if e != nil {
-			return nil, e
-		}
-		if len(owners) > 0 {
-			return nil, fmt.Errorf("the Live Photo video belongs to a photo in the archive and goes to the Bin with it: %s", video)
-		}
 		fp, e := b.fingerprint(ctx, video)
 		if e != nil {
 			return nil, e
+		}
+		if inline {
+			twin, e := b.fingerprint(ctx, liveFolder+"/"+video)
+			if e != nil && !errors.Is(e, os.ErrNotExist) {
+				return nil, e
+			}
+			if e != nil || twin.Hash != fp.Hash || twin.Size != fp.Size {
+				return nil, fmt.Errorf("a Live Photo video beside its photo goes to the Bin by itself only as a second copy of the one in .live-photos: %s", video)
+			}
+			fp.Twin = liveFolder + "/" + video
+		} else {
+			owners, e := b.liveOwners(ctx, dir, stem, "")
+			if e != nil {
+				return nil, e
+			}
+			if len(owners) > 0 {
+				return nil, fmt.Errorf("the Live Photo video belongs to a photo in the archive and goes to the Bin with it: %s", video)
+			}
 		}
 		if e = b.s.read.QueryRowContext(ctx, "SELECT id FROM assets WHERE source_id='archive' AND relative_path=?", "/archive/"+video).Scan(&fp.Clip); e != nil && !errors.Is(e, sql.ErrNoRows) {
 			return nil, e
@@ -553,11 +573,21 @@ func allIn(ids, set []int64) bool {
 
 // checkLive refuses to move or delete a Live Photo's video while a photograph
 // it belongs to is in the archive outside this batch, or was given back from
-// it without the video.
+// it without the video. A second copy goes while its twin is there unchanged,
+// which the photograph keeps.
 func (b *BinEngine) checkLive(p *BinPlan, f BinFile) error {
 	dir, stem, ok := livePhotoOf(f.Original)
 	if !ok {
 		return fmt.Errorf("not the video of a Live Photo: %s", f.Original)
+	}
+	if f.Twin != "" {
+		if !safeLiveClip(f.Twin) || f.Twin != liveFolder+"/"+f.Original {
+			return ErrInvalid
+		}
+		if e := b.verify(context.Background(), f.Twin, f); e != nil {
+			return fmt.Errorf("the copy of this Live Photo video in .live-photos is gone or changed, so this one stays: %s", f.Original)
+		}
+		return nil
 	}
 	owners, e := b.liveOwners(context.Background(), dir, stem, p.ID)
 	if e != nil {
