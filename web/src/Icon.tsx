@@ -222,6 +222,14 @@ export function addonIcon(name:string|undefined):IconName{
   return name&&Object.hasOwn(icons,name)?name as IconName:'extension';
 }
 
+// One markup object per icon and fill, made once: React writes the markup
+// again whenever it is handed a new object, even with the same text, which
+// would replace the icon under a press in progress and lose the click.
+const markup=new Map<string,{__html:string}>();
+
 export function Icon({name,filled=false}:{name:IconName;filled?:boolean}){
-  return <span className="icon" aria-hidden="true" dangerouslySetInnerHTML={{__html:icons[name][filled?1:0]}}/>;
+  const key=`${name}:${Number(filled)}`;
+  let html=markup.get(key);
+  if(!html){html={__html:icons[name][filled?1:0]};markup.set(key,html)}
+  return <span className="icon" aria-hidden="true" dangerouslySetInnerHTML={html}/>;
 }
