@@ -4,9 +4,9 @@ import {Logo} from '../Logo';
 // The app's own address opens on the year, the way a phone opens on its home
 // screen: the logo alone in the middle, light passing over it, then the camera
 // dives in through the day tiles and every date of the calendar flies in from
-// in front of the screen to settle in its place. Only loading the bare address
-// plays it; /year, or Year in the sidebar, simply shows the calendar. Any key,
-// click or scroll skips it.
+// in front of the screen to settle in its place. Loading the year plays it,
+// at the bare address or /year, a reload included; Year in the sidebar simply
+// shows the calendar. Any key, click or scroll skips it.
 
 /** logo: the logo shows while the year is read; dive: the camera goes
  * through it and the dates arrive. */
@@ -19,13 +19,13 @@ export const OpeningContext=createContext<OpeningPhase|null>(null);
 // dive and the dates' arrival take this long after it.
 const LOGO=1300,DIVE=1500;
 
-/** Whether this page load opens with the logo: only one at the bare address
- * does, read before the app rewrites it to /year, and never for someone who
- * has asked for less motion. */
+/** Whether this page load opens with the logo: one at the bare address or
+ * /year does, read before the app rewrites the one to the other, and never
+ * for someone who has asked for less motion. */
 export function opensWithLogo(){
   return loadedAtRoot&&!matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
-const loadedAtRoot=location.pathname==='/';
+const loadedAtRoot=location.pathname==='/'||location.pathname==='/year';
 
 /** The opening's phase. It waits on the logo until the year is ready to
  * show, and is gone at once if the page fails or the app goes elsewhere. */

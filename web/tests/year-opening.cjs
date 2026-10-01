@@ -3,9 +3,9 @@ const assert=require('node:assert/strict');
 
 // Loading the app's own address opens on the year with the logo alone in the
 // middle, light passing over it; the camera dives through the day tiles and
-// every date flies in to its place. Only the bare address plays it: /year,
-// Year in the sidebar and a visitor who asks for less motion see the calendar
-// at once, and any key skips it.
+// every date flies in to its place. The bare address and /year play it, so a
+// reload does too; Year in the sidebar and a visitor who asks for less motion
+// see the calendar at once, and any key skips it.
 const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
 const shots=process.env.SHOTS;
 const length=[31,29,31,30,31,30,31,31,30,31,30,31];
@@ -67,16 +67,18 @@ const playing=page=>page.evaluate(()=>document.getAnimations().filter(animation=
   assert.equal(await page.evaluate(([x,y])=>document.elementFromPoint(x,y)?.closest('.cell')?.getAttribute('href'),[box.x+box.width/2,box.y+box.height/2]),'/on/06-15');
   if(shots)await page.screenshot({path:`${shots}/opening-end.png`});
 
-  // Year in the sidebar, and /year itself, show the calendar at once.
+  // Year in the sidebar shows the calendar at once.
   await page.getByRole('link',{name:'Bin',exact:true}).click();
   await page.getByRole('heading',{name:'Bin',exact:true}).waitFor();
   await page.getByRole('link',{name:'Year',exact:true}).click();
   await page.locator('.cmonth').nth(11).waitFor();
   assert.equal(await page.locator('.opening').count(),0,'moving to the year inside the app does not play it');
+  // A reload of the year, which the bare address became, plays it again.
+  await page.reload();
+  await page.locator('.opening').waitFor();
   await page.close();
   page=await open(browser,'/year');
-  await page.locator('.cmonth').nth(11).waitFor();
-  assert.equal(await page.locator('.opening').count(),0,'opening /year does not play it');
+  await page.locator('.opening').waitFor();
   await page.close();
 
   // A key skips it.
