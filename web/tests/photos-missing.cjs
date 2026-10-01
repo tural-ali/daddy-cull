@@ -16,6 +16,12 @@ const missing=[
   miss('IMG_8190.MOV','2025-04-08','shared-album'),
   miss('IMG_0412.MOV','2024-12-25','other-day'),
 ];
+// Removals withheld because the archive keeps another copy: one the same day,
+// and one Photos had only a day off, which is the kept copy's own photograph.
+const held=[
+  {name:'IMG_5000.JPG',day:'2020-05-05',kept:'IMG_5000.HEIC'},
+  {name:'IMG_0367.HEIC',day:'2020-08-30',kept:'IMG_0367.HEIC',keptDay:'2020-08-29'},
+];
 let stage='';
 let agent={online:true,lastSeen:now,version:'1.1',access:'authorized'};
 const summary=()=>stage?{id:'J1',state:'checking',rev:1,stage,done:40,total:120}:{id:'J1',state:'planned',rev:2,done:0,total:0};
@@ -29,8 +35,8 @@ const summary=()=>stage?{id:'J1',state:'checking',rev:1,stage,done:40,total:120}
     if(url.pathname==='/api/photos')return route.fulfill({json:{configured:true,now,agent,job:summary()}});
     if(url.pathname==='/api/photos/overview')return route.fulfill({json:{delete:4,favourite:0,held:0,undated:0,restored:[],synced:{deleted:0,favourited:0,last:''}}});
     // Opening the page checks Photos; the answer here is the same plan.
-    if(url.pathname==='/api/photos/check')return route.fulfill({json:{...summary(),created:now,updated:now,toCheck:4,delete:[],favourite:[],missing,held:[],undated:0,selected:[],skipped:0}});
-    if(url.pathname==='/api/photos/jobs/J1')return route.fulfill({json:{...summary(),created:now,updated:now,toCheck:4,delete:[],favourite:[],missing:stage?[]:missing,held:[],undated:0,selected:[],skipped:0}});
+    if(url.pathname==='/api/photos/check')return route.fulfill({json:{...summary(),created:now,updated:now,toCheck:4,delete:[],favourite:[],missing,held,undated:0,selected:[],skipped:0}});
+    if(url.pathname==='/api/photos/jobs/J1')return route.fulfill({json:{...summary(),created:now,updated:now,toCheck:4,delete:[],favourite:[],missing:stage?[]:missing,held:stage?[]:held,undated:0,selected:[],skipped:0}});
     return route.fulfill({status:404,json:{error:'not mocked'}});
   });
 
@@ -50,6 +56,12 @@ const summary=()=>stage?{id:'J1',state:'checking',rev:1,stage,done:40,total:120}
   assert.equal(await page.locator('details[data-why="shared-album"] summary').innerText(),'1 file only in a shared album');
   assert.equal(await page.locator('details[data-why="other-day"] summary').innerText(),'1 file not found: Photos has the name only on another day');
 
+  const kept=page.locator('details.pmore',{hasText:'not deleted from Photos'});
+  await kept.locator('summary').click();
+  assert.deepEqual((await kept.locator('li').allInnerTexts()).map(text=>text.replace(/\s+/g,' ')),[
+    'IMG_5000.JPG · 5 May 2020 · kept as IMG_5000.HEIC',
+    'IMG_0367.HEIC · 30 Aug 2020 · kept as IMG_0367.HEIC on 29 Aug 2020',
+  ]);
   await page.locator('details[data-why="shared-album"] summary').click();
   const shared=page.locator('details[data-why="shared-album"]');
   assert.match(await shared.locator('.hint').innerText(),/never changes a shared album/);

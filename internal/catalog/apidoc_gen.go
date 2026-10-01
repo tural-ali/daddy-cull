@@ -409,6 +409,7 @@ func init() {
 		"daddy-cull/next/internal/catalog.PhotosHeld":                       "PhotosHeld is a removal withheld because the archive still holds the photograph under another file.",
 		"daddy-cull/next/internal/catalog.PhotosHeld.Day":                   "Day is the day it was taken, as YYYY-MM-DD.",
 		"daddy-cull/next/internal/catalog.PhotosHeld.Kept":                  "Kept is the name of a file the archive still holds from the same day with the same name, ignoring duplicate suffixes and the extension, such as the JPG of a removed HEIC.",
+		"daddy-cull/next/internal/catalog.PhotosHeld.KeptDay":               "KeptDay is the day of Kept, as YYYY-MM-DD, when it is a day either side: Photos had the name only a day off, which is the kept file's own photograph. Omitted when Kept is from the same day.",
 		"daddy-cull/next/internal/catalog.PhotosHeld.Name":                  "Name is the removed file's name, as Photos would know it.",
 		"daddy-cull/next/internal/catalog.PhotosHub":                        "PhotosHub holds the current job and what the helper last said.",
 		"daddy-cull/next/internal/catalog.PhotosJobRef":                     "PhotosJobRef names a sync.",

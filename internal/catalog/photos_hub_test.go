@@ -648,3 +648,72 @@ func TestPhotosAutoCheck(t *testing.T) {
 	beat()
 	auto(true, "the helper is back and the answer is old")
 }
+
+// Photos finding a removed file's name only a day off has found the
+// photograph of a file the archive still keeps on that day, when it keeps one:
+// a copy filed under the next day was the one removed. Such a match is held,
+// never offered for deletion, while a day-off match with nothing kept nearby
+// still is.
+func TestPhotosNearMatchOfAKeptFileIsHeld(t *testing.T) {
+	s := testStore(t)
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := s.write.Exec(query, args...); err != nil {
+			t.Fatalf("%s: %v", query, err)
+		}
+	}
+	asset := func(id int64, path string, cull bool) {
+		exec("INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(?,?,0,?,100,'archive')", id, path, mediaKind(path))
+		if cull {
+			exec("INSERT INTO decisions(asset_id,status,favourite,revision) VALUES(?,'cull',0,1)", id)
+		}
+	}
+	// The copy under 30 August removed, the one under 29 August kept.
+	asset(1, "/archive/2020/2020-08/2020-08-29/IMG_0367.HEIC", false)
+	asset(2, "/archive/2020/2020-08/2020-08-30/IMG_0367.HEIC", true)
+	// Both plain copies removed, a re-download under the day before kept.
+	asset(3, "/archive/2023/2023-12/2023-12-31/IMG_4167 (2023-12-31).MOV", false)
+	asset(4, "/archive/2024/2024-01/2024-01-01/IMG_4167.MOV", true)
+	// Nothing kept nearby: the day-off match still stands.
+	asset(5, "/archive/2021/2021-03/2021-03-04/IMG_9000.HEIC", true)
+
+	h := NewPhotosHub(s, fakePhotosKey)
+	view, err := h.StartCheck(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := claimNow(t, h)
+	report := PhotosMatchReport{}
+	for i, entry := range task.Entries {
+		report.Matches = append(report.Matches, PhotosReportedMatch{ID: entry.ID, How: "near", Photos: []PhotosReportedAsset{{
+			ID: fmt.Sprintf("UUID-%d/L0/001", i), Name: entry.Name, Created: "2020-01-01T10:00:00Z", Thumb: fakeJPEG,
+		}}})
+	}
+	if err = h.Matches(view.ID, report); err != nil {
+		t.Fatal(err)
+	}
+	if err = h.Checked(view.ID); err != nil {
+		t.Fatal(err)
+	}
+	view, _ = h.Job(view.ID)
+	if len(view.Delete) != 1 || view.Delete[0].Name != "IMG_9000.HEIC" || view.Delete[0].How != "near" {
+		t.Fatalf("offered %+v", view.Delete)
+	}
+	if len(view.Missing) != 0 {
+		t.Fatalf("missing %+v", view.Missing)
+	}
+	held := map[string]PhotosHeld{}
+	for _, item := range view.Held {
+		held[item.Name] = item
+	}
+	if got := held["IMG_0367.HEIC"]; got.Kept != "IMG_0367.HEIC" || got.KeptDay != "2020-08-29" || got.Day != "2020-08-30" {
+		t.Fatalf("IMG_0367 held as %+v", got)
+	}
+	if got := held["IMG_4167.MOV"]; got.Kept != "IMG_4167 (2023-12-31).MOV" || got.KeptDay != "2023-12-31" {
+		t.Fatalf("IMG_4167 held as %+v", got)
+	}
+	// Choosing a held one is refused.
+	if _, err = h.Apply(context.Background(), view.ID, []string{"delete:asset:2"}, nil); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("applying a held match: %v", err)
+	}
+}

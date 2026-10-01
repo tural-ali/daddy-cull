@@ -138,7 +138,11 @@ type photosJob struct {
 	reported         map[string]bool
 	// why says, for an entry Photos does not hold, what the helper saw
 	// instead: photosWhySharedAlbum or photosWhyOtherDay, or nothing at all.
-	why        map[string]string
+	why map[string]string
+	// nearHeld marks entries Photos found only a day off where the archive
+	// still holds a file of that name on the day either side: the match is
+	// that file's photograph, so it is held, not offered.
+	nearHeld   map[string]bool
 	thumbs     [][]byte
 	thumbBytes int
 	selected   []string
@@ -325,7 +329,7 @@ func (h *PhotosHub) startCheck(ctx context.Context, due func() bool) (PhotosJobV
 	j := &photosJob{
 		id: newPhotosJobID(), state: "queued_check", created: now, updated: now,
 		byID: map[string]int{}, held: plan.Held, undated: plan.Undated,
-		matches: map[string]photosMatch{}, reported: map[string]bool{}, why: map[string]string{}, outcomes: map[string]photosOutcome{},
+		matches: map[string]photosMatch{}, reported: map[string]bool{}, why: map[string]string{}, nearHeld: map[string]bool{}, outcomes: map[string]photosOutcome{},
 	}
 	j.entries = append(append(j.entries, plan.Delete...), plan.Favourite...)
 	for i, entry := range j.entries {
@@ -726,6 +730,14 @@ func (h *PhotosHub) Matches(jobID string, report PhotosMatchReport) error {
 	}
 	for _, match := range report.Matches {
 		h.dropThumbsLocked(j, match.ID)
+		if entry := j.entries[j.byID[match.ID]]; match.How == "near" && entry.nearKept != "" {
+			delete(j.matches, match.ID)
+			delete(j.why, match.ID)
+			j.reported[match.ID] = true
+			j.nearHeld[match.ID] = true
+			continue
+		}
+		delete(j.nearHeld, match.ID)
 		stored := photosMatch{how: match.How}
 		for _, asset := range match.Photos {
 			seen := photosAsset{id: asset.ID, name: asset.Name, created: asset.Created, favourite: asset.Favourite}
@@ -745,6 +757,7 @@ func (h *PhotosHub) Matches(jobID string, report PhotosMatchReport) error {
 	for _, id := range report.Missing {
 		h.dropThumbsLocked(j, id)
 		delete(j.matches, id)
+		delete(j.nearHeld, id)
 		j.reported[id] = true
 		if why := report.Reasons[id]; why != "" {
 			j.why[id] = why
@@ -1189,15 +1202,16 @@ func (h *PhotosHub) viewLocked(j *photosJob) PhotosJobView {
 		PhotosJobSummary: PhotosJobSummary{ID: j.id, State: j.state, Rev: j.rev, Stage: j.stage, Message: j.message, Done: j.done, Total: j.total, Error: j.err},
 		Created:          j.created.UTC().Format(time.RFC3339), Updated: j.updated.UTC().Format(time.RFC3339),
 		ToCheck: len(j.entries), Delete: []PhotosRow{}, Favourite: []PhotosRow{}, Missing: []PhotosMissing{},
-		Held: j.held, Undated: j.undated, Selected: append([]string{}, j.selected...), Skipped: j.skipped, Result: j.result,
-	}
-	if view.Held == nil {
-		view.Held = []PhotosHeld{}
+		Held: append([]PhotosHeld{}, j.held...), Undated: j.undated, Selected: append([]string{}, j.selected...), Skipped: j.skipped, Result: j.result,
 	}
 	if j.state == "queued_check" || j.state == "checking" {
 		return view
 	}
 	for _, entry := range j.entries {
+		if j.nearHeld[entry.ID] {
+			view.Held = append(view.Held, PhotosHeld{Name: entry.Name, Day: entry.Day, Kept: entry.nearKept, KeptDay: entry.nearKeptDay})
+			continue
+		}
 		match, found := j.matches[entry.ID]
 		if !found {
 			if j.reported[entry.ID] || j.checked {

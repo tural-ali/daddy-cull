@@ -10,7 +10,7 @@ type Summary={id:string;state:JobState;rev:number;stage?:string;message?:string;
 type Status={configured:boolean;settling?:boolean;now:string;agent:Agent;job:Summary|null};
 type PhotosAsset={id:string;name:string;created:string;favourite:boolean;thumb?:string};
 type Row={id:string;action:'delete'|'favourite';keys:string[];name:string;day:string;original:string;kind:string;ext:string;state?:'marked'|'bin'|'purged';preview?:string;how:'exact'|'near';photos:PhotosAsset[];outcome?:'deleted'|'not-deleted'|'favourited'|'failed';outcomeError?:string};
-type Held={name:string;day:string;kept:string};
+type Held={name:string;day:string;kept:string;keptDay?:string};
 type Result={nothing?:boolean;deleted:number;notDeleted:number;favourited:number;favouriteFailed:number;note?:string};
 type Missing={action:string;name:string;day:string;why?:'shared-album'|'other-day'};
 type Job=Summary&{created:string;updated:string;toCheck:number;delete:Row[];favourite:Row[];missing:Missing[];held:Held[];undated:number;selected:string[];skipped:number;result?:Result};
@@ -375,7 +375,7 @@ export function Photos(){
           const items=view.missing.filter(item=>(item.why??'')===group.why);
           return items.length>0&&<details className="pmore" key={group.why} data-why={group.why||'none'}><summary>{group.title(items.length)}</summary><p className="hint">{group.hint}{group.why===''&&agent?.outdated&&' This Mac\'s Cull Sync is too old to say which of these are only in a shared album or only on another day: update it and check again.'}</p><ul className="plain">{items.slice(0,300).map((item,index)=><li key={index}><span className="mono">{item.name}</span> · {day(item.day)}{item.action==='favourite'&&' · favourite'}</li>)}</ul>{items.length>300&&<p>and {(items.length-300).toLocaleString()} more.</p>}</details>;
         })}
-        {view.held.length>0&&<details className="pmore"><summary>{view.held.length.toLocaleString()} not deleted from Photos: you kept another copy of {view.held.length===1?'it':'each'}, such as the JPG of a HEIC</summary><ul className="plain">{view.held.slice(0,300).map((item,index)=><li key={index}><span className="mono">{item.name}</span> · {day(item.day)} · kept as <span className="mono">{item.kept}</span></li>)}</ul>{view.held.length>300&&<p>and {(view.held.length-300).toLocaleString()} more.</p>}</details>}
+        {view.held.length>0&&<details className="pmore"><summary>{view.held.length.toLocaleString()} not deleted from Photos: you kept another copy of {view.held.length===1?'it':'each'}, such as the JPG of a HEIC</summary><ul className="plain">{view.held.slice(0,300).map((item,index)=><li key={index}><span className="mono">{item.name}</span> · {day(item.day)} · kept as <span className="mono">{item.kept}</span>{item.keptDay&&` on ${day(item.keptDay)}`}</li>)}</ul>{view.held.length>300&&<p>and {(view.held.length-300).toLocaleString()} more.</p>}</details>}
         {view.undated>0&&<p className="hint">{plural(view.undated,'removed file')} {view.undated===1?'has':'have'} no date to match on and {view.undated===1?'is':'are'} left alone.</p>}
       </section>}
     </>}

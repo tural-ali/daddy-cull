@@ -133,6 +133,12 @@ type PhotosEntry struct {
 	// Preview is the path of a preview of the file in Cull; omitted when
 	// there is none, as for a file emptied from the Bin for good.
 	Preview string `json:"preview,omitempty"`
+
+	// nearKept is a file of the same name the archive still holds from a day
+	// either side, with that day. Photos finding the name only a day off has
+	// most likely found that file's photograph, not this one's, so such a
+	// match is held rather than offered.
+	nearKept, nearKeptDay string
 }
 
 // PhotosHeld is a removal withheld because the archive still holds the
@@ -146,6 +152,10 @@ type PhotosHeld struct {
 	// with the same name, ignoring duplicate suffixes and the extension, such
 	// as the JPG of a removed HEIC.
 	Kept string `json:"kept"`
+	// KeptDay is the day of Kept, as YYYY-MM-DD, when it is a day either side:
+	// Photos had the name only a day off, which is the kept file's own
+	// photograph. Omitted when Kept is from the same day.
+	KeptDay string `json:"keptDay,omitempty"`
 }
 
 // PhotosRestored is a photograph deleted from Photos and later put back in the
@@ -268,13 +278,33 @@ func photosEntries(action string, items []photosItem, synced map[string]photosSy
 			continue
 		}
 		index[group] = len(entries)
-		entries = append(entries, PhotosEntry{
+		entry := PhotosEntry{
 			ID: action + ":" + item.key, Action: action, Keys: []string{item.key},
 			Name: name, Stem: stem, Ext: ext, Day: day,
 			Original: item.file, Kind: item.kind, State: item.state, Preview: item.preview,
-		})
+		}
+		if live != nil {
+			entry.nearKept, entry.nearKeptDay = photosKeptNear(live, stem, day)
+		}
+		entries = append(entries, entry)
 	}
 	return entries, held, undated
+}
+
+// photosKeptNear is a file the archive still holds under stem from the day
+// before or after day, and that day, or nothing.
+func photosKeptNear(live map[string]string, stem, day string) (string, string) {
+	at, err := time.Parse(time.DateOnly, day)
+	if err != nil {
+		return "", ""
+	}
+	for _, offset := range []int{-1, 1} {
+		near := at.AddDate(0, 0, offset).Format(time.DateOnly)
+		if kept, ok := live[stem+"\x00"+near]; ok {
+			return kept, near
+		}
+	}
+	return "", ""
 }
 
 // photosRemoved lists every file taken out of the archive and not restored,
