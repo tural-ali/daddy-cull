@@ -88,21 +88,24 @@ const settled=async page=>{
   await target.click();
   const tile=page.locator('.zoomtile');
   await tile.waitFor();
-  const start=await page.evaluate(()=>document.querySelector('.zoomtile').getAnimations()[0].effect.getKeyframes()[0]);
+  // The square is read at set moments of its own growth rather than after
+  // waits, which a slow machine can outlast before the day replaces it.
+  const [start,end,early,middle,label]=await page.evaluate(()=>{
+    const grown=document.querySelector('.zoomtile'),grow=grown.getAnimations()[0],was=grow.currentTime;
+    const at=time=>{grow.currentTime=time;return grown.getBoundingClientRect().width};
+    const sizes=[at(60),at(140)];
+    grow.currentTime=was;
+    const frames=grow.effect.getKeyframes();
+    return [frames[0],frames.at(-1),...sizes,grown.innerText];
+  });
   for(const edge of ['left','top','width','height'])assert.ok(Math.abs(parseFloat(start[edge])-before[{left:'x',top:'y'}[edge]??edge])<0.5,`the square starts where the date is: ${edge} ${start[edge]}`);
-  await page.waitForTimeout(60);
-  const early=await tile.boundingBox();
-  if(shots)await page.screenshot({path:`${shots}/zoom-60.png`});
-  await page.waitForTimeout(80);
-  const middle=await tile.boundingBox();
-  if(shots)await page.screenshot({path:`${shots}/zoom-140.png`});
-  assert.ok(early.width>before.width*2&&middle.width>early.width,`it grows: ${before.width}, ${early.width}, then ${middle.width}`);
-  assert.match(await tile.innerText(),/^7$/,'with the date on it');
+  assert.ok(early>before.width*2&&middle>early,`it grows: ${before.width}, ${early}, then ${middle}`);
+  assert.match(label,/^7$/,'with the date on it');
+  if(shots)await page.screenshot({path:`${shots}/zoom-grow.png`});
   await page.locator('main .jgrid figure').first().waitFor();
   assert.equal(new URL(page.url()).pathname,'/on/09-07');
   const panel=await page.locator('.panel').boundingBox();
-  const full=await tile.boundingBox().catch(()=>null);
-  if(full)assert.ok(Math.abs(full.width-panel.width)<2&&Math.abs(full.x-panel.x)<2,'the square has filled the panel');
+  assert.ok(Math.abs(parseFloat(end.width)-panel.width)<2&&Math.abs(parseFloat(end.left)-panel.x)<2,`the square grows to fill the panel: ${end.left} ${end.width}`);
   await page.waitForFunction(()=>/\bentering zoom\b/.test(document.querySelector('.pagestage')?.className??''));
   const waits=await page.evaluate(()=>[...document.querySelectorAll('main .jgrid figure')].slice(0,3).map(f=>getComputedStyle(f).animationDelay));
   assert.deepEqual(waits,['0.06s','0.072s','0.084s'],`the photographs come in one after another: ${waits}`);
@@ -159,13 +162,13 @@ const settled=async page=>{
   // where it is too, as moving a page has the browser paint all of it, which
   // for a long one holds everything for a second or more. A short page rises.
   const motion=()=>page.evaluate(()=>new Promise(resolve=>{
-    const stage=document.querySelector('.pagestage'),seen={};
+    const stage=document.querySelector('.pagestage'),got={};
     const observer=new MutationObserver(()=>{
       const phase=stage.classList.contains('leaving')?'leaving':stage.classList.contains('entering')?'entering':null;
-      if(!phase||seen[phase])return;
+      if(!phase||got[phase])return;
       const moving=stage.getAnimations().find(a=>(a.animationName??'').startsWith('page-'));
-      seen[phase]={name:moving?.animationName,transform:!!moving?.effect.getKeyframes().some(frame=>frame.transform&&frame.transform!=='none'),tall:Math.round(stage.scrollHeight/innerHeight)};
-      if(phase==='entering'){observer.disconnect();resolve(seen)}
+      got[phase]={name:moving?.animationName,transform:!!moving?.effect.getKeyframes().some(frame=>frame.transform&&frame.transform!=='none'),tall:Math.round(stage.scrollHeight/innerHeight)};
+      if(phase==='entering'){observer.disconnect();resolve(got)}
     });
     observer.observe(stage,{attributes:true,attributeFilter:['class']});
   }));

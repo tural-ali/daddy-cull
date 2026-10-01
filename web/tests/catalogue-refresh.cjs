@@ -46,7 +46,10 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   await page.waitForFunction(()=>document.querySelectorAll('.gal figure').length===61);
   assert.equal(Math.round(await page.evaluate(()=>window.scrollY)),420,'the page stays where it was scrolled to');
   await refreshed.waitFor();
-  await page.clock.runFor(300);await page.waitForTimeout(50);
+  // The frame reads its counts a moment after the catalogue moves on; the
+  // read reaches the mock in its own time, which a slow machine stretches.
+  await page.clock.runFor(300);
+  for(const end=Date.now()+5000;statsReads===statsBefore&&Date.now()<end;)await page.waitForTimeout(25);
   assert.ok(statsReads>statsBefore,'the counts in the frame are read again');
   // 2. It stacks with the day's own tip in the one corner instead of on it.
   if(await tip.count()){
