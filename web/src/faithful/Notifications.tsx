@@ -1,3 +1,4 @@
+import {Busy} from '../Busy';
 import {useCallback,useEffect,useRef,useState,type RefObject} from 'react';
 import {Icon} from '../Icon';
 import {usePopover} from './CalendarPopover';
@@ -91,7 +92,7 @@ function NotificationPanel({anchor,onClose,onRead}:{anchor:RefObject<HTMLButtonE
   return <div ref={panel} className="calpop notepop" role="dialog" aria-label="Notifications" tabIndex={-1} {...keys}>
     <div className="notehead"><h2>Notifications</h2></div>
     {failed?<p className="notenote" role="alert">Notifications did not load. <button type="button" className="textbtn" onClick={()=>setAttempt(value=>value+1)}>Try again</button></p>
-      :list===null?<p className="notenote" aria-busy="true">Reading notifications…</p>
+      :list===null?<p className="notenote"><Busy label="Reading notifications…"/></p>
       :list.items.length===0?<p className="notenote">Nothing yet. New files from iCloud and photos deleted on a phone show here.</p>
       :<ul className="notelist">{list.items.map(item=><NotificationItem key={item.id} item={item} unseen={fresh.has(item.id)}/>)}</ul>}
   </div>;

@@ -4,11 +4,12 @@ import {useEffect,useId,useState,type CSSProperties} from 'react';
 // to amber to mint, are the calendar's own scale: much still to cull, some, done.
 // The lettering takes its colours from the theme, so one drawing serves day and night.
 
-const tiles=[
-  'M52 0 66 14 28 52 66 90 52 104 0 52Z',
-  'M91 0 105 14 67 52 105 90 91 104 39 52Z',
-  'M132 0 184 52 132 104 80 52Z',
+export const logoTilePoints=[
+  [[52,0],[66,14],[28,52],[66,90],[52,104],[0,52]],
+  [[91,0],[105,14],[67,52],[105,90],[91,104],[39,52]],
+  [[132,0],[184,52],[132,104],[80,52]],
 ];
+const tiles=logoTilePoints.map(points=>`M${points.map(point=>point.join(' ')).join('L')}Z`);
 
 /** The day tiles alone, for small places such as the tab icon. */
 export function LogoMark({className}:{className?:string}){

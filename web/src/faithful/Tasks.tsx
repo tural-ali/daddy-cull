@@ -1,3 +1,5 @@
+import {Busy} from '../Busy';
+import {ProgressBar} from '../ProgressBar';
 import {useCallback,useEffect,useRef,useState,type CSSProperties,type RefObject} from 'react';
 import {Icon,type IconName} from '../Icon';
 import {usePopover} from './CalendarPopover';
@@ -86,7 +88,7 @@ function TaskPanel({anchor,onClose}:{anchor:RefObject<HTMLButtonElement|null>;on
       {finished>0&&<button type="button" className="textbtn" disabled={working!==''} onClick={()=>void run('clear',clearTasks)}>Clear finished</button>}
     </div>
     {error&&<p className="notenote warn" role="alert">{error}</p>}
-    {list===null?<p className="notenote" aria-busy="true">Reading tasks…</p>
+    {list===null?<p className="notenote"><Busy label="Reading tasks…"/></p>
       :tasks.length===0?<p className="notenote">Nothing running. Moving many files to the Bin, deleting or restoring them runs here in the background, so you can carry on.</p>
       :<ul className="notelist tasklist">{tasks.map(task=><TaskItem key={task.id} task={task} working={working} run={run}/>)}</ul>}
   </div>;
@@ -101,8 +103,7 @@ function TaskItem({task,working,run}:{task:Task;working:string;run:(key:string,a
     <div className="notebody">
       <p className="notetitle">{task.label}</p>
       <p className="notemeta"><span className="taskstate">{progressOf(task)}</span>{(task.finishedAt||task.createdAt)&&<span>{when(task.finishedAt||task.createdAt)}</span>}</p>
-      {active(task)&&<span className="meter" role="progressbar" aria-label={task.label} aria-valuemin={0} aria-valuemax={task.total} aria-valuenow={handled}>
-        <span style={{width:`${task.total>0?Math.min(100,handled/task.total*100):0}%`}}/></span>}
+      {active(task)&&<ProgressBar className="meter" label={task.label} value={handled} max={task.total}/>}
       {task.note&&<p className="tasknote">{task.note}</p>}
       {task.keptDays&&!active(task)?<p className="tasknote">They stay on disk for {plural(task.keptDays,'day')}, restorable from the <a href="/log">Log</a>.</p>:null}
       {task.failures.length>0&&<ul className="taskfailures">

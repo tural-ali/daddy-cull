@@ -76,8 +76,8 @@ const settled=async page=>{
   await side.getByRole('link',{name:'Year'}).click();
   await settled(page);
   const seen=await phases(page);
-  assert.deepEqual(seen.map(p=>p.className),['pagestage leaving','pagestage entering','pagestage'],'the page left goes, the next comes in');
-  assert.deepEqual(seen.map(p=>p.inert),[true,false,false],'and the page left cannot be pressed as it goes');
+  assert.deepEqual(seen.filter(p=>p.className!=='pagestage waiting').map(p=>p.className),['pagestage leaving','pagestage entering','pagestage'],'the page left goes, the next comes in');
+  assert.deepEqual(seen.filter(p=>p.className!=='pagestage waiting').map(p=>p.inert),[true,false,false],'and the page left cannot be pressed as it goes');
   assert.equal(seen[0].current,'Year','the sidebar says where it is going at once');
   assert.ok(await page.locator('main .cell').count()>300,'the year comes in');
 

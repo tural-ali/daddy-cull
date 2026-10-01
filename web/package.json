@@ -20,8 +20,7 @@
     "@fontsource-variable/google-sans-flex": "5.3.1",
     "@material-symbols/svg-400": "0.47.5",
     "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "thinking-orbs": "0.3.2"
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@types/react": "19.2.18",

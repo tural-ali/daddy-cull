@@ -2,7 +2,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const assert=require('node:assert/strict');
 
 // Moving between pages keeps the frame: the top bar and the sidebar stay as
-// they are, the panel shows an orb while the next page is read, and only the
+// they are, the panel shows a branded loading rail while the next page is read, and only the
 // panel changes. Back returns to where the last page was scrolled, closing a
 // photo does not read its page again, and a choice still being saved lands
 // before the next page is read.
@@ -33,6 +33,7 @@ const square='<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48"><re
       log.push('decision saved');
       return route.fulfill({json:{revision:body.expectedRevision+1,previousStatus:'unreviewed',previousFavourite:false}});
     }
+    if(url.pathname==='/api/log')return route.fulfill({json:[]});
     if(url.pathname.startsWith('/api/duplicates'))return route.fulfill({json:[]});
     if(url.pathname.startsWith('/api/media/'))return route.fulfill({contentType:'image/svg+xml',body:square});
     return route.fulfill({status:404,json:{error:'not mocked'}});
@@ -45,19 +46,25 @@ const square='<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48"><re
   await page.locator('main .jgrid figure').first().waitFor();
   await page.evaluate(()=>{document.querySelector('.gbar').dataset.frame='kept';document.querySelector('#side').dataset.frame='kept'});
 
-  // The next page is read while the frame stays, with an orb in the panel.
+  // The next page is read while the frame stays, with a branded loading rail in the panel.
   let release;
   holdYear=new Promise(resolve=>{release=resolve});
   await page.evaluate(()=>scrollTo(0,900));
   const scrolled=await page.evaluate(()=>scrollY);
   assert.ok(scrolled>800,'the day scrolls');
   await side.getByRole('link',{name:'Year'}).click();
-  const orb=page.locator('.panel .pageload');
-  await orb.getByText('Opening Year…').waitFor();
+  const loader=page.locator('.navigationload');
+  await loader.getByText('Opening Year…').waitFor();
   assert.equal(new URL(page.url()).pathname,'/year');
-  assert.equal(await page.locator('main .jgrid').count(),0,'the day has gone from the panel');
+  assert.equal(await page.locator('main .jgrid').count(),1,'the day stays visible while the next page loads');
+  assert.equal(await page.locator('.pagestage').evaluate(node=>node.inert),true,'the previous page cannot receive stale actions');
+  assert.equal(await loader.locator('.busy-mark .tile').count(),3,'the logo tiles replace the orb');
+  assert.equal(await loader.locator('canvas').count(),0,'no canvas loader');
+  assert.equal(await loader.locator('.progress-track.indeterminate').count(),1,'unknown progress uses the shared rail');
   assert.equal(await side.getByRole('link',{name:'Year'}).getAttribute('aria-current'),'page','the sidebar says where it is going at once');
-  assert.equal(await page.evaluate(()=>scrollY),0,'the panel starts from its top');
+  assert.equal(await page.evaluate(()=>scrollY),scrolled,'the old page keeps its place until the new one is ready');
+  assert.equal(await page.locator('.pageacts button').first().isDisabled(),true,'old page actions stay disabled during the wait');
+  await page.waitForFunction(()=>{const status=document.querySelector('.navigationload');return status&&Number(getComputedStyle(status).opacity)>.99});
   if(shots)await page.screenshot({path:`${shots}/page-loading.png`});
   release();holdYear=null;
   await page.locator('main .cell').first().waitFor();
@@ -106,6 +113,19 @@ const square='<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48"><re
   await popup.close();
   assert.equal(new URL(page.url()).pathname,'/on/09-07','the tab stayed where it was');
   assert.equal(await reloads(),1,'still the first page load');
+  // A slow request from an abandoned destination must never replace the
+  // later choice or leave the retained page inert.
+  holdYear=new Promise(resolve=>{release=resolve});
+  await side.getByRole('link',{name:'Year'}).click();
+  await page.locator('.navigationload').getByText('Opening Year…').waitFor();
+  await side.getByRole('link',{name:'Log',exact:true}).click();
+  await page.getByRole('heading',{name:'Log',exact:true}).waitFor();
+  release();holdYear=null;
+  await page.waitForTimeout(650);
+  assert.equal(new URL(page.url()).pathname,'/log');
+  assert.equal(await page.locator('main .cell').count(),0,'the abandoned year never appears');
+  assert.equal(await page.locator('.pagestage').evaluate(node=>node.inert),false);
+  assert.equal(await page.locator('.navigationload').count(),0);
   await browser.close();
   console.log('page transitions: ok');
 })().catch(error=>{console.error(error);process.exit(1)});

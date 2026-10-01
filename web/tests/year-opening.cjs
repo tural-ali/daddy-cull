@@ -17,13 +17,20 @@ const months=length.map((days,month)=>({name:new Date(Date.UTC(2000,month,1)).to
 })}));
 
 async function open(browser,address,options={}){
-  const page=await browser.newPage({viewport:{width:1440,height:900},...options});
+  const {yearDelay=400,yearError=false,...browserOptions}=options;
+  const page=await browser.newPage({viewport:{width:1440,height:900},...browserOptions});
+  page.on('pageerror',error=>{throw error});
+  await page.addInitScript(()=>{localStorage.setItem('cull-theme','night')});
   await page.addInitScript(key=>{const now=new Date();localStorage.setItem(key,`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`)},'cull.streak-intro');
   await page.route('**/api/**',async route=>{
     const url=new URL(route.request().url());
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:10,synthetic:false,snapshotAt:'',bin:0,notifications:0}});
     // The year takes a moment to read, as it does on a big archive.
-    if(url.pathname==='/api/year'){await new Promise(done=>setTimeout(done,400));return route.fulfill({json:{months,prog:{dates:366,done:120,part:40,filesDone:0,files:20000},today:'10-01',streak:0,week:{days:0,seconds:0}}})}
+    if(url.pathname==='/api/year'){
+      await new Promise(done=>setTimeout(done,yearDelay));
+      if(yearError)return route.fulfill({status:500,json:{error:'Calendar unavailable'}});
+      return route.fulfill({json:{months,prog:{dates:366,done:120,part:40,filesDone:0,files:20000},today:'10-01',streak:0,week:{days:0,seconds:0}}});
+    }
     if(url.pathname==='/api/notifications')return route.fulfill({json:{unread:0,items:[]}});
     if(url.pathname==='/api/tasks')return route.fulfill({json:{tasks:[],active:0}});
     if(url.pathname==='/api/trash')return route.fulfill({json:[]});
@@ -51,8 +58,25 @@ const playing=page=>page.evaluate(()=>document.getAnimations().filter(animation=
   if(shots)await page.screenshot({path:`${shots}/opening-logo.png`});
   await page.locator('.opening.dive').waitFor();
   assert.ok(await page.locator('.yearview.opening-arrive').count(),'the dates fly in as the camera dives');
+  assert.equal(await page.locator('.openingedge').count(),16,'every outline edge has a solid side face');
+  const camera=await page.locator('.openingworld').evaluate(world=>{
+    const animation=world.getAnimations()[0],time=animation.currentTime;
+    const frames=[300,700].map(at=>{animation.currentTime=at;const box=world.getBoundingClientRect();return {centre:box.x+box.width/2,width:box.width}});
+    animation.currentTime=time;
+    return {frames,wordOpacity:getComputedStyle(world.querySelector('.word')).opacity,logoAnimation:getComputedStyle(world.querySelector('.openinglogo')).animationName};
+  });
+  assert.ok(camera.frames.every(frame=>Math.abs(frame.centre-720)<1),'the camera travels straight without sideways re-centring');
+  assert.ok(camera.frames[1].width>camera.frames[0].width,'the whole logo grows in one camera move');
+  assert.equal(camera.wordOpacity,'1','the wordmark travels with the mark');
+  assert.equal(camera.logoAnimation,'none','the wordmark never fades away independently');
+  assert.equal(await page.locator('.openingface').count(),6,'all three tiles have front and back faces');
+  const delays=await page.locator('.cell:not(.blank)').evaluateAll(cells=>cells.map(cell=>parseFloat(getComputedStyle(cell).animationDelay)));
+  assert.ok(Math.min(...delays)>=1.25&&Math.max(...delays)<=1.48,'the dates wait for the camera pass');
+  assert.ok(Math.max(...delays)-Math.min(...delays)>.15,'the centre arrives before the edges');
+  const hidden=await page.locator('.cell:not(.blank)').evaluateAll(cells=>cells.every(cell=>getComputedStyle(cell).opacity==='0'));
+  assert.ok(hidden,'no dates appear before the zoom');
   if(shots){
-    for(const ms of [180,420,700,1000]){
+    for(const ms of [180,700,1100,1300,1600,2200]){
       await hold(page,ms);
       await page.screenshot({path:`${shots}/opening-dive-${ms}.png`});
     }
@@ -95,6 +119,43 @@ const playing=page=>page.evaluate(()=>document.getAnimations().filter(animation=
   page=await open(browser,'/',{reducedMotion:'reduce'});
   await page.locator('.cmonth').nth(11).waitFor();
   assert.equal(await page.locator('.opening').count(),0,'no opening for less motion');
+  await page.close();
+
+  // Changing the OS preference while the camera is moving ends the motion.
+  page=await open(browser,'/');
+  await page.locator('.opening.dive').waitFor();
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.locator('.opening').waitFor({state:'detached',timeout:1000});
+  assert.equal(await playing(page),0);
+  await page.close();
+
+  // A slow archive must never send the camera into an empty calendar.
+  page=await open(browser,'/',{yearDelay:2400});
+  await page.waitForTimeout(1800);
+  assert.equal(await page.locator('.opening.logo').count(),1,'wait on the logo until the archive arrives');
+  await page.locator('.opening.dive').waitFor();
+  await page.locator('.opening').waitFor({state:'detached',timeout:4000});
+  await page.close();
+  page=await open(browser,'/',{yearError:true});
+  await page.getByRole('alert').waitFor();
+  assert.equal(await page.locator('.opening').count(),0,'a failed load exposes Retry immediately');
+  await page.close();
+
+  for(const width of [320,768,1024,1440]){
+    page=await open(browser,'/',{viewport:{width,height:900},colorScheme:width===1440?'light':'dark'});
+    if(width===1440)await page.evaluate(()=>document.documentElement.dataset.theme='day');
+    await page.locator('.opening.dive').waitFor();
+    await hold(page,700);
+    if(shots)await page.screenshot({path:`${shots}/opening-${width}-solid.png`});
+    await hold(page,1600);
+    if(shots)await page.screenshot({path:`${shots}/opening-${width}-landing.png`});
+    const movingWidth=await page.evaluate(()=>document.documentElement.scrollWidth);
+    await page.locator('.opening').waitFor({state:'detached',timeout:4000});
+    assert.equal(await playing(page),0);
+    assert.ok(movingWidth<=await page.evaluate(()=>document.documentElement.scrollWidth),`no added viewport overflow at ${width}px`);
+    if(shots)await page.screenshot({path:`${shots}/opening-${width}-end.png`});
+    await page.close();
+  }
   await browser.close();
   console.log('year opening: ok');
 })().catch(error=>{console.error(error);process.exit(1)});

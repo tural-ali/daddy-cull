@@ -1,3 +1,4 @@
+import {ProgressBar} from '../ProgressBar';
 import {useContext,type CSSProperties} from 'react';
 import {OpeningContext} from './YearOpening';
 import {zoomFrom} from './pageMotion';
@@ -59,13 +60,13 @@ export function Year({months,prog,streak}:YearData){
       {prog.part>0&&<span className="dim"> · {prog.part} part-finished</span>}
       {streak>0&&<span className="dim"> · {streak} day streak</span>}
     </p>
-    <div className="pbar wide"><span style={{width:`${percent}%`}}/></div>
+    <ProgressBar className="pbar wide" label="Calendar dates reviewed" value={prog.done} max={dates}/>
     <div className="calendar">
       {months.map((month,row)=><div className="cmonth" key={month.name}>
         <span className="mlabel" style={{'--far':far(row,-1).toFixed(3)} as CSSProperties}>{month.name.slice(0,3)}</span>
         {month.cells.map((cell,index)=>cell===null?<span className="cell blank" key={index}/>:<a
           key={cell.md} className={`cell ${heat(cell)}${cell.md===today?' now':''}`} href={`/on/${cell.md}`}
-          style={{'--depth':depth(cell,busiest).toFixed(3),'--far':far(row,index).toFixed(3)} as CSSProperties}
+          style={{'--depth':depth(cell,busiest).toFixed(3),'--far':far(row,index).toFixed(3),'--fly-x':`${(index-15)*9}px`,'--fly-y':`${(row-5.5)*12}px`} as CSSProperties}
           title={describe(cell)} aria-label={describe(cell)}
           onClick={event=>{if(event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey)zoomFrom(event.currentTarget)}}
         >{cell.dom}{(cell.fresh??0)>0&&<span className="freshdot" aria-hidden="true"/>}</a>)}

@@ -12,22 +12,24 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 [ -f dist/index.html ] || { echo "Build the app first: npm run build" >&2; exit 1; }
 
+port=${TEST_PORT:-8842}
 names=("$@")
 if [ $# -eq 0 ]; then
   for file in tests/*.cjs; do names+=("$(basename "$file" .cjs)"); done
 fi
 
 logs=$(mktemp -d "${TMPDIR:-/tmp}/cull-browser-tests.XXXXXX")
-npx vite preview --host 127.0.0.1 --port 8842 --strictPort >"$logs/preview.log" 2>&1 &
+npx vite preview --host 127.0.0.1 --port "$port" --strictPort >"$logs/preview.log" 2>&1 &
 preview=$!
 trap 'kill "$preview" 2>/dev/null || true; rm -rf "$logs"' EXIT
 for _ in $(seq 1 50); do
-  curl -fsS -o /dev/null http://127.0.0.1:8842/ 2>/dev/null && break
+  kill -0 "$preview" 2>/dev/null || { cat "$logs/preview.log"; exit 1; }
+  curl -fsS -o /dev/null http://127.0.0.1:$port/ 2>/dev/null && break
   sleep 0.2
 done
-curl -fsS -o /dev/null http://127.0.0.1:8842/ || { cat "$logs/preview.log"; exit 1; }
+curl -fsS -o /dev/null http://127.0.0.1:$port/ || { cat "$logs/preview.log"; exit 1; }
 
-export APP_URL=http://127.0.0.1:8842
+export APP_URL=http://127.0.0.1:$port
 run() {
   local name=$1 started=$SECONDS
   if node "tests/$name.cjs" >"$logs/$name.log" 2>&1; then

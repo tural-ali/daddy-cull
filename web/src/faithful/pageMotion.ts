@@ -10,7 +10,7 @@
 /** How long the page left takes to go, and how long a date's square takes to
  * fill the panel, in milliseconds. The next page waits for whichever applies
  * before it comes in. */
-export const LEAVE=140,ZOOM=360;
+export const LEAVE=120,ZOOM=360;
 
 /** How many screens tall a page can be and still rise in; a longer one
  * fades in where it is. */
@@ -109,4 +109,26 @@ export function squareOrigin(stage:HTMLElement,md:string){
   if(!cell)return null;
   const box=stage.getBoundingClientRect(),rect=cell.getBoundingClientRect();
   return `${rect.left-box.left+rect.width/2}px ${rect.top-box.top+rect.height/2}px`;
+}
+
+/** A little follow-through on visible content, never thousands of offscreen
+ * photographs. The frame runs after scroll restoration and grid layout. */
+export function staggerVisible(stage:HTMLElement){
+  const animations:Animation[]=[];
+  const frame=requestAnimationFrame(()=>{
+    if(calm())return;
+    const candidates=stage.querySelectorAll<HTMLElement>('.cmonth, .jgrid figure, .dupegroup, .noteitem, .settings > section, .logentry');
+    let index=0;
+    for(const element of candidates){
+      const box=element.getBoundingClientRect();
+      if(box.bottom<0||box.top>innerHeight||box.right<0||box.left>innerWidth)continue;
+      animations.push(element.animate([
+        {opacity:.3,transform:'translateY(12px) scale(.985)'},
+        {opacity:1,transform:'translateY(-1px) scale(1)',offset:.8},
+        {opacity:1,transform:'none'},
+      ],{duration:360,delay:index*14,easing:'cubic-bezier(.16,1,.3,1)',fill:'backwards'}));
+      if(++index===12)break;
+    }
+  });
+  return()=>{cancelAnimationFrame(frame);animations.forEach(animation=>animation.cancel())};
 }

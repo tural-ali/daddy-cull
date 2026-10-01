@@ -1,3 +1,4 @@
+import {Busy} from '../Busy';
 import {useEffect,useLayoutEffect,useRef,useState,type RefObject} from 'react';
 import {Icon} from '../Icon';
 import {Confetti,stillMotion,useCountUp} from './Celebration';
@@ -111,7 +112,7 @@ export function StreakCalendar({streak,onClose,anchor}:{streak:StreakState;onClo
           className={`d${cell.on?' on':''}${cell.joinLeft?' jl':''}${cell.joinRight?' jr':''}${cell.today?' today':''}${cell.future?' future':''}`}><span>{cell.dom}</span></span>)}
     </div>
     <p className="calfoot" role={failed?'alert':undefined}>{failed?<>The review days did not load. <button type="button" className="textbtn" onClick={()=>setAttempt(value=>value+1)}>Try again</button></>
-      :data?<>Longest streak <b>{data.best.toLocaleString()} {unit(data.best)}</b></>:'Loading…'}</p>
+      :data?<>Longest streak <b>{data.best.toLocaleString()} {unit(data.best)}</b></>:<Busy label="Loading…"/>}</p>
   </div>;
 }
 

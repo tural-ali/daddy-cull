@@ -35,7 +35,7 @@ async function open(browser,viewport={width:1280,height:800},theme='night',store
       return route.fulfill({json:body});
     }
     if(url.pathname==='/api/catalogue')return route.fulfill({json:{generation:1}});
-    if(url.pathname==='/api/today/09-07')return route.fulfill({json:{md:'09-07',label:'7 September',previous:'09-06',next:'09-08',years:[{day:'2010-09-07',year:2010,files:2,bytes:200,status:'pending',assets:[photo(1,'ONE.JPG'),photo(2,'TWO.JPG')]}],memories:2,bytes:200}});
+    if(url.pathname.startsWith('/api/today/'))return route.fulfill({json:{md:'09-07',label:'7 September',previous:'09-06',next:'09-08',years:[{day:'2010-09-07',year:2010,files:2,bytes:200,status:'pending',assets:[photo(1,'ONE.JPG'),photo(2,'TWO.JPG')]}],memories:2,bytes:200}});
     if(url.pathname.startsWith('/api/media/'))return route.fulfill({contentType:'image/svg+xml',body:picture});
     if(url.pathname==='/api/addons')return route.fulfill({json:[]});
     const found=common(url);

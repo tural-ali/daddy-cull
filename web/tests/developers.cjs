@@ -40,10 +40,10 @@ const shots=process.env.SHOTS;
   const send=asset.getByRole('button',{name:'Send'});
   assert.equal(await send.isDisabled(),true);
   assert.equal(await asset.locator('.tryit .hint').innerText(),'Fill in id first.');
-  assert.equal(await asset.locator('.codeblock pre').innerText(),'curl \\\n  -H "Authorization: Bearer $(cat key)" \\\n  "http://127.0.0.1:8842/api/assets/<id>"','an empty path parameter is a placeholder curl will not expand');
+  assert.equal(await asset.locator('.codeblock pre').innerText(),'curl \\\n  -H "Authorization: Bearer $(cat key)" \\\n  "http://127.0.0.1:8842/api/assets/<id>"'.replace('http://127.0.0.1:8842',base),'an empty path parameter is a placeholder curl will not expand');
   await asset.getByRole('textbox',{name:'id'}).fill('42');
   assert.equal(await send.isDisabled(),false);
-  assert.match(await asset.locator('.codeblock pre').innerText(),/"http:\/\/127\.0\.0\.1:8842\/api\/assets\/42"$/);
+  assert.ok((await asset.locator('.codeblock pre').innerText()).endsWith(`"${base}/api/assets/42"`));
 
   // The permissions an addon may ask for, from the reference.
   assert.match(await page.locator('#permissions dl').innerText(),/delete\s+Delete files in the Bin for good\./);

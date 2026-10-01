@@ -1,3 +1,4 @@
+import {ProgressBar} from '../ProgressBar';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {FilePreview} from '../Media';
 import {Busy} from '../Busy';
@@ -306,7 +307,7 @@ export function Photos(){
     <b>{found.delete.length.toLocaleString()}</b> still in Photos to delete · <b>{found.favourite.length.toLocaleString()}</b> favourite{found.favourite.length===1?'':'s'} to set
     {gone>0&&<> · {gone.toLocaleString()} already gone from it</>}{found.missing.length>gone&&<> · {(found.missing.length-gone).toLocaleString()} left alone</>}{last}
   </>:view&&(view.state==='queued_check'||view.state==='checking')?<>Looking for <b>{view.toCheck.toLocaleString()}</b> {view.toCheck===1?'file':'files'} in Photos…{last}</>
-    :overview===null?'Reading the catalogue…':<>
+    :overview===null?<Busy label="Reading the catalogue…"/>:<>
     <b>{overview.delete.toLocaleString()}</b> removed and <b>{overview.favourite.toLocaleString()}</b> favourite{overview.favourite===1?'':'s'} in Cull to look for in Photos{last}
   </>;
 
@@ -325,7 +326,7 @@ export function Photos(){
       <span>{!status.configured?<>Cull Sync is not set up yet, so Photos cannot be checked.</>
         :agent.online?<>Cull Sync is running on the Mac{agent.version&&<span className="dim"> · version {agent.version}</span>}{agent.outdated&&<span className="dim"> · version {agent.latest} is ready</span>}</>
         :agent.lastSeen?<>Cull Sync is not answering. Last seen {ago(agent.lastSeen,status.now)}. Is the Mac awake?</>
-        :status.settling?<>Waiting for Cull Sync to call in…</>
+        :status.settling?<Busy label="Waiting for Cull Sync to call in…"/>
         :<>Cull Sync has not connected yet.</>}</span>
       {agent.online&&agent.outdated?<button type="button" className="btn small primary" onClick={openSetup}>Update Cull Sync</button>
         :(!status.configured||!agent.online)&&!status.settling&&<button type="button" className="btn small" onClick={openSetup}>Set up Cull Sync</button>}
@@ -348,7 +349,7 @@ export function Photos(){
 
     {step&&summary&&<div className={`pprogress${summary.stage==='confirm'?' confirm':''}`}>
       <Busy label={step.label} state={step.state}/>
-      {summary.total>0&&<><progress max={summary.total} value={Math.min(summary.done,summary.total)}/><span className="dim">{summary.done.toLocaleString()} of {summary.total.toLocaleString()}</span></>}
+      {summary.total>0&&<><ProgressBar label={step.label} max={summary.total} value={summary.done}/><span className="dim">{summary.done.toLocaleString()} of {summary.total.toLocaleString()}</span></>}
       {summary.message&&<span className="dim">{summary.message}</span>}
       {ACTIVE.includes(summary.state)&&agent&&!agent.online&&agent.lastSeen&&<span className="dim">Cull Sync is not answering, so this waits until the Mac is awake and the helper is running.</span>}
     </div>}

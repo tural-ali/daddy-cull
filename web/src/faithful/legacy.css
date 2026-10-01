@@ -327,8 +327,7 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .taskflag { position: absolute; top: 9px; right: 9px; width: 9px; height: 9px; border-radius: 999px; background: var(--dot); box-shadow: 0 0 0 2px var(--shell); pointer-events: none; }
 .taskhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; padding-top: 0; padding-bottom: 6px; }
 .taskhead .textbtn { margin-right: -4px; }
-.taskitem .meter { display: block; height: 4px; margin: 8px 0 2px; background: var(--bg-4); border-radius: 999px; overflow: hidden; }
-.taskitem .meter > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width 400ms ease; }
+.taskitem .meter { margin: 8px 0 2px; }
 .taskitem.failed .taskstate { color: var(--bad); }
 .taskitem.running .taskstate { color: var(--text); }
 .tasknote { margin: 6px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
@@ -629,8 +628,6 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
 .sideprogress:hover { text-decoration: none; }
 .sideprogresshead { display: flex; align-items: center; gap: 18px; font-size: 14px; }
 .sideprogresshead .icon { color: var(--muted); }
-.sideprogress .meter { display: block; height: 4px; background: var(--bg-4); border-radius: 999px; overflow: hidden; }
-.sideprogress .meter > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
 .sideprogressnote { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sideprogressfoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; }
 /* What the library holds, under the review meter, or pushed to the foot of
@@ -757,20 +754,45 @@ main.wide, main:has(.gal, .rows, .calendar) { max-width: 100%; }
   color: var(--text);
 }
 
-/* A waiting state is a thinking orb and a few words, never a spinner. The small
-   orb gives back 4px above and below, so a line or a button does not grow by a
-   pixel when it appears. The large one stands in for a page or panel that has
-   nothing to show yet. */
-.busy { display: inline-flex; align-items: center; gap: .45em; vertical-align: top; }
-.busy > canvas { flex: none; margin: -4px 0; }
-/* A button is disabled while its own request runs, and at the usual 40% the
-   words saying what it is doing all but disappear. */
+/* Loading belongs to the same family as the opening logo and calendar.
+   The three tiles breathe in turn; every rail shares these dimensions. */
+.busy { display: inline-flex; align-items: center; gap: .5em; vertical-align: top; }
+.busy-mark { flex: none; width: 28px; height: 20px; overflow: visible; }
+.busy-mark .tile { transform-box: fill-box; transform-origin: center; animation: busy-tile 1500ms cubic-bezier(.45, 0, .25, 1) infinite; }
+.busy-mark .t0 { fill: var(--logo-coral); }
+.busy-mark .t1 { fill: var(--logo-amber); animation-delay: 120ms; }
+.busy-mark .t2 { fill: var(--logo-mint); animation-delay: 240ms; }
+@keyframes busy-tile {
+  0%, 65%, 100% { transform: translateY(0); opacity: .65; }
+  32% { transform: translateY(-9px); opacity: 1; }
+}
 .btn:disabled:has(> .busy) { opacity: .75; cursor: progress; }
 .busy.big {
-  display: flex; flex-direction: column; justify-content: center; gap: .75rem;
+  display: flex; flex-direction: column; justify-content: center; gap: .85rem;
   margin: 4.5rem auto; color: var(--muted); font-size: 13.5px; text-align: center;
 }
-.busy.big > canvas { margin: 0; }
+.busy.big .busy-mark { width: 72px; height: 44px; }
+.busy.big > .progress-track { width: 128px; margin-top: .25rem; }
+.progress-track {
+  display: block; height: 6px; flex-shrink: 0;
+  background: var(--bg-4); border-radius: 999px; overflow: hidden;
+}
+.progress-track > .progress-fill {
+  display: block; height: 100%; border-radius: inherit; background: var(--accent);
+  transition: width 360ms cubic-bezier(.16, 1, .3, 1);
+}
+.progress-track.indeterminate > .progress-fill {
+  width: 36%; animation: progress-travel 1500ms cubic-bezier(.45, 0, .25, 1) infinite;
+}
+@keyframes progress-travel {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(390%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .busy-mark .tile, .progress-track.indeterminate > .progress-fill { animation: none; opacity: 1; }
+  .progress-track > .progress-fill { transition: none; }
+  .progress-track.indeterminate > .progress-fill { margin-inline: auto; }
+}
 
 /* One button everywhere, the shape the top bar's actions have: a pill 36
    pixels tall with medium-weight words, 30 for a small one beside a line of
@@ -849,16 +871,8 @@ main.wide, main:has(.gal, .rows, .calendar) { max-width: 100%; }
 /* Named .pbar rather than .bar: the top navigation is already .bar, and a
    second rule on the same class quietly overwrote the header's height and
    background from further down the sheet. */
-.pbar {
-  flex: 1; height: 4px; min-width: 6rem;
-  background: var(--bg-4); border-radius: 999px; overflow: hidden;
-}
-.pbar > span {
-  display: block; height: 100%;
-  background: var(--accent); border-radius: 999px;
-  transition: width 220ms cubic-bezier(.4, 0, .2, 1);
-}
-.pbar.wide { height: 6px; margin: .6rem 0 1.6rem; display: block; }
+.pbar { flex: 1; min-width: 6rem; }
+.pbar.wide { margin: .6rem 0 1.6rem; }
 
 .goalbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: .5rem;
@@ -1385,79 +1399,110 @@ main.selecting .mo.sel:not(:focus-visible) { box-shadow: none; transform: none; 
 .cell > .freshdot { position: absolute; top: -3px; right: -3px; box-shadow: 0 0 0 2px var(--bg); }
 
 /* -------------------------------------------------------------- opening -- */
-/* Loading the app's own address opens it like a phone's home screen. The logo
-   comes up alone in the middle with light passing over it while the year is
-   read. Then the camera dives in through the day tiles, the logo rushing past
-   as the window clears, and every date flies in from in front of the screen,
-   the middle of the year first, to settle in its place. The rest of the page
-   rises in after them. */
+/* One camera move: reveal, light sweep, orbit into the solid mark, pass its
+   edges, then settle the dates from the same vanishing point. */
 .opening {
   position: fixed; inset: 0; z-index: 400;
-  display: grid; place-items: center;
-  background-color: var(--bg);
+  display: grid; place-items: center; overflow: clip;
   pointer-events: none;
 }
-.openingstage { position: relative; display: grid; place-items: center; }
-/* A soft bloom in the tiles' colours behind the logo, as the light catches. */
+.opening::before { content: ""; position: absolute; inset: 0; background: var(--bg); }
+.openingstage {
+  position: relative; width: min(76vw, 620px); aspect-ratio: 2016 / 308;
+  /* One original mark unit: logo width / 2016 * 2.595. */
+  font-size: min(.0978vw, .7981px);
+  perspective: 1000px; perspective-origin: 50% 50%;
+}
+.openingworld { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; }
 .openingstage::before {
-  content: ""; position: absolute; inset: -60% -10%;
-  background:
-    radial-gradient(closest-side at 22% 50%, color-mix(in srgb, var(--logo-coral) 22%, transparent), transparent),
-    radial-gradient(closest-side at 50% 50%, color-mix(in srgb, var(--logo-amber) 14%, transparent), transparent),
-    radial-gradient(closest-side at 78% 50%, color-mix(in srgb, var(--logo-mint) 18%, transparent), transparent);
-  filter: blur(24px);
-  animation: opening-bloom 1.2s cubic-bezier(.2, .8, .2, 1) 150ms both;
+  content: ""; position: absolute; inset: -120% -20%;
+  background: radial-gradient(ellipse, color-mix(in srgb, var(--logo-mint) 10%, transparent), transparent 65%);
+  animation: opening-bloom 1.2s ease-out both;
 }
 .openinglogo {
-  position: relative; display: block;
-  width: min(76vw, 620px); height: auto; aspect-ratio: 2016 / 308;
-  /* The dive aims at the middle of the day tiles, 12.53% across the logo. */
+  position: relative; display: block; width: 100%; height: auto;
   transform-origin: 12.53% 50%;
-  animation: opening-logo 620ms cubic-bezier(.2, .8, .2, 1) both;
+  animation: opening-logo 650ms cubic-bezier(.16, 1, .3, 1) both;
 }
-.opening .shine { transform: translateX(-560px) skewX(-20deg); animation: opening-shine 1.1s cubic-bezier(.4, 0, .3, 1) 300ms infinite both; }
-.opening.dive { animation: opening-clear 750ms cubic-bezier(.5, 0, .7, .4) both; }
-.opening.dive .openingstage::before { animation: opening-fade 300ms ease-in both; }
-.opening.dive .openinglogo { animation: opening-dive 750ms cubic-bezier(.55, 0, .8, .25) both; }
-@keyframes opening-logo { from { opacity: 0; transform: scale(.82); filter: blur(8px); } }
-@keyframes opening-bloom { from { opacity: 0; transform: scale(.6); } }
+.opening .shine {
+  transform: translateX(-560px) skewX(-20deg);
+  animation: opening-shine 1050ms cubic-bezier(.4, 0, .25, 1) 450ms both;
+}
+.openingmark {
+  position: absolute; left: .6944%; top: 3.8961%; width: 184em; height: 104em;
+  visibility: hidden; transform-style: preserve-3d;
+}
+.openingcamera, .openingsolid { position: absolute; inset: 0; transform-style: preserve-3d; }
+.openingface { position: absolute; inset: 0; background: var(--solid); backface-visibility: hidden; }
+.openingface.front { background: linear-gradient(135deg, color-mix(in srgb, var(--solid), white 28%), var(--solid) 48%, color-mix(in srgb, var(--solid), black 12%)); }
+.openingface.back { transform: translateZ(-12em); backface-visibility: visible; }
+.openingedge {
+  position: absolute; top: 0; left: 0; height: 12em; transform-origin: 0 0;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--solid), black 65%), color-mix(in srgb, var(--solid), black var(--edge-light)) 80%, var(--solid));
+}
+.solid0 { --solid: var(--logo-coral); --layer: 38em; }
+.solid1 { --solid: var(--logo-amber); --layer: 0em; }
+.solid2 { --solid: var(--logo-mint); --layer: -38em; }
+.opening.dive::before { animation: opening-clear 1300ms linear both; }
+.opening.dive .openingstage::before { animation: opening-fade 400ms ease-in both; }
+.opening.dive .openinglogo { animation: none; }
+.opening.dive .openingworld { animation: opening-camera 1300ms cubic-bezier(.55, 0, .75, .5) both; }
+.opening.dive .openinglogo .tile { visibility: hidden; }
+.opening.dive .shine { display: none; }
+.opening.dive .openingmark { visibility: visible; }
+.opening.dive .openingcamera { animation: opening-orbit 1300ms ease-in-out both; }
+.opening.dive .openingsolid { animation: opening-separate 1300ms ease-in-out both; }
+@keyframes opening-logo { from { opacity: 0; transform: translateY(8px) scale(.94); } }
+@keyframes opening-bloom { from { opacity: 0; } }
 @keyframes opening-shine {
-  0% { transform: translateX(-560px) skewX(-20deg); }
-  70%, 100% { transform: translateX(2300px) skewX(-20deg); }
+  from { transform: translateX(-560px) skewX(-20deg); }
+  to { transform: translateX(2300px) skewX(-20deg); }
 }
 @keyframes opening-fade { to { opacity: 0; } }
-/* The tiles come to the middle of the window as the camera closes on them,
-   then grow past it and are gone before they fill it, so the camera passes
-   through rather than into a wall of colour. */
-@keyframes opening-dive {
-  0% { transform: none; opacity: 1; }
-  30% { transform: translateX(37.47%) scale(2.4); opacity: 1; }
-  50% { opacity: 1; }
-  80% { opacity: 0; }
-  100% { transform: translateX(37.47%) scale(70); opacity: 0; }
+/* One straight camera push. The wordmark and solid tiles share a plane and
+   travel together until they pass the eye; there is no lateral re-centring. */
+@keyframes opening-camera {
+  from { transform: translateZ(0); }
+  to { transform: translateZ(1120px); }
+}
+@keyframes opening-orbit {
+  0% { transform: rotateX(0) rotateY(0); }
+  45% { transform: rotateX(16deg) rotateY(-32deg); }
+  100% { transform: rotateX(9deg) rotateY(-18deg); }
+}
+@keyframes opening-separate {
+  to { transform: translateZ(var(--layer)); }
 }
 @keyframes opening-clear {
-  0%, 30% { background-color: var(--bg); }
-  100% { background-color: transparent; }
+  0%, 55% { opacity: 1; }
+  100% { opacity: 0; }
 }
-/* Under the logo the year is drawn but unseen, so it is ready to fly in. */
 .yearview.opening-held :is(h1, .ysum, .pbar, .calendar, .legend) { opacity: 0; }
-/* Each date starts close in front of the camera, so the perspective has it
-   large and far out from the middle, and closes in on its place. The grid
-   stops clipping meanwhile, or the dates would appear at its edge. */
-.yearview.opening-arrive .calendar { overflow: visible; perspective: 640px; }
-.yearview.opening-arrive .cmonth { transform-style: preserve-3d; }
-.yearview.opening-arrive :is(.cell:not(.blank), .mlabel) {
-  animation: opening-date 950ms cubic-bezier(.12, .7, .22, 1) calc(140ms + var(--far, 1) * 300ms) both;
+/* Keep the calendar's horizontal scroll container on narrow screens.
+   Perspective lives on the month rows: transforms must not flatten at the
+   calendar's overflow boundary. Radial offsets share the calendar centre. */
+.yearview.opening-arrive .cmonth { perspective: 900px; }
+.panel:has(.yearview.opening-arrive) { overflow: clip; }
+@media (width >= 1000px) {
+  .yearview.opening-arrive .calendar { overflow: visible; }
+}
+.yearview.opening-arrive .cell:not(.blank) {
+  animation: opening-date 1000ms cubic-bezier(.16, 1, .3, 1) calc(1250ms + var(--far, 1) * 220ms) both;
   will-change: transform, opacity;
 }
-.yearview.opening-arrive :is(h1, .ysum, .pbar, .legend) { animation: opening-rise 600ms cubic-bezier(.2, .8, .2, 1) 650ms both; }
+.yearview.opening-arrive :is(h1, .ysum, .pbar, .legend, .mlabel) { animation: opening-rise 700ms cubic-bezier(.16, 1, .3, 1) 1450ms both; }
 @keyframes opening-date {
-  0% { opacity: 0; transform: translateZ(520px); }
-  30% { opacity: 1; }
+  0% { opacity: 0; transform: translate3d(var(--fly-x), var(--fly-y), 480px) rotateX(8deg) scale(1.35); }
+  20% { opacity: 1; }
+  82% { transform: translate3d(0, 0, -8px) rotateX(0) scale(.995); }
   100% { opacity: 1; transform: none; }
 }
-@keyframes opening-rise { from { opacity: 0; transform: translateY(10px); } }
+@keyframes opening-rise { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) {
+  .opening { display: none; }
+  .yearview.opening-held :is(h1, .ysum, .pbar, .calendar, .legend) { opacity: 1; }
+  .yearview.opening-arrive :is(h1, .ysum, .pbar, .legend, .mlabel, .cell:not(.blank)) { animation: none; }
+}
 
 /* ------------------------------------------------------------- completion -- */
 /* The photograph is the largest thing here. The numbers are small, there is no
@@ -1686,17 +1731,6 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 /* A picture turned a quarter keeps its unturned box in the layout, so its
    margins make up the difference and the scroll reaches every edge. */
 .rvstage.zoom :is([data-turn="1"], [data-turn="3"]) { --swing: calc((var(--natural-w, 0px) - var(--natural-h, 0px)) / 2); margin-block: var(--swing); margin-inline: calc(-1 * var(--swing)); }
-.rvstage .rvspin {
-  position: absolute; color: #6c717d; font-size: 13px;
-  display: flex; align-items: center; gap: .5rem;
-}
-.rvstage .rvspin::before {
-  content: ""; width: 13px; height: 13px; border-radius: 50%;
-  border: 2px solid #3a3d45; border-top-color: #8b8f99;
-  animation: rvspin 700ms linear infinite;
-}
-@keyframes rvspin { to { transform: rotate(360deg); } }
-
 /* Compact arrow buttons at the edges. They used to be invisible zones covering
    a fifth of the stage each side, which swallowed the clicks on the dark area
    around a photograph that are meant to close the review. Kept to the vertical
@@ -2053,12 +2087,6 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 }
 .summary .stat span { font-size: 11.5px; color: var(--faint); letter-spacing: .02em; }
 
-.progress {
-  height: 5px; background: var(--bg-4);
-  border-radius: 999px; overflow: hidden; margin: 0 0 .5rem;
-}
-.progress > span { display: block; height: 100%; background: var(--accent); }
-
 .year { margin: 0 0 1.6rem; }
 .year h2 { margin: 0 0 .5rem; font-size: 17px; font-variant-numeric: tabular-nums; }
 .year h2 small { font-weight: 400; font-size: 12px; color: var(--muted); margin-left: .5rem; }
@@ -2164,20 +2192,8 @@ button.danger:not(.btn, .iconbtn) {
   background: color-mix(in oklab, var(--accent) 10%, var(--bg-2));
   font-weight: 600;
 }
-.pprogress progress { flex: 1 1 12rem; max-width: 22rem; height: 6px; accent-color: var(--accent); }
+.pprogress .progress-track { flex: 1 1 12rem; max-width: 22rem; }
 .pprogress .dim { font-variant-numeric: tabular-nums; font-weight: 400; }
-
-/* Until the shared Busy component lands with its own animation, a quiet
-   pulsing dot keeps a waiting label from reading as a frozen page. */
-.pacts .busy, .pprogress .busy { display: inline-flex; align-items: center; gap: .5rem; }
-.pacts .busy::before, .pprogress .busy::before {
-  content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%;
-  background: var(--accent); animation: pbusy 1.2s ease-in-out infinite;
-}
-@keyframes pbusy { 50% { opacity: .25; } }
-@media (prefers-reduced-motion: reduce) {
-  .pacts .busy::before, .pprogress .busy::before { animation: none; }
-}
 
 .psec { margin: 1.6rem 0; }
 .psec > header { display: flex; align-items: baseline; gap: 1rem; }
@@ -2784,19 +2800,35 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
 @media (hover: none) { .pick { opacity: .9; } :is(.rt, .mo):has(.pick)::before { opacity: 1; } }
 @media (width <= 600px) { .rt .dur { font-size: 0; gap: 0; top: 10px; right: 8px; } }
 
-/* The end of a list that loads as it scrolls: nothing while idle, the orb
+/* The end of a list that loads as it scrolls: nothing while idle, the tile loader
    while the next page is on its way, and Try again if it did not come. */
 .more { display: grid; place-items: center; }
 .more:not(:empty) { padding: 24px 0 32px; }
 .more .note { margin: 0; }
 
-/* The panel while the next page is read. Most pages arrive before the orb
+/* The panel while the next page is read. Most pages arrive before the tile loader
    would show, so it waits a moment and then fades in, rather than flashing. */
 .pageload { display: grid; place-items: center; min-height: calc(100vh - var(--head-h) - 6rem); animation: pageload-in .25s ease-out .18s both; }
 .pageload .busy.big { margin: 0; }
 @keyframes pageload-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .pageload { animation: pageload-in 0s .18s both; }
+}
+
+/* Slow navigation retains its context. The small status appears only once
+   a wait is noticeable, and sits inside the viewport even on a long page. */
+.navigationload {
+  position: fixed; z-index: 35; top: calc(var(--head-h) + 16px); left: 50%;
+  transform: translateX(-50%); width: min(320px, calc(100vw - 32px));
+  display: grid; gap: 10px; padding: 12px 16px;
+  color: var(--text); background: var(--bg-2); border: 1px solid var(--line);
+  border-radius: 16px; box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+  font-size: 13px; pointer-events: none;
+  animation: navigation-wait 180ms ease-out 220ms both;
+}
+@keyframes navigation-wait { from { opacity: 0; translate: 0 -4px; } }
+@media (prefers-reduced-motion: reduce) {
+  .navigationload { animation: navigation-wait 0s 220ms both; }
 }
 
 /* Moving between pages. The page left fades as the next is read, and the
@@ -2808,19 +2840,27 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
    grows to fill the panel, and the day's photographs come in after it one by
    one; from a day, the year zooms out onto that day's square. Nothing moves
    once a page is in, so nothing inside is drawn relative to a moving box. */
-.pagestage.leaving { animation: page-leave 140ms cubic-bezier(.4, 0, 1, 1) both; }
+.pagestage.leaving { animation: page-leave 120ms cubic-bezier(.4, 0, 1, 1) both; }
 .pagestage.leaving.zoom { animation: page-zoom-in 360ms cubic-bezier(.5, 0, .75, 0) both; }
-.pagestage.entering { animation: page-enter 340ms cubic-bezier(.2, .8, .2, 1) both; }
+.pagestage.entering { animation: page-enter 440ms cubic-bezier(.16, 1, .3, 1) both; }
 .pagestage.entering.back { animation-name: page-enter-back; }
 .pagestage.entering.zoom { animation: none; }
 .pagestage.entering.zoom .jgrid figure { animation: page-photo 460ms cubic-bezier(.2, .8, .2, 1) calc(60ms + var(--i, 32) * 12ms) both; }
 .pagestage.entering.fromday { animation: page-zoom-out 480ms cubic-bezier(.2, .8, .2, 1) both; }
 /* A zoom stays inside the panel rather than spilling over the sidebar. */
 main:has(> .pagestage:is(.leaving.zoom, .entering.fromday)) { overflow: clip; }
-@keyframes page-leave { to { opacity: 0; } }
-@keyframes page-enter { from { opacity: 0; transform: translateY(10px); } }
-@keyframes page-enter-back { from { opacity: 0; transform: translateY(-10px); } }
-@keyframes page-fade-in { from { opacity: 0; } }
+@keyframes page-leave { to { opacity: .45; } }
+@keyframes page-enter {
+  0% { opacity: .35; transform: translateY(18px) scale(.992); }
+  80% { opacity: 1; transform: translateY(-1px) scale(1); }
+  100% { transform: none; }
+}
+@keyframes page-enter-back {
+  0% { opacity: .35; transform: translateY(-18px) scale(.992); }
+  80% { opacity: 1; transform: translateY(1px) scale(1); }
+  100% { transform: none; }
+}
+@keyframes page-fade-in { from { opacity: .35; } }
 @keyframes page-zoom-in { to { opacity: 0; transform: scale(2.4); } }
 @keyframes page-zoom-out { from { opacity: 0; transform: scale(2.2); } }
 @keyframes page-photo { from { opacity: 0; transform: translateY(14px) scale(.94); } }

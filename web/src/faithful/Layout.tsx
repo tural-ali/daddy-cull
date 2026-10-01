@@ -1,3 +1,4 @@
+import {ProgressBar} from '../ProgressBar';
 import {useCallback,useEffect,useMemo,useRef,useState,type CSSProperties,type FormEvent,type KeyboardEvent as ReactKeyboardEvent,type ReactNode} from 'react';
 import {Icon,addonIcon,type IconName} from '../Icon';
 import {useAddons,type Addon,type AddonSection} from './addonList';
@@ -165,7 +166,7 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
  * which is still the last one while it leaves. */
 const narrowQuery='(max-width: 1000px)';
 
-export function Layout({opening=false,route,shown=route,path,visit,binFiles,reviewed,library,streak,notifications,onNotificationsRead,flash,children}:{opening?:boolean;route:LegacyRoute;shown?:LegacyRoute;path:string;visit:number;binFiles:number;reviewed?:{done:number;total:number};library?:LibraryTotals;streak?:{days:number;today:boolean};notifications?:number;onNotificationsRead?:()=>void;flash?:string;children:ReactNode}){
+export function Layout({opening=false,moving=false,route,shown=route,path,visit,binFiles,reviewed,library,streak,notifications,onNotificationsRead,flash,children}:{opening?:boolean;moving?:boolean;route:LegacyRoute;shown?:LegacyRoute;path:string;visit:number;binFiles:number;reviewed?:{done:number;total:number};library?:LibraryTotals;streak?:{days:number;today:boolean};notifications?:number;onNotificationsRead?:()=>void;flash?:string;children:ReactNode}){
   const [selection,setSelection]=useState<Selection|null>(null);
   const addons=useAddons();
   const sections=useMemo(()=>sidebar(addons),[addons]);
@@ -202,7 +203,7 @@ export function Layout({opening=false,route,shown=route,path,visit,binFiles,revi
   },[streak,opening]);
   useEffect(()=>{if(!bump)return;const timer=setTimeout(()=>setBump(false),900);return()=>clearTimeout(timer)},[bump]);
   return <div className={`shell${rail?' side-hidden':''}`}>
-    {selection?<SelectionBar selection={selection}/>:<header className="gbar">
+    {selection?<SelectionBar selection={moving?{...selection,busy:true}:selection}/>:<header className="gbar">
       <div className="gbarstart">
         <a className="brand" href="/" {...tipProps('Year')}><Logo intro/><LogoMark className="brandmark"/></a>
         {streak&&<div className="streakwrap">
@@ -214,7 +215,7 @@ export function Layout({opening=false,route,shown=route,path,visit,binFiles,revi
       </div>
       <DateSearch key={visit} date={pageDate} filters={pageFilters}/>
       <div className="gbaracts">
-        {pageActions&&<PageActionButtons page={pageActions}/>}
+        {pageActions&&<PageActionButtons page={moving?{...pageActions,actions:pageActions.actions.map(action=>({...action,disabled:true}))}:pageActions}/>}
         {!selection&&<GuideButton route={shown}/>}
       </div>
     </header>}
@@ -234,7 +235,7 @@ export function Layout({opening=false,route,shown=route,path,visit,binFiles,revi
       {reviewed&&reviewed.total>0&&<a className="sideprogress" href="/year" style={{'--share':Math.min(1,share)} as CSSProperties}
         title={rail?`Reviewed ${reviewed.done.toLocaleString()} of ${reviewed.total.toLocaleString()} dates`:'Open the calendar'}>
         <span className="sideprogresshead"><Icon name="task_alt"/><span className="sidelabel">Reviewed</span></span>
-        <span className="meter" role="progressbar" aria-label="Calendar dates reviewed" aria-valuemin={0} aria-valuemax={reviewed.total} aria-valuenow={reviewed.done}><span style={{width:`${Math.min(100,share*100)}%`}}/></span>
+        <ProgressBar className="meter" label="Calendar dates reviewed" value={reviewed.done} max={reviewed.total}/>
         <span className="sideprogressfoot"><span className="sideprogressnote">{reviewed.done.toLocaleString()} of {reviewed.total.toLocaleString()} dates</span></span>
       </a>}
       {library&&addons?.find(addon=>addon.id==='library-totals')?.on!==false&&library.photos.files+library.videos.files>0&&<SideLibrary library={library} rail={rail}/>}
