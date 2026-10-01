@@ -14,8 +14,8 @@ import {shortLabel,usePageDate} from './DatePicker';
 import {dayName} from './goto';
 import {requestID,sendDecisions} from './decisions';
 import {historyKey,undoKeys,useHistory,type HistoryEntry,type Snapshot} from './history';
-import {CopyGroup} from './CopyGroup';
-import {fileFormat,setPaired,stackFormats,stackOf,stacksBehind} from './stacks';
+import {CopiesHeading,CopyGroup} from './CopyGroup';
+import {fileFormat,setPaired,stackFormats,stackLead,stackOf,stackOrder,stacksBehind} from './stacks';
 import {usePageFilters,type SortOption} from './SearchFilters';
 import {Snacks} from './Snacks';
 import {flyToBin} from './binFlight';
@@ -36,7 +36,7 @@ export type SidecarFacts={files:number;people:number;keywords:number;rating:numb
 export type DuplicateMember=Asset&{day:string;located:boolean;converted?:boolean;retagged?:boolean;sidecars?:SidecarFacts};
 // bytes: byte-identical on a full hash. footage: videos whose pictures and
 // sound are identical, whose metadata differs.
-export type DuplicateGroup={hash:string;proof:'bytes'|'footage';size:number;reclaimable:number;members:DuplicateMember[]};
+export type DuplicateGroup={hash:string;proof:'bytes'|'footage'|'exposure';size:number;reclaimable:number;members:DuplicateMember[]};
 
 /** Whether a key went to a field being typed in, which the page's single
  * letter shortcuts must leave alone. */
@@ -227,9 +227,12 @@ export function Today({initial}:{initial:TodayData}){
       binChanged();
       flyToBin(group.members.filter(asset=>asset.id!==keeperID).map(asset=>document.querySelector(`.xgroup tr[data-asset="${asset.id}"]`)));
       group.members.forEach((asset,index)=>patchAsset(asset.id,{status:asset.id===keeperID?'keep':'cull',favourite:asset.id===keeperID&&asset.favourite,revision:results[index].revision}));
-      history.record({kind:'decisions',label:`resolved ${group.members.length} copies`,before:group.members.map(snapshot),after:changes.map(change=>({id:change.assetId,status:change.status as Status,favourite:change.favourite}))});
+      history.record({kind:'decisions',label:group.proof==='exposure'?`kept one format of ${fileName(group.members[0])}`:`resolved ${group.members.length} copies`,before:group.members.map(snapshot),after:changes.map(change=>({id:change.assetId,status:change.status as Status,favourite:change.favourite}))});
 	  setDuplicateGroups(current=>current.filter(item=>item.hash!==group.hash||item.size!==group.size));
-      setMessage(`${group.members.length-1} verified ${group.members.length===2?'copy':'copies'} marked for the Bin. No original has moved.`);
+      const kept=group.members.find(asset=>asset.id===keeperID);
+      setMessage(group.proof==='exposure'&&kept
+        ?`Marked ${group.members.filter(asset=>asset!==kept).map(fileName).join(' and ')} for the Bin. ${fileName(kept)} stays. No original has moved.`
+        :`${group.members.length-1} verified ${group.members.length===2?'copy':'copies'} marked for the Bin. No original has moved.`);
     }catch(error){setMessage((error as Error).message)}finally{setSaving(false)}
   }
   // A confirmed choice that a later one on the same file has overtaken only
@@ -314,11 +317,14 @@ export function Today({initial}:{initial:TodayData}){
       setMessage((error as Error).message);
     }));
   }
-  /** Shows a RAW and its exports as separate photos, or as one again. */
+  /** Shows the files of a stack as separate photos, or as one again: the
+   * partners taken out of the stack built on lead, its RAW or its HEIC, or
+   * put back. */
   async function pairing(raw:number,partners:number[],paired:boolean,remember=true){
     const files=[raw,...partners];
-    const face=assets.find(asset=>asset.id===partners[0]);
-    const name=face?fileName(face):'the photo';
+    const stack=stackOrder(files.map(id=>assets.find(asset=>asset.id===id)).filter(asset=>asset!==undefined));
+    const name=stack?fileName(stack[0]):'the photo';
+    const formats=stack?stack.slice(1).map(fileFormat).join(' and '):'other files';
     try{
       await Promise.all(partners.map(partner=>setPaired(raw,partner,paired)));
       // The RAW keeps the exports not named, as the server does, so taking
@@ -328,8 +334,8 @@ export function Today({initial}:{initial:TodayData}){
       if(members.size===1)members.clear();
       members.forEach(id=>patchAsset(id,{stack:[...members].filter(other=>other!==id)}));
       files.filter(id=>!members.has(id)).forEach(id=>patchAsset(id,{stack:undefined}));
-      if(remember)history.record({kind:'pair',label:paired?`stacked ${name} with its RAW`:`separated ${name} from its RAW`,raw,partners,before:!paired,after:paired});
-      if(remember)setMessage(paired?`${name} and its RAW are one photo again.`:`${name} and its RAW are separate photos now.`);
+      if(remember)history.record({kind:'pair',label:paired?`stacked ${name} with its ${formats}`:`separated ${name} from its ${formats}`,raw,partners,before:!paired,after:paired});
+      if(remember)setMessage(paired?`${name} and its ${formats} are one photo again.`:`${name} and its ${formats} are separate photos now.`);
       return true;
     }catch(error){setMessage((error as Error).message);return false}
   }
@@ -338,7 +344,7 @@ export function Today({initial}:{initial:TodayData}){
    * it, since a stack is a RAW and what was exported from it. */
   async function removeFormat(face:Asset,file:Asset,remember=true){
     const files=stackOf(face,behind);
-    const raw=files.find(item=>item.kind==='raw');
+    const raw=stackLead(files);
     if(!raw||!files.includes(file))return false;
     const partners=file===raw?files.filter(item=>item!==raw).map(item=>item.id):[file.id];
     if(!await pairing(raw.id,partners,false,false))return false;
@@ -515,7 +521,9 @@ export function Today({initial}:{initial:TodayData}){
       if(!response.ok)throw new Error('Could not load verified duplicates.');
       const groups:DuplicateGroup[]=await response.json();
       setDuplicateGroups(groups);
-      setKeepers(Object.fromEntries(groups.map(group=>[group.hash,pick(group.members,'clean').id])));
+      // One shot saved twice keeps the HEIC the camera wrote, as the server
+      // lists it first; the Bin gives it the JPEG's sidecars.
+      setKeepers(Object.fromEntries(groups.map(group=>[group.hash,group.proof==='exposure'?group.members[0].id:pick(group.members,'clean').id])));
     }).catch(error=>{if(!controller.signal.aborted)setMessage((error as Error).message)});
     return()=>controller.abort();
   },[initial.md]);
@@ -589,9 +597,7 @@ export function Today({initial}:{initial:TodayData}){
     {queue.error&&<p className="note warn" role="alert">{queue.error} <button className="btn small" onClick={queue.retry}>Retry the same save</button></p>}
     {years.length===0&&<p className="note">Nothing in the archive is filed under {initial.label}, so there is nothing to review.</p>}
     {duplicateGroups.length>0&&<section className="xdupes">
-      {duplicateGroups.every(group=>group.proof!=='footage')
-        ?<h2>Same file, different folders <small>{duplicateGroups.length} {duplicateGroups.length===1?'group':'groups'} · byte-identical, verified by full hash</small></h2>
-        :<h2>Copies <small>{duplicateGroups.length} {duplicateGroups.length===1?'group':'groups'} · verified by a full hash of each file, or of each video's footage</small></h2>}
+      <CopiesHeading groups={duplicateGroups}/>
       {duplicateGroups.map(group=><CopyGroup key={`${group.hash}:${group.size}`} group={group} keeperID={keepers[group.hash]??group.members[0].id} saving={saving} onChoose={id=>setKeepers(current=>({...current,[group.hash]:id}))} onResolve={()=>void resolveGroup(group)}/>)}
     </section>}
     {shownYears.filter(year=>filters.size===0||year.assets.some(asset=>shownIDs.has(asset.id))).map(year=>{
@@ -618,6 +624,6 @@ export function Today({initial}:{initial:TodayData}){
     </Snacks>}
     {cheer&&<Celebration tally={cheer} nextHref={`/on/${initial.next}`} nextLabel={calendarLabel(initial.next)} onClose={()=>setCheer(null)}/>}
     {viewing!==null&&<Viewer assets={walked} initialID={viewing} onClose={photo.close} onMove={moved} onSave={save} onPatch={patchAsset} onRecord={history.record} onTurn={(asset,quarters)=>turn([asset],quarters)}
-      behindOf={asset=>behind.get(asset.id)} onRemoveFormat={(still,file)=>void removeFormat(still,file)} onSeparate={(still,files)=>{const raw=files.find(file=>file.kind==='raw');if(raw)void pairing(raw.id,[still,...files].filter(file=>file!==raw).map(file=>file.id),false)}}/>}
+      behindOf={asset=>behind.get(asset.id)} onRemoveFormat={(still,file)=>void removeFormat(still,file)} onSeparate={(still,files)=>{const lead=stackLead([still,...files]);if(lead)void pairing(lead.id,[still,...files].filter(file=>file!==lead).map(file=>file.id),false)}}/>}
   </>;
 }

@@ -5,9 +5,9 @@ const assert=require('node:assert/strict');
 // merge that keeps exactly the ticked copy.
 const member=(id,path,day,kind='image',size=2516582)=>({id,path,day,capturedAt:Date.parse(day)/1000,kind,size,status:'unreviewed',favourite:false,revision:0,source:'archive',relatedCount:0,alternativeCount:0});
 const report={candidates:6,hashed:6,settled:true,unproven:[],groups:[
-  {hash:'aaaa',size:2516582,reclaimable:2516582,members:[member(91,'/archive/2025/2025-08/2025-08-05/IMG_1000.HEIC','2025-08-05'),member(92,'/archive/2025/2025-08/2025-08-05/IMG_1000 (1).HEIC','2025-08-05')]},
-  {hash:'bbbb',size:3565158,reclaimable:3565158,members:[member(93,'/archive/2026/2026-07/2026-07-26/IMG_2000.HEIC','2026-07-26','image',3565158),member(94,'/archive/2026/2026-09/2026-09-05/IMG_2000.HEIC','2026-09-05','image',3565158)]},
-  {hash:'cccc',size:1363148,reclaimable:1363148,members:[member(95,'/archive/2024/2024-01/2024-01-02/CLIP.MOV','2024-01-02','video',1363148),member(96,'/archive/2024/2024-01/2024-01-02/.culled/CLIP.MOV','2024-01-02','video',1363148)]},
+  {hash:'aaaa',proof:'bytes',size:2516582,reclaimable:2516582,members:[member(91,'/archive/2025/2025-08/2025-08-05/IMG_1000.HEIC','2025-08-05'),member(92,'/archive/2025/2025-08/2025-08-05/IMG_1000 (1).HEIC','2025-08-05')]},
+  {hash:'bbbb',proof:'bytes',size:3565158,reclaimable:3565158,members:[member(93,'/archive/2026/2026-07/2026-07-26/IMG_2000.HEIC','2026-07-26','image',3565158),member(94,'/archive/2026/2026-09/2026-09-05/IMG_2000.HEIC','2026-09-05','image',3565158)]},
+  {hash:'cccc',proof:'bytes',size:1363148,reclaimable:1363148,members:[member(95,'/archive/2024/2024-01/2024-01-02/CLIP.MOV','2024-01-02','video',1363148),member(96,'/archive/2024/2024-01/2024-01-02/.culled/CLIP.MOV','2024-01-02','video',1363148)]},
 ]};
 const svg=(w,h,fill)=>`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="${fill}"/></svg>`;
 (async()=>{
@@ -21,7 +21,7 @@ const svg=(w,h,fill)=>`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" heig
   await page.route(/\/api\/media\/9\d\/preview/,route=>{const id=Number(/media\/(\d+)/.exec(route.request().url())[1]);previews.push(id);return route.fulfill({contentType:'image/svg+xml',body:id===93?svg(600,800,'#6b8f71'):svg(800,533,'#4d6f94')})});
   await page.route('**/api/decisions/batch',route=>{posted=JSON.parse(route.request().postData());return route.fulfill({json:posted.map(change=>({...change,revision:1}))})});
   // A set of one, which the server should never send, is not offered.
-  report.groups.push({hash:'dddd',size:1000,reclaimable:0,members:[member(97,'/archive/2026/2026-07/2026-07-25/A7401914-2.ARW','2026-07-25','raw')]});
+  report.groups.push({hash:'dddd',proof:'bytes',size:1000,reclaimable:0,members:[member(97,'/archive/2026/2026-07/2026-07-25/A7401914-2.ARW','2026-07-25','raw')]});
   await page.goto((process.env.APP_URL||'http://127.0.0.1:8850').replace(/\/$/,'')+'/duplicates');
   await page.locator('.dupegroup').first().waitFor();
   await page.waitForFunction(()=>[...document.querySelectorAll('.dupefig')].filter(f=>f.querySelector('img')).every(f=>f.style.aspectRatio));

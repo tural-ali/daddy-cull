@@ -93,16 +93,19 @@ export function pick(members:DuplicateMember[],rule:Rule):DuplicateMember{
 }
 
 /** What a copy lacks that another copy of it has, as short flags: its place,
- * and the first thing its sidecars record less of than the richest copy's. */
-export function flagsOf(member:DuplicateMember,members:DuplicateMember[]):string[]{
+ * and the first thing its sidecars record less of than the richest copy's.
+ * shot is true for one shot saved twice, whose kept file gets the other's
+ * sidecars, as a camera's own file gets an export's. */
+export function flagsOf(member:DuplicateMember,members:DuplicateMember[],shot=false):string[]{
   const flags:string[]=[];
   if(member.converted)flags.push('HandBrake');
   else if(member.retagged&&members.some(other=>!other.retagged))flags.push('metadata rewritten');
   if(!member.located&&members.some(other=>other.located))flags.push('no location');
   const tags=lore(members);
   const richest=[...members].sort(tags)[0];
-  // The camera's own file, kept, gets the sidecars of an export the Bin takes.
-  const inherits=!member.retagged&&richest.retagged&&!member.sidecars?.files;
+  // The camera's own file, kept, gets the sidecars of an export the Bin takes,
+  // and the HEIC of one shot gets its JPEG's.
+  const inherits=(shot||!member.retagged&&richest.retagged)&&!member.sidecars?.files;
   if(member.sidecars&&richest.sidecars&&tags(member,richest)>0&&!inherits){
     const missing=LORE.find(({of})=>of(richest.sidecars!)>of(member.sidecars!))!;
     flags.push(missing.of(member.sidecars)===0||!missing.fewer?missing.none:missing.fewer);

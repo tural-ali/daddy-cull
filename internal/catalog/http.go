@@ -521,7 +521,7 @@ func (s *Store) Routes(m *api.Mux) {
 	m.HandleFunc(api.Route{
 		Method: "GET", Path: "/api/duplicates", Tag: "Duplicates", Needs: api.Read,
 		Summary: "List groups of identical files",
-		Doc:     "Groups of files proven to be copies: byte-identical on a full hash of each, or videos whose pictures and sound are identical and played the same way, with only their metadata different.",
+		Doc:     "Groups of files proven to be copies: byte-identical on a full hash of each, or videos whose pictures and sound are identical and played the same way, with only their metadata different. For a day, as md, a HEIC and a JPEG of one name that record the same moment and camera are listed too, after the copies, as one exposure saved twice.",
 		Params: []api.Param{
 			api.Query("md", "string", "Only groups with a file on this month and day, as MM-DD."),
 			api.Query("limit", "integer", "How many groups to return, 1 to 1000. 100 by default."),
@@ -535,7 +535,14 @@ func (s *Store) Routes(m *api.Mux) {
 		if !ok {
 			return
 		}
-		groups, err := s.ExactDuplicates(ctx, r.URL.Query().Get("md"), limit)
+		md := r.URL.Query().Get("md")
+		groups, err := s.ExactDuplicates(ctx, md, limit)
+		if err == nil && md != "" && len(groups) < limit {
+			var exposures []DuplicateGroup
+			if exposures, err = s.sameExposures(ctx, md); err == nil {
+				groups = append(groups, exposures[:min(len(exposures), limit-len(groups))]...)
+			}
+		}
 		if err != nil {
 			failFor(w, err, "md should be MM-DD and limit 1 to 1000.")
 			return

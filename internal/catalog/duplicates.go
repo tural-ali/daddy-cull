@@ -32,22 +32,24 @@ type DuplicateMember struct {
 // DuplicateGroup is a set of files proven to be copies of one another. A
 // group already settled, with every copy but one removed, is not listed.
 type DuplicateGroup struct {
-	// Hash names the group: the full hash the files share, or for copies
-	// proven by their footage, "footage:" and the footage hash.
+	// Hash names the group: the full hash the files share, for copies
+	// proven by their footage, "footage:" and the footage hash, or for one
+	// exposure, "exposure:" and the HEIC's id.
 	Hash string `json:"hash"`
 	// Proof is how the copies are known to be copies: "bytes" when every file
-	// is byte-identical on a full hash, or "footage" when they are videos
+	// is byte-identical on a full hash, "footage" when they are videos
 	// holding the same pictures and sound, played the same way, whose
-	// metadata differs.
+	// metadata differs, or "exposure" for a HEIC and a JPEG of one name that
+	// record the same moment, to a fraction of a second, and camera.
 	Proof string `json:"proof"`
 	// Size is each file's size, in bytes, or for copies proven by their
-	// footage, the largest file's.
+	// footage or exposure, the largest file's.
 	Size int64 `json:"size"`
 	// Reclaimable is the space keeping one copy would free, in bytes, if the
-	// largest is the one kept.
+	// largest is the one kept, or for one exposure, the HEIC.
 	Reclaimable int64 `json:"reclaimable"`
 	// Members are the copies still in the archive, ordered by day and then
-	// path.
+	// path, or for one exposure, the HEIC and then the JPEG.
 	Members []DuplicateMember `json:"members"`
 }
 

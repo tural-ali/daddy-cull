@@ -161,13 +161,13 @@ function RawSettings({initial}:{initial:boolean}){
     }catch(reason){setError((reason as Error).message)}finally{setBusy(false)}
   }
   return <>
-    <h2 id="raw">RAW and exports</h2>
-    <div className="segmented" role="radiogroup" aria-label="RAW and exports">
+    <h2 id="raw">Photos saved as several files</h2>
+    <div className="segmented" role="radiogroup" aria-label="Photos saved as several files">
       <label className={together?'on':undefined}><input type="radio" name="raw-stacks" value="together" checked={together} disabled={busy} onChange={()=>void choose(true)}/>One photo</label>
       <label className={together?undefined:'on'}><input type="radio" name="raw-stacks" value="separate" checked={!together} disabled={busy} onChange={()=>void choose(false)}/>Separate files</label>
     </div>
     {error&&<p className="note warn" role="alert">{error}</p>}
-    <p className="hint">{together?'A RAW and the JPEG, HEIC or TIFF files beside it with the same name show as one photo, badged with each format. Keeping, removing and favouriting take every file, so a RAW is never kept without its exports or removed without them.':'A RAW and each file exported from it show as separate photos, and each is kept or removed on its own.'}</p>
+    <p className="hint">{together?'A RAW and the JPEG, HEIC or TIFF files beside it with the same name show as one photo, badged with each format, and so do a HEIC and a JPEG of the same name that record the same moment and camera. Keeping, removing and favouriting take every file, so a RAW is never kept without its exports or removed without them. The library counts each as one photo.':'A RAW and each file exported from it, and a HEIC and its JPEG, show as separate photos, and each is kept or removed on its own.'}</p>
   </>;
 }
 

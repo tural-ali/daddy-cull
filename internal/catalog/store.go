@@ -163,6 +163,16 @@ CREATE TABLE IF NOT EXISTS raw_pair_splits (
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
  PRIMARY KEY(raw_id,partner_id)
 );
+-- A HEIC and a JPEG of one name in one folder, with no RAW beside them, and
+-- rebuilt with raw_stacks. They are one photo only once exposures proves them
+-- one exposure; see format_pairs.go. A split pair is in raw_pair_splits, the
+-- HEIC as raw_id.
+CREATE TABLE IF NOT EXISTS format_pairs (jpeg_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE, heic_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE);
+CREATE INDEX IF NOT EXISTS format_pairs_heic ON format_pairs(heic_id);
+-- When and with what a photo was taken, as its metadata records it, read at
+-- size_bytes for the files of format_pairs. An empty value is one the file
+-- does not record, or a file the reader could not make sense of.
+CREATE TABLE IF NOT EXISTS exposures (asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE, size_bytes INTEGER NOT NULL, taken TEXT NOT NULL, subsec TEXT NOT NULL, model TEXT NOT NULL);
 -- The video of each Live Photo, found by name in .live-photos/ or beside the
 -- photo, and rebuilt from the folders at every scan; see live_photos.go.
 -- clip_id is the video's own catalogue entry, when it has one.

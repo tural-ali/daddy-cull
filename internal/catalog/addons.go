@@ -117,7 +117,9 @@ type Stats struct {
 // LibraryStats counts the files in the library: the archive, less what is in
 // the Bin, deleted from it or missing from disk.
 type LibraryStats struct {
-	// Photos counts photos, RAW files included.
+	// Photos counts photos, RAW files included. A stack the day page shows as
+	// one photo, a RAW and its exports or a HEIC and a JPEG of one exposure,
+	// is one of Files, and every file of it is in Bytes.
 	Photos MediaTotal `json:"photos"`
 	// Videos counts videos.
 	Videos MediaTotal `json:"videos"`
@@ -135,10 +137,7 @@ type MediaTotal struct {
 func (s *Store) LibraryStats(ctx context.Context) (LibraryStats, error) {
 	var st LibraryStats
 	rows, err := s.read.QueryContext(ctx, `SELECT a.kind='video',count(*),coalesce(sum(a.size_bytes),0) FROM assets a
-		WHERE a.source_id='archive'
-		  AND NOT EXISTS(SELECT 1 FROM missing_assets m WHERE m.asset_id=a.id)
-		  AND a.id NOT IN (`+liveClipAssets+`)
-		  AND NOT EXISTS(SELECT 1 FROM file_state f WHERE f.asset_id=a.id AND f.state!='restored')
+		WHERE `+inLibrary+`
 		GROUP BY a.kind='video'`)
 	if err != nil {
 		return st, err
@@ -156,8 +155,25 @@ func (s *Store) LibraryStats(ctx context.Context) (LibraryStats, error) {
 			st.Photos = total
 		}
 	}
-	return st, rows.Err()
+	if err = rows.Err(); err != nil {
+		return st, err
+	}
+	// A stack is one photo while the day page shows it as one.
+	if together, err := s.RawTogether(ctx); err != nil || !together {
+		return st, err
+	}
+	stacked, err := s.stackedPartners(ctx, inLibrary)
+	st.Photos.Files -= stacked
+	return st, err
 }
+
+// inLibrary is true of a file in the library: in the archive, on disk, and
+// neither in the Bin nor deleted from it. A Live Photo's video is part of its
+// photo.
+const inLibrary = `a.source_id='archive'
+	AND NOT EXISTS(SELECT 1 FROM missing_assets m WHERE m.asset_id=a.id)
+	AND a.id NOT IN (` + liveClipAssets + `)
+	AND NOT EXISTS(SELECT 1 FROM file_state f WHERE f.asset_id=a.id AND f.state!='restored')`
 
 // Stats counts the library, with the day of review ending at midnight in loc.
 func (s *Store) Stats(ctx context.Context, loc *time.Location) (Stats, error) {

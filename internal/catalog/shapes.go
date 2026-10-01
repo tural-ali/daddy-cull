@@ -34,8 +34,9 @@ const shapeTimeout = 30 * time.Second
 // catalogue starts a pass sooner.
 const shapeEvery = 15 * time.Minute
 
-// KeepShapes fills in shapes now and then again every so often, until ctx
-// ends. It is quiet when there is nothing new.
+// KeepShapes fills in shapes, and the exposures that prove a HEIC and a JPEG
+// one photo, now and then again every so often, until ctx ends. It is quiet
+// when there is nothing new.
 func (s *Store) KeepShapes(ctx context.Context, roots MediaRoots) {
 	if roots.RawTool == "" {
 		log.Print("photo shapes off: no metadata reader")
@@ -49,6 +50,14 @@ func (s *Store) KeepShapes(ctx context.Context, roots MediaRoots) {
 			log.Printf("photo shapes: %v", err)
 		} else if read > 0 {
 			log.Printf("photo shapes: read %d in %s", read, time.Since(started).Round(time.Second))
+		}
+		// The same reader proves which HEIC and JPEG are one exposure.
+		started = time.Now()
+		read, err = s.FillExposures(ctx, roots)
+		if err != nil && ctx.Err() == nil {
+			log.Printf("photo exposures: %v", err)
+		} else if read > 0 {
+			log.Printf("photo exposures: read %d in %s", read, time.Since(started).Round(time.Second))
 		}
 		if !s.waitForChange(ctx, seen, shapeEvery) {
 			return
@@ -72,6 +81,20 @@ func (s *Store) FillShapes(ctx context.Context, roots MediaRoots) (int, error) {
 	if err != nil || len(targets) == 0 {
 		return 0, err
 	}
+	return readEach(ctx, targets, func(target shapeTarget) (bool, error) {
+		width, height, ok := readShape(ctx, roots, target)
+		if !ok {
+			return false, nil
+		}
+		_, err := s.write.ExecContext(ctx, `INSERT INTO media_shapes(asset_id,size_bytes,width,height) VALUES(?,?,?,?)
+			ON CONFLICT(asset_id) DO UPDATE SET size_bytes=excluded.size_bytes,width=excluded.width,height=excluded.height`, target.id, target.size, width, height)
+		return err == nil, err
+	})
+}
+
+// readEach hands targets to read a few at a time, and returns how many read
+// recorded, and the first error it met.
+func readEach(ctx context.Context, targets []shapeTarget, read func(shapeTarget) (bool, error)) (int, error) {
 	work := make(chan shapeTarget)
 	var mu sync.Mutex
 	var recorded int
@@ -82,16 +105,11 @@ func (s *Store) FillShapes(ctx context.Context, roots MediaRoots) (int, error) {
 		go func() {
 			defer wg.Done()
 			for target := range work {
-				width, height, ok := readShape(ctx, roots, target)
-				if !ok {
-					continue
-				}
-				_, err := s.write.ExecContext(ctx, `INSERT INTO media_shapes(asset_id,size_bytes,width,height) VALUES(?,?,?,?)
-					ON CONFLICT(asset_id) DO UPDATE SET size_bytes=excluded.size_bytes,width=excluded.width,height=excluded.height`, target.id, target.size, width, height)
+				done, err := read(target)
 				mu.Lock()
 				if err != nil && firstErr == nil {
 					firstErr = err
-				} else if err == nil {
+				} else if done {
 					recorded++
 				}
 				mu.Unlock()
@@ -139,39 +157,52 @@ func (s *Store) shapeTargets(ctx context.Context) ([]shapeTarget, error) {
 	return targets, rows.Err()
 }
 
-// readShape opens one file through its read-only mount, as the media handler
-// does, and asks the metadata reader for its size and turn. ok is false when
-// the file could not be reached, which says nothing about the file itself.
+// readShape reads one file's size and turn. ok is false when the file could
+// not be reached, which says nothing about the file itself.
 func readShape(ctx context.Context, roots MediaRoots, target shapeTarget) (width, height int, ok bool) {
+	// -fast stops before the end of the file, which is where a phone video's
+	// index sometimes sits, but after the track headers that hold its size.
+	out, ok := readMetadata(ctx, roots, target, "-ImageWidth", "-ImageHeight", "-Orientation", "-Rotation")
+	if !ok {
+		return 0, 0, false
+	}
+	width, height = parseShape(out)
+	return width, height, true
+}
+
+// readMetadata opens one file through its read-only mount, as the media
+// handler does, and asks the metadata reader for tags, as JSON, from the
+// headers alone. ok is false when the file could not be reached or the read
+// was cut short, which says nothing about the file; out is nil when the
+// reader could not make sense of it.
+func readMetadata(ctx context.Context, roots MediaRoots, target shapeTarget, tags ...string) (out []byte, ok bool) {
 	mountRoot, inMount, known := roots.root(target.relative, target.id)
 	if !known {
-		return 0, 0, false
+		return nil, false
 	}
 	root, err := os.OpenRoot(mountRoot)
 	if err != nil {
-		return 0, 0, false
+		return nil, false
 	}
 	defer root.Close()
 	file, err := root.Open(inMount)
 	if err != nil {
-		return 0, 0, false
+		return nil, false
 	}
 	defer file.Close()
 	if info, err := file.Stat(); err != nil || !info.Mode().IsRegular() {
-		return 0, 0, false
+		return nil, false
 	}
 	ctx, cancel := context.WithTimeout(ctx, shapeTimeout)
 	defer cancel()
-	// -fast stops before the end of the file, which is where a phone video's
-	// index sometimes sits, but after the track headers that hold its size.
-	var out []byte
+	args := append([]string{"-j", "-n", "-fast"}, tags...)
 	for attempt := 0; ; attempt++ {
-		command := exec.CommandContext(ctx, roots.RawTool, "-j", "-n", "-fast", "-ImageWidth", "-ImageHeight", "-Orientation", "-Rotation", "/dev/fd/3")
+		command := exec.CommandContext(ctx, roots.RawTool, append(args, "/dev/fd/3")...)
 		command.ExtraFiles = []*os.File{file}
 		out, err = command.Output()
 		if ctx.Err() != nil {
 			// Cut short, not unreadable: try again on a later pass.
-			return 0, 0, false
+			return nil, false
 		}
 		// The reader now and then fails to find the file handed to it, which
 		// is open here and says nothing about the file: it is asked again,
@@ -183,15 +214,14 @@ func readShape(ctx context.Context, roots MediaRoots, target shapeTarget) (width
 					continue
 				}
 			}
-			return 0, 0, false
+			return nil, false
 		}
 		break
 	}
 	if err != nil {
-		return 0, 0, true
+		return nil, true
 	}
-	width, height = parseShape(out)
-	return width, height, true
+	return out, true
 }
 
 // parseShape reads the metadata reader's answer: the stored size, swapped

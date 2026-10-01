@@ -17,7 +17,8 @@ import (
 
 // A copy kept over another loses nothing the other's sidecars record. When
 // the copy going to the Bin has sidecars and the one kept has none, as an
-// export from Photos beside the camera's own file does, the sidecars are
+// export from Photos beside the camera's own file does, or a JPEG beside the
+// HEIC of the same shot, the sidecars are
 // copied beside the kept file, under its name, before the Bin takes them. The
 // copy going keeps its own, so restoring it brings them back as they were,
 // and the ones written stay with the kept file.
@@ -43,8 +44,9 @@ type SidecarCopy struct {
 var recordSidecars = map[string]bool{"xmp": true, "json": true, "xml": true}
 
 // keptCopy is the one copy kept of a file: the only file in the archive
-// proven the same, byte for byte or by its footage, that is not marked for
-// the Bin. It is empty when there is no such copy, or more than one.
+// proven the same, byte for byte, by its footage, or as the other format of
+// one exposure, that is not marked for the Bin. It is empty when there is no
+// such copy, or more than one.
 func (b *BinEngine) keptCopy(ctx context.Context, id int64) (string, error) {
 	var size int64
 	var full, footage sql.NullString
@@ -54,19 +56,18 @@ func (b *BinEngine) keptCopy(ctx context.Context, id int64) (string, error) {
 	 WHERE a.id=?`, id).Scan(&size, &full, &footage); e != nil {
 		return "", e
 	}
-	if full.String == "" && footage.String == "" {
-		return "", nil
-	}
 	rows, e := b.s.read.QueryContext(ctx, `WITH copies AS (
 		SELECT e.asset_id FROM asset_evidence e JOIN assets a ON a.id=e.asset_id WHERE ?!='' AND e.full_hash=? AND a.size_bytes=?
 		UNION
 		SELECT f.asset_id FROM asset_footage f JOIN assets a ON a.id=f.asset_id AND a.size_bytes=f.size_bytes WHERE ?!='' AND f.footage_hash=?
+		UNION
+		SELECT CASE WHEN p.heic_id=? THEN p.jpeg_id ELSE p.heic_id END FROM (`+provenFormatPairs+`) p WHERE ? IN (p.heic_id,p.jpeg_id)
 	)
 	SELECT a.relative_path FROM copies c JOIN assets a ON a.id=c.asset_id LEFT JOIN decisions d ON d.asset_id=a.id
 	 WHERE a.id!=? AND COALESCE(d.status,'unreviewed')!='cull' AND a.source_id='archive'
 	   AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored')
 	   AND NOT EXISTS(SELECT 1 FROM missing_assets m WHERE m.asset_id=a.id)
-	 LIMIT 2`, full.String, full.String, size, footage.String, footage.String, id)
+	 LIMIT 2`, full.String, full.String, size, footage.String, footage.String, id, id, id)
 	if e != nil {
 		return "", e
 	}

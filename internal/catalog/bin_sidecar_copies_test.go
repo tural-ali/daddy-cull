@@ -104,3 +104,69 @@ func TestBinCopiesSidecarsToTheCopyKept(t *testing.T) {
 		t.Fatalf("copies planned again: %+v %v", p, e)
 	}
 }
+
+// The JPEG of a shot kept as HEIC goes to the Bin with its sidecars, and the
+// HEIC gets a copy of each, as one copy of a video gets another's.
+func TestBinCopiesSidecarsToTheHEICKept(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	root := t.TempDir()
+	day := filepath.Join(root, "2022/2022-10/2022-10-02")
+	if e := os.MkdirAll(day, 0o700); e != nil {
+		t.Fatal(e)
+	}
+	files := map[string]string{
+		"IMG_9101.HEIC":    "heic picture",
+		"IMG_9101.JPG":     "jpeg picture",
+		"IMG_9101.JPG.xmp": "<x:xmpmeta>a person</x:xmpmeta>",
+		"IMG_9102.HEIC":    "another heic",
+		"IMG_9102.JPG":     "another jpeg",
+		"IMG_9102.JPG.xmp": "<x:xmpmeta>someone</x:xmpmeta>",
+	}
+	for name, body := range files {
+		if e := os.WriteFile(filepath.Join(day, name), []byte(body), 0o600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	for _, row := range []struct {
+		id     int64
+		name   string
+		status string
+		subsec string
+	}{{1, "IMG_9101.HEIC", "keep", "123"}, {2, "IMG_9101.JPG", "cull", "123"}, {3, "IMG_9102.HEIC", "keep", "123"}, {4, "IMG_9102.JPG", "cull", "456"}} {
+		if _, e := s.write.Exec("INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes,source_id) VALUES(?,?,1,'image',?,'archive')", row.id, "/archive/2022/2022-10/2022-10-02/"+row.name, len(files[row.name])); e != nil {
+			t.Fatal(e)
+		}
+		if _, e := s.write.Exec("INSERT INTO decisions VALUES(?,?,0,1)", row.id, row.status); e != nil {
+			t.Fatal(e)
+		}
+		if _, e := s.write.Exec("INSERT INTO exposures VALUES(?,?,'2022:10:02 10:11:12',?,'iPhone 12')", row.id, len(files[row.name]), row.subsec); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if e := s.IndexRelated(ctx); e != nil {
+		t.Fatal(e)
+	}
+	b, e := NewBinEngine(s, root)
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() { b.Close() })
+	p, e := b.Preview(ctx, []int64{2, 4})
+	if e != nil {
+		t.Fatal(e)
+	}
+	// IMG_9102's two files are different moments, so they are not copies.
+	if len(p.Copies) != 1 || p.Copies[0].Keeper != "2022/2022-10/2022-10-02/IMG_9101.HEIC" || p.Copies[0].To != "2022/2022-10/2022-10-02/IMG_9101.HEIC.xmp" {
+		t.Fatalf("copies: %+v", p.Copies)
+	}
+	if _, e = b.Run(ctx, p.ID, "quarantine", ""); e != nil {
+		t.Fatal(e)
+	}
+	if got, e := os.ReadFile(filepath.Join(day, "IMG_9101.HEIC.xmp")); e != nil || string(got) != files["IMG_9101.JPG.xmp"] {
+		t.Fatalf("IMG_9101.HEIC.xmp: %q, %v", got, e)
+	}
+	if _, e := os.Stat(filepath.Join(day, "IMG_9102.HEIC.xmp")); !os.IsNotExist(e) {
+		t.Fatalf("IMG_9102.HEIC.xmp: %v", e)
+	}
+}
