@@ -956,8 +956,9 @@ func (h *PhotosHub) Thumb(jobID string, n int) ([]byte, bool) {
 // PhotosAgentVersion is the Cull Sync this server was built with, the
 // CFBundleShortVersionString in mac/CullSync/Info.plist. A helper reporting an
 // older one still works, but misses what was added since, such as saying why
-// a file was not found, so the page offers to update it.
-const PhotosAgentVersion = "1.1"
+// a file was not found or matching a day off when the same number recurs
+// years away, so the page offers to update it.
+const PhotosAgentVersion = "1.2"
 
 // PhotosAgentView is how the page describes the helper.
 type PhotosAgentView struct {

@@ -90,7 +90,7 @@ do {
     expect(index.match(stem: "IMG_2866", ext: "mov", day: "2023-08-26") == .missing, "an ambiguous name is never matched a day off")
 }
 
-// The one-day tolerance, only for a name that is unique in the whole library.
+// The one-day tolerance, only for a name with one bearer within a day.
 do {
     let unique = asset("U", "IMG_1001.HEIC", "2023-08-25T23:30:00Z")
     let index = LibraryIndex([unique, asset("N", "IMG_0001.HEIC", nil)], zone: utc)
@@ -104,6 +104,15 @@ do {
     let crowded = LibraryIndex([unique, asset("X", "IMG_1001.HEIC", nil)], zone: utc)
     expect(crowded.match(stem: "IMG_1001", ext: "heic", day: "2023-08-26") == .missing, "undated twin makes the name ambiguous")
     expect(crowded.match(stem: "IMG_1001", ext: "heic", day: "2023-08-25") == .exact([unique]), "the exact day still matches")
+
+    // The same number years away is another photograph, so it leaves the
+    // name unambiguous a day off, as IMG_4167.MOV was on 31 December 2023 with
+    // another in 2026. Two within the day either side are still ambiguous.
+    let reused = LibraryIndex([unique, asset("Y", "IMG_1001.HEIC", "2026-06-13T14:10:54Z")], zone: utc)
+    expect(reused.match(stem: "IMG_1001", ext: "heic", day: "2023-08-26") == .near(unique), "a bearer years away does not make the name ambiguous")
+    expect(reused.match(stem: "IMG_1001", ext: "heic", day: "2026-06-14") == .near(asset("Y", "IMG_1001.HEIC", "2026-06-13T14:10:54Z")), "each is near on its own day")
+    let close = LibraryIndex([unique, asset("Z", "IMG_1001.HEIC", "2023-08-27T08:00:00Z")], zone: utc)
+    expect(close.match(stem: "IMG_1001", ext: "heic", day: "2023-08-26") == .missing, "two bearers within a day either side are ambiguous")
 }
 
 // The day is read in the Mac's time zone, as Photos shows it.
@@ -140,7 +149,7 @@ do {
     }
     expect(why("IMG_8190", "mov", "2025-04-08") == .sharedAlbum, "a clip in a Shared Album says so")
     expect(why("IMG_0412", "mov", "2024-12-25") == .otherDay, "the name on another day says so")
-    expect(why("IMG_0500", "jpg", "2021-05-06") == .otherDay, "an ambiguous name a day off is another day")
+    expect(why("IMG_0500", "jpg", "2021-05-08") == .otherDay, "a reused name days off is another day")
     expect(why("IMG_8157", "mov", "2025-04-08") == nil, "a clip nothing here holds has no reason")
     expect(why("IMG_8156", "mov", "2025-04-08") == nil, "a raw of the same number is not the clip")
     expect(why("IMG_8190", "mov", "2025-04-20") == nil, "a Shared Album clip on another day is not it")

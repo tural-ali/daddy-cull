@@ -80,7 +80,8 @@ enum MatchResult: Equatable {
     /// Name, type and day all agree. Every such asset is included: Photos can
     /// hold one photograph twice, and removing one copy would leave the other.
     case exact([LibraryAsset])
-    /// The one bearer of this name and type in the whole library, a day off.
+    /// The one bearer of this name and type dated within a day either side,
+    /// a day off.
     case near(LibraryAsset)
     case missing
 }
@@ -123,18 +124,23 @@ struct LibraryIndex: Sendable {
     /// already lower-case, exactly as the server matched its own side.
     ///
     /// Name, type and day must all agree. The one concession is a day either
-    /// side, and only when the name and type together have exactly one bearer in
-    /// the whole library: Photos stores a capture time and the archive stores
-    /// the day folder it was filed under, and those can land on different sides
-    /// of midnight. An unambiguous name cannot be the wrong photograph; an
-    /// ambiguous one is reported as not found rather than picked between.
+    /// side, and only when exactly one bearer of the name and type is dated
+    /// within it: Photos stores a capture time and the archive stores the day
+    /// folder it was filed under, and those can land on different sides of
+    /// midnight. Camera numbers come round again only after thousands of
+    /// pictures, so a bearer years away is another photograph and does not make
+    /// the name ambiguous; two within the window do, and are reported as not
+    /// found rather than picked between. An undated bearer could be from any
+    /// day, so it always counts as one within it.
     func match(stem: String, ext: String, day: String) -> MatchResult {
         if let hits = byKey[Self.key(stem, ext, day)], !hits.isEmpty {
             return hits.count <= Self.maxAssetsPerEntry ? .exact(hits) : .missing
         }
-        let loose = byName[Self.key(stem, ext)] ?? []
-        if loose.count == 1, let created = loose[0].created, Day.withinADay(created, of: day, in: zone) {
-            return .near(loose[0])
+        let nearby = (byName[Self.key(stem, ext)] ?? []).filter { asset in
+            asset.created.map { Day.withinADay($0, of: day, in: zone) } ?? true
+        }
+        if nearby.count == 1, nearby[0].created != nil {
+            return .near(nearby[0])
         }
         return .missing
     }
