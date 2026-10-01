@@ -60,7 +60,17 @@ type movie struct {
 	playback string
 	// located is true when the file records where it was taken.
 	located bool
+	// converted is true when HandBrake wrote the file: its pictures were
+	// encoded again from another file, the original.
+	converted bool
+	// retagged is true when the file carries an XMP packet, which a camera
+	// never writes into a movie: a tool such as ExifTool, or an export that
+	// uses it, rewrote what the file records after it was taken.
+	retagged bool
 }
+
+// xmpUUID opens the top-level atom an MP4 keeps its XMP packet in.
+var xmpUUID = []byte{0xbe, 0x7a, 0xcf, 0xcb, 0x97, 0xa9, 0x42, 0xe8, 0x9c, 0x71, 0x99, 0x94, 0x91, 0xe3, 0xaf, 0xac}
 
 // readMovie reads a QuickTime or MP4 file's layout and header. It fails for
 // any other file, and for a movie it cannot compare: one whose media data is
@@ -115,6 +125,14 @@ func readMovie(file io.ReaderAt, size int64) (movie, error) {
 			}
 		case "moof", "mfra":
 			return found, errNotMovie
+		case "uuid":
+			var id [16]byte
+			if length-start >= 16 {
+				if _, err := file.ReadAt(id[:], position+start); err != nil {
+					return found, err
+				}
+				found.retagged = found.retagged || bytes.Equal(id[:], xmpUUID)
+			}
 		}
 		position += length
 	}
@@ -196,8 +214,11 @@ func (m *movie) readHeader(header []byte) error {
 				record(path+"/chunks", offsets)
 			case kind == "udta" && path == "":
 				m.located = m.located || hasAtom(inner, "\xa9xyz")
+				m.retagged = m.retagged || hasAtom(inner, "XMP_")
+				m.converted = m.converted || handBrake(inner)
 			case kind == "meta" && path == "":
 				m.located = m.located || bytes.Contains(inner, []byte("com.apple.quicktime.location.ISO6709"))
+				m.converted = m.converted || handBrake(inner)
 			}
 		}
 		return nil
@@ -249,6 +270,13 @@ func hasAtom(body []byte, want string) bool {
 		body = rest
 	}
 	return false
+}
+
+// handBrake reports whether metadata names HandBrake as the file's encoder,
+// in the ©too atom QuickTime and MP4 keep it in, directly or in a list.
+func handBrake(body []byte) bool {
+	at := bytes.Index(body, []byte("\xa9too"))
+	return at >= 0 && bytes.Contains(body[at:min(len(body), at+64)], []byte("HandBrake"))
 }
 
 // withoutDates drops the creation and modification times from a movie, track
@@ -328,11 +356,12 @@ func (s *Store) FillFootage(ctx context.Context, roots MediaRoots) (read, hashed
 func (s *Store) readHeaders(ctx context.Context, roots MediaRoots) (int, error) {
 	targets, err := s.footageTargets(ctx, `SELECT a.id,a.relative_path,a.size_bytes FROM assets a
 	  LEFT JOIN asset_footage f ON f.asset_id=a.id
+	  LEFT JOIN asset_writer wr ON wr.asset_id=a.id
 	 WHERE a.kind='video' AND a.size_bytes>0
 	   AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored')
 	   AND NOT EXISTS(SELECT 1 FROM missing_assets m WHERE m.asset_id=a.id)
 	   AND a.id NOT IN (`+liveClipAssets+`)
-	   AND (f.asset_id IS NULL OR f.size_bytes!=a.size_bytes)
+	   AND (f.asset_id IS NULL OR f.size_bytes!=a.size_bytes OR wr.asset_id IS NULL OR wr.size_bytes!=a.size_bytes)
 	 ORDER BY a.id
 	 LIMIT ?`, headerBatch)
 	if err != nil {
@@ -360,9 +389,17 @@ func (s *Store) readHeaders(ctx context.Context, roots MediaRoots) (int, error) 
 		if found.playback != "" {
 			playback = found.playback
 		}
+		// A file read again as it was, at the same size and time with the
+		// same header, keeps the footage hash it has.
 		if _, err = s.write.ExecContext(ctx, `INSERT INTO asset_footage(asset_id,size_bytes,mtime,media_bytes,playback_hash,footage_hash,located,read_at) VALUES(?,?,?,?,?,NULL,?,?)
-			ON CONFLICT(asset_id) DO UPDATE SET size_bytes=excluded.size_bytes,mtime=excluded.mtime,media_bytes=excluded.media_bytes,playback_hash=excluded.playback_hash,footage_hash=NULL,located=excluded.located,read_at=excluded.read_at`,
+			ON CONFLICT(asset_id) DO UPDATE SET footage_hash=CASE WHEN asset_footage.size_bytes=excluded.size_bytes AND asset_footage.mtime=excluded.mtime AND asset_footage.media_bytes=excluded.media_bytes AND asset_footage.playback_hash IS excluded.playback_hash THEN asset_footage.footage_hash END,
+			  size_bytes=excluded.size_bytes,mtime=excluded.mtime,media_bytes=excluded.media_bytes,playback_hash=excluded.playback_hash,located=excluded.located,read_at=excluded.read_at`,
 			target.id, target.size, mtime, found.mediaBytes, playback, found.located, time.Now().UTC().Format(time.RFC3339)); err != nil {
+			return read, err
+		}
+		if _, err = s.write.ExecContext(ctx, `INSERT INTO asset_writer(asset_id,size_bytes,converted,retagged) VALUES(?,?,?,?)
+			ON CONFLICT(asset_id) DO UPDATE SET size_bytes=excluded.size_bytes,converted=excluded.converted,retagged=excluded.retagged`,
+			target.id, target.size, found.converted, found.retagged); err != nil {
 			return read, err
 		}
 		read++

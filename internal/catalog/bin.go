@@ -96,6 +96,10 @@ type BinPlan struct {
 	// another file and so left in the archive, or a file found gone during a
 	// resumed deletion. It is an empty list when there are none.
 	Warnings []string `json:"warnings"`
+	// Copies are sidecars the plan writes beside the copy kept of a file it
+	// moves, before moving them, as bin_sidecar_copies.go explains. It is
+	// left out when there are none.
+	Copies []SidecarCopy `json:"copies,omitempty"`
 	// Error says why the last step failed. It is cleared when a step
 	// finishes, and left out when there is none.
 	Error string `json:"error,omitempty"`
@@ -323,6 +327,12 @@ func (b *BinEngine) load(id string) (*BinPlan, error) {
 			return nil, ErrInvalid
 		}
 	}
+	for _, c := range p.Copies {
+		if !safeRelative(c.To) || !safeRelative(c.Keeper) || path.Dir(c.To) != path.Dir(c.Keeper) ||
+			!slices.ContainsFunc(p.Files, func(f BinFile) bool { return f.Original == c.From && f.Sidecar && !f.Live }) {
+			return nil, ErrInvalid
+		}
+	}
 	return &p, nil
 }
 
@@ -386,6 +396,15 @@ func (b *BinEngine) Preview(ctx context.Context, ids []int64) (*BinPlan, error) 
 			}
 			fp.Sidecar = i > 0
 			p.Files = append(p.Files, fp)
+		}
+		copies, e := b.sidecarCopies(ctx, a.ID, files[1:])
+		if e != nil {
+			return nil, e
+		}
+		for _, copy := range copies {
+			if !slices.ContainsFunc(p.Copies, func(planned SidecarCopy) bool { return planned.To == copy.To }) {
+				p.Copies = append(p.Copies, copy)
+			}
 		}
 		clips, warnings, e := b.liveClips(ctx, rel, ids, "")
 		if e != nil {
@@ -934,6 +953,9 @@ func (b *BinEngine) Run(ctx context.Context, id, action, confirmation string) (r
 			}
 		}
 		if e = b.receipt(p); e != nil {
+			return p, e
+		}
+		if e = b.writeCopies(ctx, p); e != nil {
 			return p, e
 		}
 

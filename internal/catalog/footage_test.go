@@ -20,6 +20,9 @@ type fakeMovie struct {
 	xyz        bool // location in udta, as older iPhones write it
 	keys       bool // location in the metadata keys, as newer ones do
 	title      string
+	encoder    string // ©too, as HandBrake writes it in udta's item list
+	xmp        bool   // an XMP packet in udta, as ExifTool writes one into a QuickTime file
+	xmpUUID    bool   // an XMP packet in a top-level uuid atom, as ExifTool writes one into an MP4; header last only
 }
 
 func atom(kind string, parts ...[]byte) []byte {
@@ -61,11 +64,17 @@ func (f fakeMovie) bytes() []byte {
 				atom("hdlr", be32(0, 0), []byte("vide"), make([]byte, 12), []byte(f.title)),
 				atom("minf", stbl)))
 		parts := [][]byte{atom("mvhd", be32(0, f.created, f.created, 600, 1000), make([]byte, 80)), trak}
+		udta := [][]byte{atom("\xa9nam", []byte(f.title))}
 		if f.xyz {
-			parts = append(parts, atom("udta", atom("\xa9xyz", []byte("+51.5007-000.1246/"))))
-		} else {
-			parts = append(parts, atom("udta", atom("\xa9nam", []byte(f.title))))
+			udta = [][]byte{atom("\xa9xyz", []byte("+51.5007-000.1246/"))}
 		}
+		if f.encoder != "" {
+			udta = append(udta, atom("meta", be32(0), atom("ilst", atom("\xa9too", atom("data", be32(1, 0), []byte(f.encoder))))))
+		}
+		if f.xmp {
+			udta = append(udta, atom("XMP_", []byte(`<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Image::ExifTool 13.55"/>`)))
+		}
+		parts = append(parts, atom("udta", udta...))
 		if f.keys {
 			parts = append(parts, atom("meta", be32(0), atom("keys", be32(0, 1), atom("mdta", []byte("com.apple.quicktime.location.ISO6709")))))
 		}
@@ -73,8 +82,12 @@ func (f fakeMovie) bytes() []byte {
 	}
 	mdat := atom("mdat", f.media)
 	if f.headerLast {
-		start := uint32(len(ftyp) + 8)
-		return bytes.Join([][]byte{ftyp, mdat, header(start)}, nil)
+		var packet []byte
+		if f.xmpUUID {
+			packet = atom("uuid", xmpUUID, []byte(`<x:xmpmeta xmlns:x="adobe:ns:meta/"/>`))
+		}
+		start := uint32(len(ftyp) + len(packet) + 8)
+		return bytes.Join([][]byte{ftyp, packet, mdat, header(start)}, nil)
 	}
 	size := len(header(0))
 	start := uint32(len(ftyp) + size + 8)
@@ -174,7 +187,7 @@ func TestFootageCopiesAreGrouped(t *testing.T) {
 		hash string
 	}{
 		{1, "IMG_2208.MOV", original, "video", "aa"},
-		{2, "IMG_2208 (2).MOV", fakeMovie{media: media, created: 200}.bytes(), "video", ""},
+		{2, "IMG_2208 (2).MOV", fakeMovie{media: media, created: 200, xmp: true}.bytes(), "video", ""},
 		{3, "Copy of IMG_2208.MOV", original, "video", "aa"},
 		{4, "IMG_2209.MOV", fakeMovie{media: other, created: 100, headerLast: true}.bytes(), "video", ""},
 		{5, "IMG_2210.MOV", fakeMovie{media: media, created: 100, headerLast: true, trimmed: true}.bytes(), "video", ""},
@@ -214,6 +227,14 @@ func TestFootageCopiesAreGrouped(t *testing.T) {
 	if read, hashed, err = s.FillFootage(ctx, roots); err != nil || read != 0 || hashed != 0 {
 		t.Fatalf("a second pass read %d and hashed %d, %v", read, hashed, err)
 	}
+	// A catalogue from before who wrote each file was read has every header
+	// read again for it, and keeps the footage hashes it has.
+	if _, err = s.write.ExecContext(ctx, "DELETE FROM asset_writer"); err != nil {
+		t.Fatal(err)
+	}
+	if read, hashed, err = s.FillFootage(ctx, roots); err != nil || read != 6 || hashed != 0 {
+		t.Fatalf("reading who wrote them read %d and hashed %d, %v", read, hashed, err)
+	}
 	groups, err := s.ExactDuplicates(ctx, "09-30", 100)
 	if err != nil {
 		t.Fatal(err)
@@ -226,7 +247,8 @@ func TestFootageCopiesAreGrouped(t *testing.T) {
 	for _, member := range group.Members {
 		ids = append(ids, member.ID)
 	}
-	if group.Proof != "footage" || len(ids) != 3 || ids[0] != 3 || ids[1] != 2 || ids[2] != 1 || group.Members[1].Located || !group.Members[2].Located {
+	if group.Proof != "footage" || len(ids) != 3 || ids[0] != 3 || ids[1] != 2 || ids[2] != 1 || group.Members[1].Located || !group.Members[2].Located ||
+		!group.Members[1].Retagged || group.Members[2].Retagged || group.Members[2].Converted {
 		t.Fatalf("group: %+v", group)
 	}
 	largest := int64(max(len(original), len(files[1].body)))
@@ -250,5 +272,33 @@ func TestFootageCopiesAreGrouped(t *testing.T) {
 	}
 	if read, _, err = s.FillFootage(ctx, roots); err != nil || read != 1 {
 		t.Fatalf("the replaced file was read %d times, %v", read, err)
+	}
+}
+
+// A copy HandBrake encoded says so in its encoder tag, and one whose metadata
+// a tool rewrote carries an XMP packet, in either place ExifTool writes it.
+// The camera's own file has neither, and neither changes the footage.
+func TestFootageReadsWhoWroteTheFile(t *testing.T) {
+	media := bytes.Repeat([]byte("frame of video "), 64)
+	camera, sum := readFake(t, fakeMovie{media: media, headerLast: true, keys: true}.bytes())
+	if camera.converted || camera.retagged {
+		t.Fatalf("the camera's file read as %+v", camera)
+	}
+	for name, copy := range map[string]fakeMovie{
+		"HandBrake":            {media: media, headerLast: true, encoder: "HandBrake 1.8.0 2024052000"},
+		"ExifTool in udta":     {media: media, headerLast: true, keys: true, xmp: true},
+		"ExifTool in uuid":     {media: media, headerLast: true, xmpUUID: true},
+		"another encoder only": {media: media, headerLast: true, encoder: "Lavf60.16.100"},
+	} {
+		found, other := readFake(t, copy.bytes())
+		if other != sum {
+			t.Errorf("%s: not the same footage", name)
+		}
+		if want := copy.encoder != "" && bytes.HasPrefix([]byte(copy.encoder), []byte("HandBrake")); found.converted != want {
+			t.Errorf("%s: converted %v, want %v", name, found.converted, want)
+		}
+		if want := copy.xmp || copy.xmpUUID; found.retagged != want {
+			t.Errorf("%s: retagged %v, want %v", name, found.retagged, want)
+		}
 	}
 }

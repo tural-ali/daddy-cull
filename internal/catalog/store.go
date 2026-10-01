@@ -223,6 +223,16 @@ CREATE TABLE IF NOT EXISTS asset_footage (
 );
 CREATE INDEX IF NOT EXISTS asset_footage_playback ON asset_footage(media_bytes,playback_hash) WHERE playback_hash IS NOT NULL;
 CREATE INDEX IF NOT EXISTS asset_footage_hash ON asset_footage(footage_hash) WHERE footage_hash IS NOT NULL;
+-- Who last wrote a video, as its header says: converted when HandBrake
+-- encoded it from another file, retagged when it carries an XMP packet, which
+-- only a tool rewriting its metadata puts there. Read with the footage, and
+-- kept apart from it so a catalogue stays readable by a version without it.
+CREATE TABLE IF NOT EXISTS asset_writer (
+ asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
+ size_bytes INTEGER NOT NULL,
+ converted INTEGER NOT NULL CHECK(converted IN (0,1)),
+ retagged INTEGER NOT NULL CHECK(retagged IN (0,1))
+);
 CREATE TABLE IF NOT EXISTS legacy_culled (
  legacy_id INTEGER PRIMARY KEY,
  batch TEXT NOT NULL,

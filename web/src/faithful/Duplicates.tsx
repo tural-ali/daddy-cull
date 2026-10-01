@@ -69,17 +69,26 @@ function lore(members:DuplicateMember[]){
   };
 }
 
-/** The copy to keep by a rule. A copy that records where it was taken comes
- * before one that does not, and then the one whose sidecars record more,
- * whatever the rule: keeping the other would lose the place, or the tags. */
+/** Which of two copies is nearer the camera's own file: negative when a is.
+ * One HandBrake encoded from another comes last, and then one whose metadata
+ * a tool rewrote, as an export from Photos with its tags does. */
+function origin(a:DuplicateMember,b:DuplicateMember){
+  return Number(!!a.converted)-Number(!!b.converted)||Number(!!a.retagged)-Number(!!b.retagged);
+}
+
+/** The copy to keep by a rule. The camera's own file comes first, whatever
+ * the rule; the Bin copies the sidecars of a copy it takes beside the one
+ * kept, when that has none, so its tags stay. Then a copy that records where
+ * it was taken comes before one that does not, and then the one whose
+ * sidecars record more: keeping the other would lose the place, or the tags. */
 export function pick(members:DuplicateMember[],rule:Rule):DuplicateMember{
   const ranked=[...members];
   const place=(a:DuplicateMember,b:DuplicateMember)=>Number(b.located)-Number(a.located);
   const tags=lore(members);
   const plain=(a:DuplicateMember,b:DuplicateMember)=>noise(a.path,a.size)-noise(b.path,b.size);
-  if(rule==='oldest')ranked.sort((a,b)=>place(a,b)||tags(a,b)||a.capturedAt-b.capturedAt||plain(a,b));
-  else if(rule==='newest')ranked.sort((a,b)=>place(a,b)||tags(a,b)||b.capturedAt-a.capturedAt||plain(a,b));
-  else ranked.sort((a,b)=>place(a,b)||tags(a,b)||plain(a,b)||a.path.localeCompare(b.path));
+  if(rule==='oldest')ranked.sort((a,b)=>origin(a,b)||place(a,b)||tags(a,b)||a.capturedAt-b.capturedAt||plain(a,b));
+  else if(rule==='newest')ranked.sort((a,b)=>origin(a,b)||place(a,b)||tags(a,b)||b.capturedAt-a.capturedAt||plain(a,b));
+  else ranked.sort((a,b)=>origin(a,b)||place(a,b)||tags(a,b)||plain(a,b)||a.path.localeCompare(b.path));
   return ranked[0];
 }
 
@@ -87,10 +96,14 @@ export function pick(members:DuplicateMember[],rule:Rule):DuplicateMember{
  * and the first thing its sidecars record less of than the richest copy's. */
 export function flagsOf(member:DuplicateMember,members:DuplicateMember[]):string[]{
   const flags:string[]=[];
+  if(member.converted)flags.push('HandBrake');
+  else if(member.retagged&&members.some(other=>!other.retagged))flags.push('metadata rewritten');
   if(!member.located&&members.some(other=>other.located))flags.push('no location');
   const tags=lore(members);
   const richest=[...members].sort(tags)[0];
-  if(member.sidecars&&richest.sidecars&&tags(member,richest)>0){
+  // The camera's own file, kept, gets the sidecars of an export the Bin takes.
+  const inherits=!member.retagged&&richest.retagged&&!member.sidecars?.files;
+  if(member.sidecars&&richest.sidecars&&tags(member,richest)>0&&!inherits){
     const missing=LORE.find(({of})=>of(richest.sidecars!)>of(member.sidecars!))!;
     flags.push(missing.of(member.sidecars)===0||!missing.fewer?missing.none:missing.fewer);
   }
@@ -107,6 +120,18 @@ function recorded(facts:SidecarFacts){
 
 function why(keeper:DuplicateMember,members:DuplicateMember[],rule:Rule){
   const others=members.filter(member=>member.id!==keeper.id);
+  const one=others.length===1;
+  // Who among the other copies, as the reason names them.
+  const whom=(count:number)=>one?'the other copy':count===1?'another copy':'other copies';
+  const converted=others.filter(member=>member.converted).length;
+  if(!keeper.converted&&converted)
+    return `${whom(converted)} ${converted===1?'was':'were'} encoded again by HandBrake, and this one was not`;
+  const rewritten=others.filter(member=>member.retagged);
+  if(!keeper.retagged&&rewritten.length){
+    const tagged=rewritten.some(member=>member.sidecars?.files)&&!keeper.sidecars?.files;
+    const owner=rewritten.length===1?'its':'their';
+    return `${whom(rewritten.length)} had ${owner} metadata rewritten, as an export does, and this is the camera's own file${tagged?`; the Bin copies ${owner} sidecars beside it`:''}`;
+  }
   if(keeper.located&&others.some(member=>!member.located))
     return others.length===1?'it records where it was taken and the other copy does not':'it records where it was taken and other copies do not';
   const tags=lore(members);

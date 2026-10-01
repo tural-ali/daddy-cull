@@ -15,6 +15,13 @@ type DuplicateMember struct {
 	// Located is true when a video records where it was taken. It is only
 	// read for videos compared by their footage, and is false for the rest.
 	Located bool `json:"located"`
+	// Converted is true when HandBrake encoded the video from another file.
+	// It is only read for videos, and is false for the rest.
+	Converted bool `json:"converted"`
+	// Retagged is true when a tool rewrote what the video records after it
+	// was taken, as an export from Photos with its metadata does. It is only
+	// read for videos, and is false for the rest.
+	Retagged bool `json:"retagged"`
 	// Sidecars is what the copy's own sidecars record, the ones that go to the
 	// Bin with it. It is left out when they could not be read in time, or
 	// there is no archive mount to read them from, which is not the same as a
@@ -112,7 +119,8 @@ func (s *Store) copyGroups(ctx context.Context, limit int, touches func(Duplicat
 		 GROUP BY f.footage_hash HAVING count(*)>1
 	)
 	SELECT a.id,a.relative_path,a.captured_at,a.kind,a.size_bytes,COALESCE(d.status,'unreviewed'),COALESCE(d.favourite,0),COALESCE(d.revision,0),a.source_id,(SELECT count(*) FROM assets alt WHERE alt.anchor_id=a.id),`+relatedCount+`,
-	       ad.day,CASE WHEN bk.hash IS NULL THEN '' ELSE bk.hash END,CASE WHEN fk.hash IS NULL THEN '' ELSE fk.hash END,COALESCE(f.located,0)
+	       ad.day,CASE WHEN bk.hash IS NULL THEN '' ELSE bk.hash END,CASE WHEN fk.hash IS NULL THEN '' ELSE fk.hash END,COALESCE(f.located,0),
+	       COALESCE(wr.converted,0),COALESCE(wr.retagged,0)
 	  FROM live l
 	  JOIN assets a ON a.id=l.id
 	  JOIN asset_days ad ON ad.asset_id=a.id
@@ -121,6 +129,7 @@ func (s *Store) copyGroups(ctx context.Context, limit int, touches func(Duplicat
 	  LEFT JOIN byte_keys bk ON bk.hash=e.full_hash AND bk.size=a.size_bytes
 	  LEFT JOIN asset_footage f ON f.asset_id=a.id AND f.size_bytes=a.size_bytes
 	  LEFT JOIN footage_keys fk ON fk.hash=f.footage_hash
+	  LEFT JOIN asset_writer wr ON wr.asset_id=a.id AND wr.size_bytes=a.size_bytes
 	 WHERE bk.hash IS NOT NULL OR fk.hash IS NOT NULL
 	 ORDER BY a.relative_path,ad.day`)
 	if err != nil {
@@ -162,7 +171,7 @@ func (s *Store) copyGroups(ctx context.Context, limit int, touches func(Duplicat
 	for rows.Next() {
 		var file copyFile
 		var member = &file.member
-		if err = rows.Scan(&member.Asset.ID, &member.Asset.Path, &member.Asset.CapturedAt, &member.Asset.Kind, &member.Asset.Size, &member.Asset.Status, &member.Asset.Favourite, &member.Asset.Revision, &member.Asset.Source, &member.Asset.AlternativeCount, &member.Asset.RelatedCount, &member.Day, &file.bytes, &file.footage, &member.Located); err != nil {
+		if err = rows.Scan(&member.Asset.ID, &member.Asset.Path, &member.Asset.CapturedAt, &member.Asset.Kind, &member.Asset.Size, &member.Asset.Status, &member.Asset.Favourite, &member.Asset.Revision, &member.Asset.Source, &member.Asset.AlternativeCount, &member.Asset.RelatedCount, &member.Day, &file.bytes, &file.footage, &member.Located, &member.Converted, &member.Retagged); err != nil {
 			return nil, err
 		}
 		// A file filed under two days is one copy, shown under its first.
