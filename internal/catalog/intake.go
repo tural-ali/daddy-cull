@@ -73,9 +73,19 @@ type IntakeStatus struct {
 	Problem string `json:"problem,omitempty"`
 }
 
-// CaptureDater reads when each file was taken, by absolute path. A file it
-// has no date for is simply left out of the answer.
-type CaptureDater func(ctx context.Context, files []string) (map[string]time.Time, error)
+// Capture is what a photo or video says about itself.
+type Capture struct {
+	// Taken is when it was taken, as the clock where it was taken showed it,
+	// or zero when the file does not say.
+	Taken time.Time
+	// LiveID is the identifier Apple gives both halves of a Live Photo, the
+	// still and its video, in upper case; empty for anything else.
+	LiveID string
+}
+
+// CaptureReader reads what each file says about itself, by absolute path. A
+// file that says nothing is simply left out of the answer.
+type CaptureReader func(ctx context.Context, files []string) (map[string]Capture, error)
 
 // IntakeWriter files what arrives in the Import folder. It runs in the
 // private writer, the only process that may change the library.
@@ -85,7 +95,7 @@ type IntakeWriter struct {
 	mirrors     []*intakeSource
 	archive     *os.Root
 	archivePath string
-	date        CaptureDater
+	capture     CaptureReader
 	link        func(oldname, newname string) error
 	settle      time.Duration
 	wake        chan struct{}
@@ -113,7 +123,7 @@ func NewIntakeWriter(s *Store, inboxRoot, archiveRoot, dateTool string) (*Intake
 		return nil, fmt.Errorf("the import folder and the library must not be inside each other")
 	}
 	w := &IntakeWriter{s: s, inbox: &intakeSource{root: inbox, path: inboxPath}, archive: archive, archivePath: archivePath,
-		date: exiftoolDater(dateTool), link: os.Link, settle: intakeSettle, wake: make(chan struct{}, 1)}
+		capture: exiftoolCapture(dateTool), link: os.Link, settle: intakeSettle, wake: make(chan struct{}, 1)}
 	return w, nil
 }
 
@@ -215,11 +225,16 @@ type intakeFile struct {
 	mod   time.Time
 	ext   string
 	still bool
+	// live is the file's Live Photo identifier, and of, for a Live Photo's
+	// video, the still in its group it is the video of.
+	live string
+	of   string
 }
 
 type intakeGroup struct {
 	dir   string
 	stem  string
+	loose string
 	files []intakeFile
 }
 
@@ -237,6 +252,27 @@ func intakeStem(name string) string {
 	}
 	// icloudpd names a Live Photo's video after its still with _HEVC added.
 	return strings.TrimSuffix(stem, "_hevc")
+}
+
+// looseTail is what may follow the name the two halves of a Live Photo share:
+// the sizes icloudpd adds to tell photos of one name apart, a copy's " (2)",
+// and the video's _HEVC. FullSizeRender-1198557.HEIC and
+// FullSizeRender_HEVC-5510754.MOV are both fullsizerender.
+var looseTail = regexp.MustCompile(`(?:_hevc|-[0-9]+| \([0-9]+\))+$`)
+
+// looseStem is the name a Live Photo's still and video share however they
+// were told apart, for finding the halves Apple's identifier may pair.
+func looseStem(name string) string {
+	stem := intakeStem(name)
+	if loose := looseTail.ReplaceAllString(stem, ""); loose != "" {
+		return loose
+	}
+	return stem
+}
+
+// isLiveClip reports whether a file may be the video of a Live Photo.
+func isLiveClip(file intakeFile) bool {
+	return liveClipExt["."+file.ext]
 }
 
 var stillExtensions = map[string]bool{"heic": true, "heif": true, "jpg": true, "jpeg": true, "png": true, "gif": true, "webp": true, "avif": true, "tif": true, "tiff": true,
@@ -378,20 +414,22 @@ func (w *IntakeWriter) pass(ctx context.Context, src *intakeSource, status *Inta
 	}
 	groups := groupIntake(ready)
 	// A group any of whose files is still arriving waits whole, so a Live
-	// Photo is never split across two days.
+	// Photo is never split across two days, nor from a half named apart.
 	for key, group := range groups {
 		for rel := range second {
-			if _, ok := ready[rel]; !ok && path.Dir(rel) == group.dir && intakeStem(path.Base(rel)) == group.stem {
+			if _, ok := ready[rel]; !ok && path.Dir(rel) == group.dir && looseStem(path.Base(rel)) == group.loose {
 				status.Waiting += len(group.files)
 				delete(groups, key)
 				break
 			}
 		}
 	}
-	taken, err := w.dates(ctx, src, groups)
+	read, err := w.captures(ctx, src, groups)
 	if err != nil {
 		return err
 	}
+	pairLive(src, groups, read)
+	taken := dates(src, groups, read)
 	keys := make([]string, 0, len(groups))
 	for key := range groups {
 		keys = append(keys, key)
@@ -435,7 +473,7 @@ func groupIntake(files map[string]intakeFile) map[string]*intakeGroup {
 		key := dir + "\x00" + stem
 		group := groups[key]
 		if group == nil {
-			group = &intakeGroup{dir: dir, stem: stem}
+			group = &intakeGroup{dir: dir, stem: stem, loose: looseStem(path.Base(rel))}
 			groups[key] = group
 		}
 		group.files = append(group.files, file)
@@ -465,22 +503,26 @@ func groupIntake(files map[string]intakeFile) map[string]*intakeGroup {
 	return groups
 }
 
-// dates finds when each group was taken: from the files themselves where
-// they say, then from the name, then from the file's modification time.
-func (w *IntakeWriter) dates(ctx context.Context, src *intakeSource, groups map[string]*intakeGroup) (map[string]time.Time, error) {
+// captures reads what every photo and video in the groups says about itself,
+// by absolute path.
+func (w *IntakeWriter) captures(ctx context.Context, src *intakeSource, groups map[string]*intakeGroup) (map[string]Capture, error) {
 	var asked []string
 	for _, group := range groups {
 		for _, file := range group.files {
 			if archiveMediaExtensions[file.ext] {
-				asked = append(asked, filepath.Join(src.path, filepath.FromSlash(file.rel)))
+				asked = append(asked, src.abs(file.rel))
 			}
 		}
 	}
-	sort.Strings(asked)
-	read := map[string]time.Time{}
-	for start := 0; start < len(asked); start += intakeDateBatch {
-		end := min(start+intakeDateBatch, len(asked))
-		found, err := w.date(ctx, asked[start:end])
+	return w.readCaptures(ctx, asked)
+}
+
+func (w *IntakeWriter) readCaptures(ctx context.Context, files []string) (map[string]Capture, error) {
+	sort.Strings(files)
+	read := map[string]Capture{}
+	for start := 0; start < len(files); start += intakeDateBatch {
+		end := min(start+intakeDateBatch, len(files))
+		found, err := w.capture(ctx, files[start:end])
 		if err != nil {
 			return nil, err
 		}
@@ -488,11 +530,87 @@ func (w *IntakeWriter) dates(ctx context.Context, src *intakeSource, groups map[
 			read[k] = v
 		}
 	}
+	return read, nil
+}
+
+func (src *intakeSource) abs(rel string) string {
+	return filepath.Join(src.path, filepath.FromSlash(rel))
+}
+
+// pairLive keeps each Live Photo's video with its still. icloudpd names the
+// two apart when it tells photos of one name apart by size, as
+// FullSizeRender-1198557.HEIC and FullSizeRender_HEVC-5510754.MOV, and a
+// phone's export may name the video IMG_0001.MOV, as it would a film of its
+// own; Apple's identifier, which both halves carry, says which are one photo.
+// A video named apart joins its still's group, and every video known to be a
+// still's is marked with it, to be filed under the still's name with _HEVC,
+// the name Cull pairs.
+func pairLive(src *intakeSource, groups map[string]*intakeGroup, read map[string]Capture) {
+	keys := make([]string, 0, len(groups))
+	for key, group := range groups {
+		keys = append(keys, key)
+		for i := range group.files {
+			group.files[i].live = read[src.abs(group.files[i].rel)].LiveID
+		}
+	}
+	sort.Strings(keys)
+	stills := map[string]string{}
+	for _, key := range keys {
+		group := groups[key]
+		for _, file := range group.files {
+			if id := group.dir + "\x00" + file.live; file.still && file.live != "" && stills[id] == "" {
+				stills[id] = key
+			}
+		}
+	}
+	for _, key := range keys {
+		group := groups[key]
+		if group.files[0].still {
+			continue
+		}
+		var kept []intakeFile
+		media := false
+		for _, file := range group.files {
+			if target := stills[group.dir+"\x00"+file.live]; file.live != "" && target != "" && isLiveClip(file) {
+				groups[target].files = append(groups[target].files, file)
+				continue
+			}
+			kept = append(kept, file)
+			media = media || archiveMediaExtensions[file.ext]
+		}
+		if !media {
+			delete(groups, key)
+		} else {
+			group.files = kept
+		}
+	}
+	for _, group := range groups {
+		for i, clip := range group.files {
+			if !isLiveClip(clip) {
+				continue
+			}
+			named := strings.HasSuffix(strings.ToLower(strings.TrimSuffix(path.Base(clip.rel), path.Ext(clip.rel))), "_hevc")
+			for _, still := range group.files {
+				if !still.still {
+					continue
+				}
+				if clip.live != "" && clip.live == still.live || clip.live == "" && named {
+					group.files[i].of = still.rel
+					break
+				}
+			}
+		}
+	}
+}
+
+// dates finds when each group was taken: from the files themselves where
+// they say, then from the name, then from the file's modification time.
+func dates(src *intakeSource, groups map[string]*intakeGroup, read map[string]Capture) map[string]time.Time {
 	taken := map[string]time.Time{}
 	for key, group := range groups {
 		var when time.Time
 		for _, file := range group.files {
-			if t, ok := read[filepath.Join(src.path, filepath.FromSlash(file.rel))]; ok && plausibleTaken(t) {
+			if t := read[src.abs(file.rel)].Taken; plausibleTaken(t) {
 				when = t
 				break
 			}
@@ -510,7 +628,7 @@ func (w *IntakeWriter) dates(ctx context.Context, src *intakeSource, groups map[
 		}
 		taken[key] = when
 	}
-	return taken, nil
+	return taken
 }
 
 func plausibleTaken(t time.Time) bool {
@@ -533,17 +651,21 @@ func dateFromName(name string) (time.Time, bool) {
 	return t, true
 }
 
-// exiftoolDater reads the time a photo or video was taken, as the clock
-// where it was taken showed it. Videos record UTC, which exiftool turns into
-// this computer's time; Apple's own videos also carry the local time, which
-// is preferred.
-func exiftoolDater(tool string) CaptureDater {
+// liveIDPattern is the form of Apple's Live Photo identifier, a UUID.
+var liveIDPattern = regexp.MustCompile(`^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$`)
+
+// exiftoolCapture reads the time a photo or video was taken, as the clock
+// where it was taken showed it, and Apple's Live Photo identifier, which the
+// still and the video both carry. Videos record UTC, which exiftool turns
+// into this computer's time; Apple's own videos also carry the local time,
+// which is preferred.
+func exiftoolCapture(tool string) CaptureReader {
 	if tool == "" {
-		return func(context.Context, []string) (map[string]time.Time, error) { return map[string]time.Time{}, nil }
+		return func(context.Context, []string) (map[string]Capture, error) { return map[string]Capture{}, nil }
 	}
-	return func(ctx context.Context, files []string) (map[string]time.Time, error) {
+	return func(ctx context.Context, files []string) (map[string]Capture, error) {
 		args := []string{"-json", "-q", "-q", "-api", "QuickTimeUTC=1", "-d", "%Y-%m-%d %H:%M:%S",
-			"-DateTimeOriginal", "-ContentCreateDate", "-CreationDate", "-CreateDate", "-MediaCreateDate", "--"}
+			"-DateTimeOriginal", "-ContentCreateDate", "-CreationDate", "-CreateDate", "-MediaCreateDate", "-ContentIdentifier", "--"}
 		cmd := exec.CommandContext(ctx, tool, append(args, files...)...)
 		var out, errOut bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &errOut
@@ -552,24 +674,31 @@ func exiftoolDater(tool string) CaptureDater {
 			if errors.Is(err, exec.ErrNotFound) {
 				return nil, fmt.Errorf("%s is not installed, so files cannot be dated by their contents", tool)
 			}
-			return map[string]time.Time{}, nil
+			return map[string]Capture{}, nil
 		}
 		var rows []map[string]any
 		if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
 			return nil, fmt.Errorf("%s answered with something other than JSON", tool)
 		}
-		found := map[string]time.Time{}
+		found := map[string]Capture{}
 		for _, row := range rows {
 			source, _ := row["SourceFile"].(string)
+			var capture Capture
 			for _, key := range []string{"DateTimeOriginal", "ContentCreateDate", "CreationDate", "CreateDate", "MediaCreateDate"} {
 				value, _ := row[key].(string)
 				if len(value) < 19 {
 					continue
 				}
 				if t, err := time.ParseInLocation("2006-01-02 15:04:05", value[:19], time.Local); err == nil && plausibleTaken(t) {
-					found[source] = t
+					capture.Taken = t
 					break
 				}
+			}
+			if id, _ := row["ContentIdentifier"].(string); liveIDPattern.MatchString(id) {
+				capture.LiveID = strings.ToUpper(id)
+			}
+			if !capture.Taken.IsZero() || capture.LiveID != "" {
+				found[source] = capture
 			}
 		}
 		return found, nil
@@ -584,6 +713,11 @@ func (w *IntakeWriter) file(ctx context.Context, group *intakeGroup, taken time.
 		file intakeFile
 		hash string
 		same string
+		// name is what the file is filed as, before any suffix; fixed when it
+		// is a Live Photo video named after a still already in the library,
+		// so it takes no suffix of its own.
+		name  string
+		fixed bool
 	}
 	members := make([]member, 0, len(group.files))
 	for _, file := range group.files {
@@ -598,7 +732,55 @@ func (w *IntakeWriter) file(ctx context.Context, group *intakeGroup, taken time.
 		if err != nil {
 			return 0, err
 		}
-		members = append(members, member{file: file, hash: hash, same: same})
+		members = append(members, member{file: file, hash: hash, same: same, name: path.Base(file.rel)})
+	}
+	// A Live Photo's video takes its still's name with _HEVC, the name Cull
+	// pairs: the still's here, the library's copy's when the still is one the
+	// library holds, or, when the video arrives after its still was filed,
+	// the name of the still in the library that has its identifier.
+	var owned map[string]bool
+	for i, m := range members {
+		if !isLiveClip(m.file) || m.same != "" {
+			continue
+		}
+		still, fixed := "", true
+		switch {
+		case m.file.of != "":
+			for _, s := range members {
+				if s.file.rel == m.file.of {
+					still, fixed = s.name, s.same != ""
+					if fixed {
+						still = path.Base(s.same)
+					}
+				}
+			}
+		case m.file.live == "" || group.files[0].still:
+			continue
+		}
+		if fixed && owned == nil {
+			var err error
+			if owned, err = w.liveOwners(day); err != nil {
+				return 0, err
+			}
+		}
+		if still == "" {
+			found, err := w.livePhotoIn(ctx, day, m.file, owned)
+			if err != nil {
+				return 0, err
+			}
+			still = found
+		}
+		stem := strings.TrimSuffix(still, path.Ext(still))
+		if still == "" || fixed && owned[strings.ToLower(stem)] {
+			continue
+		}
+		name := stem + "_HEVC" + path.Ext(m.name)
+		if fixed {
+			if _, err := w.archive.Lstat(path.Join(day, name)); !errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+		}
+		members[i].name, members[i].fixed = name, fixed
 	}
 	// One suffix for the whole photo, so a Live Photo's still and video, or a
 	// RAW and its JPEG, keep one name between them.
@@ -612,10 +794,10 @@ func (w *IntakeWriter) file(ctx context.Context, group *intakeGroup, taken time.
 		}
 		free := true
 		for _, m := range members {
-			if m.same != "" {
+			if m.same != "" || m.fixed {
 				continue
 			}
-			if _, err := w.archive.Lstat(path.Join(day, withSuffix(path.Base(m.file.rel), suffix))); err == nil {
+			if _, err := w.archive.Lstat(path.Join(day, withSuffix(m.name, suffix))); err == nil {
 				free = false
 				break
 			} else if !errors.Is(err, fs.ErrNotExist) {
@@ -637,7 +819,10 @@ func (w *IntakeWriter) file(ctx context.Context, group *intakeGroup, taken time.
 		if err := mkdirShared(w.archive, day); err != nil {
 			return filed, err
 		}
-		target := path.Join(day, withSuffix(path.Base(m.file.rel), suffix))
+		target := path.Join(day, withSuffix(m.name, suffix))
+		if m.fixed {
+			target = path.Join(day, m.name)
+		}
 		if err := w.move(ctx, m.file, target, m.hash); err != nil {
 			return filed, err
 		}
@@ -646,14 +831,78 @@ func (w *IntakeWriter) file(ctx context.Context, group *intakeGroup, taken time.
 	return filed, nil
 }
 
+// liveOwners is the photos on day that already have a Live Photo video,
+// beside them or in .live-photos, by their name before the extension in
+// lower case.
+func (w *IntakeWriter) liveOwners(day string) (map[string]bool, error) {
+	owned := map[string]bool{}
+	for _, dir := range []string{day, path.Join(liveFolder, day)} {
+		// .live-photos is hidden, so it is listed as the Bin lists it, only
+		// ever read.
+		entries, err := fs.ReadDir(w.archive.FS(), dir)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range entries {
+			if _, stem, ok := livePhotoOf(path.Join(dir, e.Name())); ok && e.Type().IsRegular() {
+				owned[stem] = true
+			}
+		}
+	}
+	return owned, nil
+}
+
+// livePhotoIn finds the still on day that a Live Photo's video, arriving
+// after it, is the video of: one of a like name with the video's identifier
+// and no video yet. It answers the still's file name, or "".
+func (w *IntakeWriter) livePhotoIn(ctx context.Context, day string, clip intakeFile, owned map[string]bool) (string, error) {
+	entries, err := readRootDir(w.archive, day)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	loose := looseStem(path.Base(clip.rel))
+	var asked []string
+	for _, e := range entries {
+		name := e.Name()
+		ext := strings.ToLower(strings.TrimPrefix(path.Ext(name), "."))
+		if strings.HasPrefix(name, ".") || !e.Type().IsRegular() || !stillExtensions[ext] || looseStem(name) != loose ||
+			owned[strings.ToLower(strings.TrimSuffix(name, path.Ext(name)))] {
+			continue
+		}
+		asked = append(asked, filepath.Join(w.archivePath, filepath.FromSlash(day), name))
+	}
+	read, err := w.readCaptures(ctx, asked)
+	if err != nil {
+		return "", err
+	}
+	for _, still := range asked {
+		if read[still].LiveID == clip.live {
+			return filepath.Base(still), nil
+		}
+	}
+	return "", nil
+}
+
 // withSuffix puts suffix before the extension, or before the photo's own
-// extension in a sidecar named like IMG_0001.HEIC.xmp.
+// extension in a sidecar named like IMG_0001.HEIC.xmp, or before the _HEVC
+// of a Live Photo's video, so IMG_0001 (2)_HEVC.MOV still pairs with
+// IMG_0001 (2).HEIC.
 func withSuffix(name, suffix string) string {
 	if suffix == "" {
 		return name
 	}
 	ext := path.Ext(name)
 	stem := strings.TrimSuffix(name, ext)
+	if liveClipExt[strings.ToLower(ext)] && len(stem) > len("_hevc") && strings.EqualFold(stem[len(stem)-len("_hevc"):], "_hevc") {
+		cut := len(stem) - len("_hevc")
+		return stem[:cut] + suffix + stem[cut:] + ext
+	}
 	if intakeSidecars[strings.ToLower(strings.TrimPrefix(ext, "."))] {
 		if inner := path.Ext(stem); archiveMediaExtensions[strings.ToLower(strings.TrimPrefix(inner, "."))] {
 			return strings.TrimSuffix(stem, inner) + suffix + inner + ext

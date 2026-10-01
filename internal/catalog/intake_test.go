@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -18,10 +20,13 @@ type intakeFixture struct {
 	inbox   string
 	archive string
 	dated   map[string]time.Time
+	// live is Apple's Live Photo identifier of each file, by name.
+	live map[string]string
 }
 
-// newIntakeFixture is an empty library and Import folder, with a dater that
-// answers from dated, by file name, the way exiftool answers from metadata.
+// newIntakeFixture is an empty library and Import folder, with a reader that
+// answers from dated and live, by file name, the way exiftool answers from
+// metadata.
 func newIntakeFixture(t *testing.T) *intakeFixture {
 	t.Helper()
 	s := testStore(t)
@@ -31,13 +36,15 @@ func newIntakeFixture(t *testing.T) *intakeFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { w.Close() })
-	f := &intakeFixture{s: s, w: w, inbox: inbox, archive: archive, dated: map[string]time.Time{}}
+	f := &intakeFixture{s: s, w: w, inbox: inbox, archive: archive, dated: map[string]time.Time{}, live: map[string]string{}}
 	w.settle = 0
-	w.date = func(_ context.Context, files []string) (map[string]time.Time, error) {
-		found := map[string]time.Time{}
+	w.capture = func(_ context.Context, files []string) (map[string]Capture, error) {
+		found := map[string]Capture{}
 		for _, file := range files {
-			if when, ok := f.dated[filepath.Base(file)]; ok {
-				found[file] = when
+			when, dated := f.dated[filepath.Base(file)]
+			live, ok := f.live[filepath.Base(file)]
+			if dated || ok {
+				found[file] = Capture{Taken: when, LiveID: live}
 			}
 		}
 		return found, nil
@@ -52,6 +59,26 @@ func (f *intakeFixture) pass(t *testing.T) IntakeStatus {
 		t.Fatal(err)
 	}
 	return status
+}
+
+// livePairs is each catalogued Live Photo's file name and its video's, as
+// Cull pairs them once the filed day is catalogued.
+func (f *intakeFixture) livePairs(t *testing.T) map[string]string {
+	t.Helper()
+	rows, err := f.s.read.Query("SELECT a.relative_path,l.clip FROM live_clips l JOIN assets a ON a.id=l.photo_id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	pairs := map[string]string{}
+	for rows.Next() {
+		var photo, clip string
+		if err := rows.Scan(&photo, &clip); err != nil {
+			t.Fatal(err)
+		}
+		pairs[filepath.Base(photo)] = filepath.Base(clip)
+	}
+	return pairs
 }
 
 func readText(t *testing.T, file string) string {
@@ -129,12 +156,193 @@ func TestIntakeKeepsALivePhotoTogetherAndNeverOverwrites(t *testing.T) {
 	}
 	for name, body := range map[string]string{
 		"IMG_0001 (2).HEIC":     "the still",
-		"IMG_0001_HEVC (2).MOV": "the video",
+		"IMG_0001 (2)_HEVC.MOV": "the video",
 		"IMG_0001 (2).HEIC.xmp": "the sidecar",
 	} {
 		if got := readText(t, filepath.Join(day, name)); got != body {
 			t.Errorf("%s = %q", name, got)
 		}
+	}
+	if got := f.livePairs(t); got["IMG_0001 (2).HEIC"] != "IMG_0001 (2)_HEVC.MOV" {
+		t.Fatalf("Cull pairs %v", got)
+	}
+}
+
+// icloudpd tells photos of one name apart by adding their sizes, and names the
+// two halves of a Live Photo apart: only Apple's identifier, which both carry,
+// says FullSizeRender_HEVC-5510754.MOV is the video of FullSizeRender-1198557.HEIC.
+// A phone's export may name the video IMG_0002.MOV. Each video is filed under
+// its still's name with _HEVC, which Cull pairs, and never as a video of its own.
+func TestIntakePairsALivePhotoByAppleIdentifier(t *testing.T) {
+	f := newIntakeFixture(t)
+	day := filepath.Join(f.archive, "2019/2019-08/2019-08-14")
+	when := time.Date(2019, 8, 14, 12, 0, 0, 0, time.Local)
+	f.dated["FullSizeRender-1198557.HEIC"] = when
+	f.live["FullSizeRender-1198557.HEIC"] = "6C2C54E8-0000-4000-8000-000000000001"
+	f.live["FullSizeRender_HEVC-5510754.MOV"] = "6C2C54E8-0000-4000-8000-000000000001"
+	// The video of another photo of that name, and a film that is no one's.
+	f.dated["FullSizeRender-2245120.HEIC"] = when
+	f.live["FullSizeRender-2245120.HEIC"] = "6C2C54E8-0000-4000-8000-000000000002"
+	f.live["FullSizeRender_HEVC-7781023.MOV"] = "6C2C54E8-0000-4000-8000-000000000002"
+	f.dated["FullSizeRender_HEVC-1000001.MOV"] = when
+	f.dated["IMG_0002.HEIC"] = when
+	f.live["IMG_0002.HEIC"] = "6C2C54E8-0000-4000-8000-000000000003"
+	f.live["IMG_0002.MOV"] = "6C2C54E8-0000-4000-8000-000000000003"
+	f.dated["IMG_0003.HEIC"] = when
+	f.dated["IMG_0003.MOV"] = when
+	for name, body := range map[string]string{
+		"FullSizeRender-1198557.HEIC": "still one", "FullSizeRender_HEVC-5510754.MOV": "video one",
+		"FullSizeRender-2245120.HEIC": "still two", "FullSizeRender_HEVC-7781023.MOV": "video two",
+		"FullSizeRender_HEVC-1000001.MOV": "a film",
+		"IMG_0002.HEIC":                   "exported still", "IMG_0002.MOV": "exported video",
+		"IMG_0003.HEIC": "a photo", "IMG_0003.MOV": "a film of its own",
+	} {
+		writeFile(t, f.inbox, name, body)
+	}
+
+	if status := f.pass(t); status.Filed != 9 || status.Problem != "" {
+		t.Fatalf("status = %+v", status)
+	}
+	for name, body := range map[string]string{
+		"FullSizeRender-1198557.HEIC": "still one", "FullSizeRender-1198557_HEVC.MOV": "video one",
+		"FullSizeRender-2245120.HEIC": "still two", "FullSizeRender-2245120_HEVC.MOV": "video two",
+		"FullSizeRender_HEVC-1000001.MOV": "a film",
+		"IMG_0002.HEIC":                   "exported still", "IMG_0002_HEVC.MOV": "exported video",
+		// Without the identifier a video of the same name is not taken for one.
+		"IMG_0003.HEIC": "a photo", "IMG_0003.MOV": "a film of its own",
+	} {
+		if got := readText(t, filepath.Join(day, name)); got != body {
+			t.Errorf("%s = %q", name, got)
+		}
+	}
+	want := map[string]string{
+		"FullSizeRender-1198557.HEIC": "FullSizeRender-1198557_HEVC.MOV",
+		"FullSizeRender-2245120.HEIC": "FullSizeRender-2245120_HEVC.MOV",
+		"IMG_0002.HEIC":               "IMG_0002_HEVC.MOV",
+	}
+	if got := f.livePairs(t); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Cull pairs %v, want %v", got, want)
+	}
+}
+
+// icloudpd downloads a Live Photo's still, then its video, so the still may be
+// filed a look before the video arrives. The video then finds its still in the
+// library by Apple's identifier, even one filed under another name.
+func TestIntakePairsALivePhotoVideoArrivingAfterItsStill(t *testing.T) {
+	f := newIntakeFixture(t)
+	day := filepath.Join(f.archive, "2019/2019-08/2019-08-14")
+	when := time.Date(2019, 8, 14, 12, 0, 0, 0, time.Local)
+	writeFile(t, day, "IMG_0001.HEIC", "a different photo from another camera")
+	f.live["IMG_0001.HEIC"] = "6C2C54E8-0000-4000-8000-00000000000A"
+	f.dated["IMG_0001 (2).HEIC"] = when
+	f.live["IMG_0001 (2).HEIC"] = "6C2C54E8-0000-4000-8000-000000000001"
+	f.dated["FullSizeRender-1198557.HEIC"] = when
+	f.live["FullSizeRender-1198557.HEIC"] = "6C2C54E8-0000-4000-8000-000000000002"
+	writeFile(t, f.inbox, "IMG_0001.HEIC", "the still")
+	writeFile(t, f.inbox, "FullSizeRender-1198557.HEIC", "another still")
+	f.dated["IMG_0001.HEIC"] = when
+	f.live["IMG_0001.HEIC"] = "6C2C54E8-0000-4000-8000-000000000001"
+	if status := f.pass(t); status.Filed != 2 {
+		t.Fatalf("status = %+v", status)
+	}
+	if got := readText(t, filepath.Join(day, "IMG_0001 (2).HEIC")); got != "the still" {
+		t.Fatalf("still = %q", got)
+	}
+	// In the library, IMG_0001.HEIC is the other camera's photo again.
+	f.live["IMG_0001.HEIC"] = "6C2C54E8-0000-4000-8000-00000000000A"
+
+	f.dated["IMG_0001_HEVC.MOV"] = when
+	f.live["IMG_0001_HEVC.MOV"] = "6C2C54E8-0000-4000-8000-000000000001"
+	f.dated["FullSizeRender_HEVC-5510754.MOV"] = when
+	f.live["FullSizeRender_HEVC-5510754.MOV"] = "6C2C54E8-0000-4000-8000-000000000002"
+	// A photo that already has its video keeps it; the newcomer is filed apart.
+	writeFile(t, day, "IMG_0005.HEIC", "a filed Live Photo")
+	writeFile(t, day, "IMG_0005_HEVC.MOV", "its video")
+	f.live["IMG_0005.HEIC"] = "6C2C54E8-0000-4000-8000-000000000005"
+	f.dated["IMG_0005_HEVC-99.MOV"] = when
+	f.live["IMG_0005_HEVC-99.MOV"] = "6C2C54E8-0000-4000-8000-000000000005"
+	writeFile(t, f.inbox, "IMG_0001_HEVC.MOV", "the video")
+	writeFile(t, f.inbox, "FullSizeRender_HEVC-5510754.MOV", "another video")
+	writeFile(t, f.inbox, "IMG_0005_HEVC-99.MOV", "a second video")
+	if status := f.pass(t); status.Filed != 3 || status.Problem != "" {
+		t.Fatalf("status = %+v", status)
+	}
+	for name, body := range map[string]string{
+		"IMG_0001.HEIC":                   "a different photo from another camera",
+		"IMG_0001 (2)_HEVC.MOV":           "the video",
+		"FullSizeRender-1198557_HEVC.MOV": "another video",
+		"IMG_0005_HEVC.MOV":               "its video",
+		"IMG_0005_HEVC-99.MOV":            "a second video",
+	} {
+		if got := readText(t, filepath.Join(day, name)); got != body {
+			t.Errorf("%s = %q", name, got)
+		}
+	}
+	if exists(t, filepath.Join(day, "IMG_0001_HEVC.MOV")) {
+		t.Error("the video was filed as the other camera's photo's")
+	}
+	want := map[string]string{
+		"IMG_0001 (2).HEIC":           "IMG_0001 (2)_HEVC.MOV",
+		"FullSizeRender-1198557.HEIC": "FullSizeRender-1198557_HEVC.MOV",
+		"IMG_0005.HEIC":               "IMG_0005_HEVC.MOV",
+	}
+	if got := f.livePairs(t); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Cull pairs %v, want %v", got, want)
+	}
+}
+
+// A still the library already holds is set aside, and its new video is
+// filed under the name the library's copy has.
+func TestIntakeNamesALiveVideoAfterTheStillTheLibraryHolds(t *testing.T) {
+	f := newIntakeFixture(t)
+	day := filepath.Join(f.archive, "2019/2019-08/2019-08-14")
+	when := time.Date(2019, 8, 14, 12, 0, 0, 0, time.Local)
+	writeFile(t, day, "IMG_0001.HEIC", "a different photo from another camera")
+	writeFile(t, day, "IMG_0001 (2).HEIC", "the still")
+	f.dated["IMG_0001.HEIC"] = when
+	writeFile(t, f.inbox, "IMG_0001.HEIC", "the still")
+	writeFile(t, f.inbox, "IMG_0001_HEVC.MOV", "the video")
+	if status := f.pass(t); status.Filed != 1 || status.Problem != "" {
+		t.Fatalf("status = %+v", status)
+	}
+	if got := readText(t, filepath.Join(day, "IMG_0001 (2)_HEVC.MOV")); got != "the video" {
+		t.Fatalf("video = %q", got)
+	}
+	if got := readText(t, filepath.Join(f.inbox, IntakeDuplicates, "IMG_0001.HEIC")); got != "the still" {
+		t.Fatalf("set aside = %q", got)
+	}
+}
+
+// exiftool reads Apple's Live Photo identifier with the dates, in one call.
+func TestExiftoolCaptureReadsTheLivePhotoIdentifier(t *testing.T) {
+	tool, err := exec.LookPath("exiftool")
+	if err != nil {
+		t.Skip("exiftool not installed")
+	}
+	ffmpeg, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg not installed")
+	}
+	dir := t.TempDir()
+	clip, film := filepath.Join(dir, "IMG_0001_HEVC.MOV"), filepath.Join(dir, "IMG_0002.MOV")
+	for _, file := range []string{clip, film} {
+		if out, err := exec.Command(ffmpeg, "-loglevel", "error", "-f", "lavfi", "-i", "color=c=gray:s=64x64:d=1", "-c:v", "libx264", file).CombinedOutput(); err != nil {
+			t.Fatal(err, string(out))
+		}
+	}
+	if out, err := exec.Command(tool, "-q", "-overwrite_original", "-Keys:ContentIdentifier=6c2c54e8-0000-4000-8000-000000000001",
+		"-Keys:CreationDate=2019:08:14 12:00:00+01:00", clip).CombinedOutput(); err != nil {
+		t.Fatal(err, string(out))
+	}
+	read, err := exiftoolCapture(tool)(context.Background(), []string{clip, film})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := read[clip]; got.LiveID != "6C2C54E8-0000-4000-8000-000000000001" || got.Taken.Format("2006-01-02 15:04") != "2019-08-14 12:00" {
+		t.Fatalf("clip = %+v", got)
+	}
+	if got, ok := read[film]; ok {
+		t.Fatalf("a film with nothing to say = %+v", got)
 	}
 }
 
@@ -335,6 +543,9 @@ func TestWithSuffix(t *testing.T) {
 		"IMG_0001.HEIC":     "IMG_0001 (2).HEIC",
 		"IMG_0001.HEIC.xmp": "IMG_0001 (2).HEIC.xmp",
 		"IMG_0001.xmp":      "IMG_0001 (2).xmp",
+		"IMG_0001_HEVC.MOV": "IMG_0001 (2)_HEVC.MOV",
+		"IMG_0001_hevc.mp4": "IMG_0001 (2)_hevc.mp4",
+		"IMG_0001_HEVC.JPG": "IMG_0001_HEVC (2).JPG",
 		"README":            "README (2)",
 	} {
 		if got := withSuffix(name, " (2)"); got != want {

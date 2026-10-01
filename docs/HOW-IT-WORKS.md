@@ -10,6 +10,8 @@ The writer looks in the Import folder every minute, and takes a file once it has
 Each file goes under `YYYY/YYYY-MM/YYYY-MM-DD` for the day it was taken, as the clock where it was taken showed it.
 The date comes from the file's metadata, read by exiftool, and otherwise from its name or its file date.
 A Live Photo's still and video, and sidecars such as `.xmp` and `.aae`, travel with their photo.
+The video is filed as the still's name with `_HEVC`, which Cull pairs, even when it arrived named apart, as icloudpd's `FullSizeRender_HEVC-5510754.MOV` for `FullSizeRender-1198557.HEIC` or a phone export's `IMG_0001.MOV`.
+Apple's Live Photo identifier, which exiftool reads from both halves, says which video is which photo's, including a video that arrives after its photo was filed.
 A name already taken on that day gets a number; a file whose bytes that day already holds is moved to `Import/Already in the library` instead.
 Nothing is ever overwritten.
 
