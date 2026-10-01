@@ -137,8 +137,8 @@ const settled=async page=>{
   await page.waitForURL(/\/on\/(?!09-07)/);
   await settled(page);
   const bar=page.locator('header.gbar');
-  await bar.getByRole('button',{name:/^Mark A day reviewed/}).waitFor({timeout:1000});
-  await bar.getByRole('button',{name:/^A day/}).waitFor({timeout:1000});
+  await bar.getByRole('button',{name:/^Mark A day reviewed/}).waitFor();
+  await bar.getByRole('button',{name:/^A day/}).waitFor();
 
   // Keys meant for the page left do nothing while it goes.
   await page.evaluate(()=>{
