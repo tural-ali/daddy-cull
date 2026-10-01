@@ -3,6 +3,7 @@ import {Layout,type LegacyRoute} from './Layout';
 import {dayName} from './goto';
 import {Today,type TodayData} from './Today';
 import {Year,type YearData} from './Year';
+import {OpeningContext,YearOpening,opensWithLogo,useOpening} from './YearOpening';
 import {Duplicates,type DuplicateReport} from './Duplicates';
 import {Settings,type Stats} from './Settings';
 import {setVideoSoundPreference} from '../SessionVideo';
@@ -76,11 +77,12 @@ function titleFor(path:string){
 }
 
 /** The page's path for the address the browser is on. The bare address is
- * today's date, and says so. An open photo's address is its page's address
- * plus /photo/<id>; the page itself reads the photo, the frame only needs the
- * page. */
+ * the year, and /today is today's date, and each says so. An open photo's
+ * address is its page's address plus /photo/<id>; the page itself reads the
+ * photo, the frame only needs the page. */
 function currentPath(){
-  if(location.pathname==='/'){
+  if(location.pathname==='/')history.replaceState(history.state,'',`/year${location.search}${location.hash}`);
+  if(location.pathname==='/today'){
     const now=new Date();
     const md=`${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     history.replaceState(history.state,'',`/on/${md}${location.search}${location.hash}`);
@@ -101,6 +103,11 @@ export function App(){
   const [page,setPage]=useState<PageState>(()=>({route:routeFor(path),content:<Opening label="Opening the catalogue…"/>}));
   const [error,setError]=useState('');
   const [recovered,setRecovered]=useState(false);
+  // A page load at the bare address opens with the logo, which the camera
+  // dives through once the year has been read.
+  const [opensOnYear]=useState(opensWithLogo);
+  const [yearShown,setYearShown]=useState(false);
+  const opening=useOpening(opensOnYear,yearShown,error!==''||place.path!=='/year');
   // The archive as the page was read: the catalogue's generation then, and
   // whether anyone has done anything on the page since, which a fresh read
   // would take away with its undo history.
@@ -238,6 +245,7 @@ export function App(){
       if(!active)return;
       arrival.current=place.returned?savedScroll()??0:location.hash?'hash':moving?0:null;
       setPage(result);
+      if(result.route==='year')setYearShown(true);
     })().catch(reason=>{if(active)setError((reason as Error).message)});
     return()=>{active=false};
   },[load,recovered,place,readStats]);
@@ -329,7 +337,7 @@ export function App(){
     lastGate.current=gate;
     if(previous&&gate&&previous!==gate&&previous.startsWith(`${path}|`))reloadPage();
   },[gate,path]);
-  return <Layout route={page.route} path={place.path} visit={place.visit} binFiles={stats?.bin??stats?.marked??0} reviewed={stats?.calendarDates?{done:stats.reviewedDates??0,total:stats.calendarDates}:undefined} library={stats?.library} streak={stats?.streak!==undefined?{days:stats.streak,today:!!stats.reviewedToday}:undefined} notifications={stats?.notifications} onNotificationsRead={()=>setStats(current=>current&&{...current,notifications:0})}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:<Fragment key={`${place.visit}:${version}`}>{page.content}</Fragment>}
+  return <OpeningContext value={opening}><Layout opening={opening!==null} route={page.route} path={place.path} visit={place.visit} binFiles={stats?.bin??stats?.marked??0} reviewed={stats?.calendarDates?{done:stats.reviewedDates??0,total:stats.calendarDates}:undefined} library={stats?.library} streak={stats?.streak!==undefined?{days:stats.streak,today:!!stats.reviewedToday}:undefined} notifications={stats?.notifications} onNotificationsRead={()=>setStats(current=>current&&{...current,notifications:0})}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:<Fragment key={`${place.visit}:${version}`}>{page.content}</Fragment>}
     {notice&&<Snacks><div className="snack" role="status">{notice==='refreshed'?'Updated with new files from the archive.':<>New files arrived in the archive. <button type="button" className="snackact" onClick={()=>void refreshNow()}>Refresh</button></>}</div></Snacks>}
-  </Layout>;
+  </Layout>{opening&&<YearOpening phase={opening}/>}</OpeningContext>;
 }

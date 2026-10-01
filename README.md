@@ -37,6 +37,7 @@ The [first blog post](https://turalali.com/giving-my-60-000-photos-and-videos-a-
 ## Every day
 
 Open [http://127.0.0.1:8830](http://127.0.0.1:8830), or run `daddy-cull open`.
+It opens on the Year calendar, and Today in the sidebar goes to today's date.
 
 1. **Review today's date.** Today shows every photo and video taken on this date, in every year, so years of memories become manageable daily sessions. <kbd>K</kbd> keeps, <kbd>X</kbd> removes, <kbd>F</kbd> favourites and <kbd>⌘Z</kbd> undoes.
 2. **Mark the date reviewed.** The Year calendar fills in, and a reviewed date that gains new files gets a red dot until they are decided.

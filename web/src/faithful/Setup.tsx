@@ -173,7 +173,7 @@ export function Setup({initial}:{initial:SetupView}){
   }
   async function finish(){
     if(editable&&!view.config.done&&!await save({...draft,done:true}))return;
-    navigate('/');
+    navigate('/today');
   }
   const set=(change:Partial<SetupConfig>)=>setDraft(current=>({...current,...change}));
   const setICloud=(change:Partial<SetupConfig['icloud']>)=>setDraft(current=>({...current,icloud:{...current.icloud,...change}}));

@@ -192,10 +192,10 @@ h1 { font-weight: 400; letter-spacing: -.01em; }
   0% { transform: translateX(-560px) skewX(-20deg); animation-timing-function: cubic-bezier(.4, 0, .3, 1); }
   64%, 100% { transform: translateX(2300px) skewX(-20deg); }
 }
-.brand .ink { fill: var(--logo-ink); }
-.brand .mint, .brand .t2 { fill: var(--logo-mint); }
-.brand .t0 { fill: var(--logo-coral); }
-.brand .t1 { fill: var(--logo-amber); }
+.brand .ink, .opening .ink { fill: var(--logo-ink); }
+:is(.brand, .opening) :is(.mint, .t2) { fill: var(--logo-mint); }
+:is(.brand, .opening) .t0 { fill: var(--logo-coral); }
+:is(.brand, .opening) .t1 { fill: var(--logo-amber); }
 
 .icon { display: inline-grid; place-items: center; width: 24px; height: 24px; flex: none; }
 .icon svg { width: 24px; height: 24px; fill: currentcolor; }
@@ -1383,6 +1383,81 @@ main.selecting .mo.sel:not(:focus-visible) { box-shadow: none; transform: none; 
 .lgkey.fresh { font-weight: 500; }
 .lgkey.fresh .freshdot { position: absolute; top: -3px; right: -3px; box-shadow: 0 0 0 2px var(--bg); }
 .cell > .freshdot { position: absolute; top: -3px; right: -3px; box-shadow: 0 0 0 2px var(--bg); }
+
+/* -------------------------------------------------------------- opening -- */
+/* Loading the app's own address opens it like a phone's home screen. The logo
+   comes up alone in the middle with light passing over it while the year is
+   read. Then the camera dives in through the day tiles, the logo rushing past
+   as the window clears, and every date flies in from in front of the screen,
+   the middle of the year first, to settle in its place. The rest of the page
+   rises in after them. */
+.opening {
+  position: fixed; inset: 0; z-index: 400;
+  display: grid; place-items: center;
+  background-color: var(--bg);
+  pointer-events: none;
+}
+.openingstage { position: relative; display: grid; place-items: center; }
+/* A soft bloom in the tiles' colours behind the logo, as the light catches. */
+.openingstage::before {
+  content: ""; position: absolute; inset: -60% -10%;
+  background:
+    radial-gradient(closest-side at 22% 50%, color-mix(in srgb, var(--logo-coral) 22%, transparent), transparent),
+    radial-gradient(closest-side at 50% 50%, color-mix(in srgb, var(--logo-amber) 14%, transparent), transparent),
+    radial-gradient(closest-side at 78% 50%, color-mix(in srgb, var(--logo-mint) 18%, transparent), transparent);
+  filter: blur(24px);
+  animation: opening-bloom 1.2s cubic-bezier(.2, .8, .2, 1) 150ms both;
+}
+.openinglogo {
+  position: relative; display: block;
+  width: min(76vw, 620px); height: auto; aspect-ratio: 2016 / 308;
+  /* The dive aims at the middle of the day tiles, 12.53% across the logo. */
+  transform-origin: 12.53% 50%;
+  animation: opening-logo 620ms cubic-bezier(.2, .8, .2, 1) both;
+}
+.opening .shine { transform: translateX(-560px) skewX(-20deg); animation: opening-shine 1.1s cubic-bezier(.4, 0, .3, 1) 300ms infinite both; }
+.opening.dive { animation: opening-clear 750ms cubic-bezier(.5, 0, .7, .4) both; }
+.opening.dive .openingstage::before { animation: opening-fade 300ms ease-in both; }
+.opening.dive .openinglogo { animation: opening-dive 750ms cubic-bezier(.55, 0, .8, .25) both; }
+@keyframes opening-logo { from { opacity: 0; transform: scale(.82); filter: blur(8px); } }
+@keyframes opening-bloom { from { opacity: 0; transform: scale(.6); } }
+@keyframes opening-shine {
+  0% { transform: translateX(-560px) skewX(-20deg); }
+  70%, 100% { transform: translateX(2300px) skewX(-20deg); }
+}
+@keyframes opening-fade { to { opacity: 0; } }
+/* The tiles come to the middle of the window as the camera closes on them,
+   then grow past it and are gone before they fill it, so the camera passes
+   through rather than into a wall of colour. */
+@keyframes opening-dive {
+  0% { transform: none; opacity: 1; }
+  30% { transform: translateX(37.47%) scale(2.4); opacity: 1; }
+  50% { opacity: 1; }
+  80% { opacity: 0; }
+  100% { transform: translateX(37.47%) scale(70); opacity: 0; }
+}
+@keyframes opening-clear {
+  0%, 30% { background-color: var(--bg); }
+  100% { background-color: transparent; }
+}
+/* Under the logo the year is drawn but unseen, so it is ready to fly in. */
+.yearview.opening-held :is(h1, .ysum, .pbar, .calendar, .legend) { opacity: 0; }
+/* Each date starts close in front of the camera, so the perspective has it
+   large and far out from the middle, and closes in on its place. The grid
+   stops clipping meanwhile, or the dates would appear at its edge. */
+.yearview.opening-arrive .calendar { overflow: visible; perspective: 640px; }
+.yearview.opening-arrive .cmonth { transform-style: preserve-3d; }
+.yearview.opening-arrive :is(.cell:not(.blank), .mlabel) {
+  animation: opening-date 950ms cubic-bezier(.12, .7, .22, 1) calc(140ms + var(--far, 1) * 300ms) both;
+  will-change: transform, opacity;
+}
+.yearview.opening-arrive :is(h1, .ysum, .pbar, .legend) { animation: opening-rise 600ms cubic-bezier(.2, .8, .2, 1) 650ms both; }
+@keyframes opening-date {
+  0% { opacity: 0; transform: translateZ(520px); }
+  30% { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes opening-rise { from { opacity: 0; transform: translateY(10px); } }
 
 /* ------------------------------------------------------------- completion -- */
 /* The photograph is the largest thing here. The numbers are small, there is no

@@ -57,7 +57,7 @@ function sidebar(addons:Addon[]|null):Section[]{
   const pages=addonPages(addons);
   const sections:Section[]=[
     {items:[
-      {href:'/',route:'today',label:'Today',icon:'photo'},
+      {href:'/today',route:'today',label:'Today',icon:'photo'},
       {href:'/year',route:'year',label:'Year',icon:'calendar_month'},
     ]},
     {title:'Collections',items:[{href:'/duplicates',route:'dupes',label:'Duplicates',icon:'filter_none'},...pages.collections]},
@@ -163,7 +163,7 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
  * into a rail of icons, so there is no menu button to reach for. */
 const narrowQuery='(max-width: 1000px)';
 
-export function Layout({route,path,visit,binFiles,reviewed,library,streak,notifications,onNotificationsRead,flash,children}:{route:LegacyRoute;path:string;visit:number;binFiles:number;reviewed?:{done:number;total:number};library?:LibraryTotals;streak?:{days:number;today:boolean};notifications?:number;onNotificationsRead?:()=>void;flash?:string;children:ReactNode}){
+export function Layout({opening=false,route,path,visit,binFiles,reviewed,library,streak,notifications,onNotificationsRead,flash,children}:{opening?:boolean;route:LegacyRoute;path:string;visit:number;binFiles:number;reviewed?:{done:number;total:number};library?:LibraryTotals;streak?:{days:number;today:boolean};notifications?:number;onNotificationsRead?:()=>void;flash?:string;children:ReactNode}){
   const [selection,setSelection]=useState<Selection|null>(null);
   const addons=useAddons();
   const sections=useMemo(()=>sidebar(addons),[addons]);
@@ -191,17 +191,18 @@ export function Layout({route,path,visit,binFiles,reviewed,library,streak,notifi
   const [bump,setBump]=useState(false);
   const introChecked=useRef(false);
   const litBefore=useRef<boolean|null>(null);
+  // The streak's own opening waits for the app's, so the two never overlap.
   useEffect(()=>{
-    if(!streak)return;
+    if(!streak||opening)return;
     if(!introChecked.current){introChecked.current=true;if(introDue(streak))setIntro(true)}
     if(litBefore.current===false&&streak.today)setBump(true);
     litBefore.current=streak.today;
-  },[streak]);
+  },[streak,opening]);
   useEffect(()=>{if(!bump)return;const timer=setTimeout(()=>setBump(false),900);return()=>clearTimeout(timer)},[bump]);
   return <div className={`shell${rail?' side-hidden':''}`}>
     {selection?<SelectionBar selection={selection}/>:<header className="gbar">
       <div className="gbarstart">
-        <a className="brand" href="/" {...tipProps('Today')}><Logo intro/><LogoMark className="brandmark"/></a>
+        <a className="brand" href="/" {...tipProps('Year')}><Logo intro/><LogoMark className="brandmark"/></a>
         {streak&&<div className="streakwrap">
           <StreakPill streak={streak} pill={pill} open={calendarOpen} bump={bump} onToggle={()=>setCalendarOpen(open=>!open)}/>
           {calendarOpen&&<StreakCalendar streak={streak} anchor={pill} onClose={closeCalendar}/>}

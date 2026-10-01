@@ -10,7 +10,7 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
 (async()=>{
   const browser=await chromium.launch({channel:'chrome',headless:true});
   const page=await browser.newPage({viewport:{width:1440,height:900}});
-  // "/" opens today's date, and the fixtures are for 7 September.
+  // /today opens today's date, and the fixtures are for 7 September.
   await page.clock.setFixedTime(new Date('2026-09-07T10:00:00'));
   const writes=[],individualWrites=[],fetched=[];
   // A choice's write is held unanswered until the test lets it go, so the
@@ -36,7 +36,7 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
     if(/^\/api\/assets\/\d+\/details$/.test(url.pathname))return route.fulfill({status:404,json:{error:'The file could not be read.'}});
     throw new Error(`${request.method()} ${url.pathname}`);
   });
-  await page.goto(process.env.APP_URL||'http://127.0.0.1:8842/');
+  await page.goto((process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'')+'/today');
   await page.getByRole('heading',{name:/7 September/}).waitFor();
   await page.getByRole('link',{name:/^Bin 2 files$/}).waitFor();
   assert.equal(fetched.filter(path=>path==='/api/today/09-07').length,1,'the page loaded its data more than once');
@@ -83,7 +83,7 @@ const fourth={...asset(4,'FOURTH.JPG','2010-09-07'),relatedCount:0};
   await page.getByRole('link',{name:'Year',exact:true}).click();
   await page.getByRole('heading',{name:'Your archive'}).waitFor();
   assert.equal(await page.locator('.cmonth').count(),12);
-  await page.getByRole('link',{name:'Daddy, Cull!'}).click();
+  await page.getByRole('link',{name:'Today',exact:true}).click();
   await page.getByRole('heading',{name:/7 September/}).waitFor();
   assert.match(page.url(),/\/on\/09-07$/);
   // Review starts from a photograph, as in Google Photos.

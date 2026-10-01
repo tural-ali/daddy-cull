@@ -38,9 +38,11 @@ function useIntro(on:boolean){
 /** The mark and the wordmark, as the product's name. With `intro` it plays
  * the page-load intro: light runs over the whole of it, as a torch rolled
  * across a metal plate, then the wordmark slides left behind the tiles and
- * only the mark stays. */
-export function Logo({className,intro=false}:{className?:string;intro?:boolean}){
+ * only the mark stays. With `shine` it carries the light alone, for whoever
+ * draws it to run as it likes. */
+export function Logo({className,intro=false,shine=false}:{className?:string;intro?:boolean;shine?:boolean}){
   const {playing,at,folded}=useIntro(intro);
+  const lit=playing||shine;
   const id=`logo${useId().replace(/[^\w-]/g,'')}`;
   const art=`${id}art`;
   return <svg className={[className,playing&&'intro',folded&&'folded'].filter(Boolean).join(' ')||undefined} viewBox="64 206 2016 308" preserveAspectRatio="xMinYMid slice"
@@ -49,7 +51,7 @@ export function Logo({className,intro=false}:{className?:string;intro?:boolean})
       {/* The wordmark is seen only to the right of the tiles, so sliding
           left it goes in behind them. */}
       <clipPath id={`${id}word`}><rect x="570" y="206" width="1510" height="308"/></clipPath>
-      {playing&&<>
+      {lit&&<>
         {/* Polished metal: a bright core with the plate darker either side
             of it, so the light shows on white lettering as well as dark. */}
         <linearGradient id={`${id}shine`}>
@@ -74,6 +76,6 @@ export function Logo({className,intro=false}:{className?:string;intro?:boolean})
       </g></g>
     </g>
     {/* The light, only where the logo is. */}
-    {playing&&<g mask={`url(#${id}mask)`}><rect className="shine" x="0" y="150" width="640" height="420" fill={`url(#${id}shine)`}/></g>}
+    {lit&&<g mask={`url(#${id}mask)`}><rect className="shine" x="0" y="150" width="640" height="420" fill={`url(#${id}shine)`}/></g>}
   </svg>;
 }

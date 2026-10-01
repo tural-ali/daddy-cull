@@ -1,4 +1,5 @@
-import type {CSSProperties} from 'react';
+import {useContext,type CSSProperties} from 'react';
+import {OpeningContext} from './YearOpening';
 
 // fresh counts files that reached the archive after the date was reviewed and
 // still wait: the date's red dot.
@@ -29,6 +30,11 @@ function depth(cell:CalendarCell,busiest:number){
   if(band==='high')return busiest>100?Math.min(1,Math.log(cell.waiting/100)/Math.log(busiest/100)):1;
   return 0;
 }
+/** How far a date sits from the middle of the year, 0 at the centre and 1
+ * at a corner, so the opening brings the middle in first. */
+function far(month:number,index:number){
+  return Math.hypot((index-15)/15,(month-5.5)/5.5)/Math.SQRT2;
+}
 function plural(count:number,word:string){return `${count.toLocaleString()} ${word}${count===1?'':'s'}`}
 /** How a date's new arrivals read after its description. */
 export function freshNote(cell:{fresh?:number}){return (cell.fresh??0)>0?`, ${plural(cell.fresh!,'newly arrived file')}`:''}
@@ -44,7 +50,9 @@ export function Year({months,prog,streak}:YearData){
   // the viewer's midnight.
   const busiest=months.reduce((most,month)=>month.cells.reduce((inner,cell)=>cell&&cell.state!=='done'?Math.max(inner,cell.waiting):inner,most),0);
   const now=new Date(),today=`${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-  return <section className="yearview">
+  // While the app opens, the dates wait unseen under the logo, then fly in.
+  const opening=useContext(OpeningContext);
+  return <section className={`yearview${opening==='logo'?' opening-held':opening==='dive'?' opening-arrive':''}`}>
     <h1>Your archive</h1>
     <p className="ysum"><b>{prog.done.toLocaleString()} of {dates.toLocaleString()}</b> calendar dates reviewed <span className="pc">{percent.toFixed(1)}%</span>
       {prog.part>0&&<span className="dim"> · {prog.part} part-finished</span>}
@@ -52,11 +60,11 @@ export function Year({months,prog,streak}:YearData){
     </p>
     <div className="pbar wide"><span style={{width:`${percent}%`}}/></div>
     <div className="calendar">
-      {months.map(month=><div className="cmonth" key={month.name}>
-        <span className="mlabel">{month.name.slice(0,3)}</span>
+      {months.map((month,row)=><div className="cmonth" key={month.name}>
+        <span className="mlabel" style={{'--far':far(row,-1).toFixed(3)} as CSSProperties}>{month.name.slice(0,3)}</span>
         {month.cells.map((cell,index)=>cell===null?<span className="cell blank" key={index}/>:<a
           key={cell.md} className={`cell ${heat(cell)}${cell.md===today?' now':''}`} href={`/on/${cell.md}`}
-          style={{'--depth':depth(cell,busiest).toFixed(3)} as CSSProperties}
+          style={{'--depth':depth(cell,busiest).toFixed(3),'--far':far(row,index).toFixed(3)} as CSSProperties}
           title={describe(cell)} aria-label={describe(cell)}
         >{cell.dom}{(cell.fresh??0)>0&&<span className="freshdot" aria-hidden="true"/>}</a>)}
       </div>)}

@@ -72,7 +72,7 @@ const near=(actual,expected,label)=>assert.ok(Math.abs(actual-expected)<0.6,`${l
 
   // Going somewhere else in the app keeps the mark.
   await page.locator('.brand').click();
-  await page.waitForURL(url=>new URL(url).pathname.startsWith('/on/'));
+  await page.waitForURL(url=>new URL(url).pathname==='/year');
   now=await state(page);
   assert.match(now.className,/\bfolded\b/,'moving around the app does not play it again');
   near(now.width,mark,'still the mark');
