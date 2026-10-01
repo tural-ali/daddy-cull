@@ -1,3 +1,4 @@
+import {useReviewSession} from './ReviewSession';
 import {useCallback,useEffect,useEffectEvent,useMemo,useRef,useState,type ReactNode} from 'react';
 import {binChanged,type Asset,type Status} from '../api';
 import {Media} from '../Media';
@@ -193,6 +194,7 @@ export function Today({initial}:{initial:TodayData}){
   const behind=useMemo(()=>stacksBehind(assets),[assets]);
   const hidden=useMemo(()=>new Set([...behind.values()].flat().map(file=>file.id)),[behind]);
   const tiles=useMemo(()=>hidden.size===0?assets:assets.filter(asset=>!hidden.has(asset.id)),[assets,hidden]);
+  const session=useReviewSession(tiles,location.pathname.replace(/\/photo\/[^/]+$/,''),viewer,photo.show,photo.close);
   const [filters,setFilters]=useState<ReadonlySet<Filter>>(()=>new Set(savedFilters()));
   function saveFilters(next:ReadonlySet<Filter>){
     setFilters(next);
@@ -556,9 +558,10 @@ export function Today({initial}:{initial:TodayData}){
   const [onScreen,setOnScreen]=useState<number|null>(null);
   if(viewing===null&&onScreen!==null)setOnScreen(null);
   const addressMoved=photo.moved;
-  const moved=useCallback((id:number)=>{if(filtering.current)setOnScreen(id);addressMoved(id)},[addressMoved]);
+  const sessionMoved=session.moved;
+  const moved=useCallback((id:number)=>{if(filtering.current)setOnScreen(id);addressMoved(id);sessionMoved(id)},[addressMoved,sessionMoved]);
   const inView=onScreen===null?viewing:photoOf(onScreen);
-  const walked=useMemo(()=>filtered?tiles.filter(asset=>asset.id===inView||shownIDs.has(asset.id)):tiles,[tiles,filtered,inView,shownIDs]);
+  const walked=useMemo(()=>session.ids?tiles.filter(asset=>session.ids!.includes(asset.id)):filtered?tiles.filter(asset=>asset.id===inView||shownIDs.has(asset.id)):tiles,[tiles,filtered,inView,shownIDs,session.ids]);
   usePageFilters(assets.length>0?{
     options:filterChips.map(chip=>({...chip,on:filters.has(chip.id),count:tiles.filter(asset=>matches(asset,new Set([chip.id]))).length})),
     toggle:id=>toggleFilter(id as Filter),clear:()=>saveFilters(new Set()),
@@ -593,6 +596,7 @@ export function Today({initial}:{initial:TodayData}){
         <span className="sep">·</span><span>{bytes(initial.bytes)}</span>
       </p>
     </section>
+    {session.ui}
     {assets.length>0&&shown.length===0&&<p className="note">Nothing on this date matches the filters. <button type="button" className="textbtn" onClick={()=>saveFilters(new Set())}>Clear filters</button></p>}
     {queue.error&&<p className="note warn" role="alert">{queue.error} <button className="btn small" onClick={queue.retry}>Retry the same save</button></p>}
     {years.length===0&&<p className="note">Nothing in the archive is filed under {initial.label}, so there is nothing to review.</p>}
@@ -623,7 +627,7 @@ export function Today({initial}:{initial:TodayData}){
       {tip&&assets.length>0&&viewing===null&&<div className="snack" role="status">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>{undoKeys.undo}</b> undo, <b>{undoKeys.redo}</b> redo, <b>?</b> for the rest</div>}
     </Snacks>}
     {cheer&&<Celebration tally={cheer} nextHref={`/on/${initial.next}`} nextLabel={calendarLabel(initial.next)} onClose={()=>setCheer(null)}/>}
-    {viewing!==null&&<Viewer assets={walked} initialID={viewing} onClose={photo.close} onMove={moved} onSave={save} onPatch={patchAsset} onRecord={history.record} onTurn={(asset,quarters)=>turn([asset],quarters)}
+    {viewing!==null&&<Viewer assets={walked} initialID={viewing} onClose={photo.close} onMove={moved} sessionControl={session.control} onSave={save} onPatch={patchAsset} onRecord={history.record} onTurn={(asset,quarters)=>turn([asset],quarters)}
       behindOf={asset=>behind.get(asset.id)} onRemoveFormat={(still,file)=>void removeFormat(still,file)} onSeparate={(still,files)=>{const lead=stackLead([still,...files]);if(lead)void pairing(lead.id,[still,...files].filter(file=>file!==lead).map(file=>file.id),false)}}/>}
   </>;
 }

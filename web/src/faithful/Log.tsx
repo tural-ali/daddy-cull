@@ -2,7 +2,6 @@ import {Fragment,useMemo,useRef,useState} from 'react';
 import {decide,type Asset,type Status} from '../api';
 import {Media} from '../Media';
 import {Busy} from '../Busy';
-import {Deleting} from './Bin';
 import {Viewer} from './Viewer';
 import {usePhotoURL} from './photoURL';
 import {dayOfPath} from './goto';
@@ -106,13 +105,13 @@ export function Log({initial}:{initial:HistoryEvent[]}){
           {/* A file in the Bin is given back from the Bin, and one deleted
               from it cannot be given back at all. */}
           {!isUndone&&!event.where&&<div className="acts"><button type="button" className="act" disabled={!!busy} onClick={()=>void undo(event)}>{busy===event.requestId?<Busy label="Undoing…" state="working"/>:'Undo'}</button></div>}
-          {!isUndone&&(event.where==='bin'||event.where==='deleting')&&<div className="acts"><a className="act" href="/bin">{event.where==='bin'?'In the Bin':'Waiting to go'}</a></div>}
+          {!isUndone&&(event.where==='bin'||event.where==='deleting')&&<div className="acts"><a className="act" href={event.where==='deleting'?'/bin?tab=deleting':'/bin'}>{event.where==='bin'?'In the Bin':'Waiting to go'}</a></div>}
           <figcaption className="cap"><a href={dayOf(event.asset)} title={`Open ${event.asset.path.slice(0,event.asset.path.lastIndexOf('/'))}`}>{name}</a><span className="dim">{at.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</span></figcaption>
         </figure>
       </Fragment>;
     })}</div>}
     {more&&<p className="logmore"><button type="button" className="btn" disabled={loading} onClick={()=>void older()}>{loading?<Busy label="Reading earlier choices…" state="working"/>:'Show earlier choices'}</button></p>}
-    <Deleting/>
+    <p className="hint"><a href="/bin?tab=deleting">Recover files pending permanent deletion</a></p>
     {viewing!==null&&<Viewer assets={assets} initialID={viewing} onClose={photo.close} onMove={photo.moved} onSave={decideInViewer} onPatch={patch} dayOf={dayOf}/>}
   </>;
 }

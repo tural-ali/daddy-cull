@@ -233,7 +233,10 @@ func TestGETResponsesConformWithBin(t *testing.T) {
 	if _, err = b.Run(ctx, plan.ID, "quarantine", ""); err != nil {
 		t.Fatal(err)
 	}
-	if checked := checkGETs(t, s, binWorker(t, b), nil, nil); checked < 20 {
+	if _, err = s.write.Exec("INSERT INTO assets(id,relative_path,captured_at,kind,size_bytes) VALUES(2,'/archive/2020/day/B.jpg',2,'image',15)"); err != nil {
+		t.Fatal(err)
+	}
+	if checked := checkGETs(t, s, binWorker(t, b), nil, map[string]string{"/api/assets/{id}/burst": "/api/assets/2/burst"}); checked < 20 {
 		t.Fatalf("only %d routes were checked", checked)
 	}
 }

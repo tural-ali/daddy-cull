@@ -203,6 +203,7 @@ type Arrivals struct {
 // the Bin's listing, the log and the settings, plus the routes of the
 // addons whose records it keeps.
 func (s *Store) Routes(m *api.Mux) {
+	s.searchRoutes(m)
 	book := m.Book()
 	book.Tag("Library", "Counts across the whole library, and whether the catalogue has changed.")
 	book.Tag("Calendar", "The year's calendar, each date's files from every year, and the review streak.")
@@ -291,6 +292,7 @@ func (s *Store) Routes(m *api.Mux) {
 		read               func(context.Context, int64) ([]Asset, error)
 	}{
 		{"/api/assets/{id}/alternatives", "List a file's other versions", "Other files that are the same picture in another form: the same photo exported again, or a copy at another size.", s.Alternatives},
+		{"/api/assets/{id}/burst", "Find nearby shots to compare", "At most 40 same-folder candidates, plus their stacked companions, supported by capture times, available perceptual fingerprints, or related filenames. These are candidates, not proof of duplication.", s.Burst},
 		{"/api/assets/{id}/related", "List files related to a file", "Files that belong with this one, such as the other half of a Live Photo or a RAW+JPEG pair, and near copies.", s.Related},
 	} {
 		m.HandleFunc(api.Route{
@@ -555,8 +557,10 @@ func (s *Store) Routes(m *api.Mux) {
 		Summary: "Read the duplicates report",
 		Doc:     "The groups of identical files, and how far the answer can be trusted: how many of the files that could be copies have been hashed.",
 		Params: []api.Param{
-			api.Query("md", "string", "Only groups with a file on this month and day, as MM-DD."),
-			api.Query("limit", "integer", "How many groups to return, 1 to 1000. 100 by default."),
+			api.Query("md", "string", "Only groups with a file on this month and day, as MM-DD; unavailable with paged=1."),
+			api.Query("limit", "integer", "How many groups to return, 1 to 1000, or 1 to 100 with paged=1. 100 by default."),
+			api.Query("paged", "string", "Set to 1 for a bounded page with total and next."),
+			api.Query("after", "string", "The next cursor from the preceding paged report."),
 		},
 		Returns: DuplicateReport{},
 		Errors:  []api.Error{refused, unreadable},
@@ -567,7 +571,17 @@ func (s *Store) Routes(m *api.Mux) {
 		if !ok {
 			return
 		}
-		report, err := s.DuplicateOverview(ctx, r.URL.Query().Get("md"), limit)
+		var report DuplicateReport
+		var err error
+		if r.URL.Query().Get("paged") == "1" {
+			if r.URL.Query().Get("md") != "" {
+				failFor(w, ErrInvalid, "md is unavailable with paged=1.")
+				return
+			}
+			report, err = s.DuplicateWindow(ctx, limit, r.URL.Query().Get("after"))
+		} else {
+			report, err = s.DuplicateOverview(ctx, r.URL.Query().Get("md"), limit)
+		}
 		if err != nil {
 			failFor(w, err, "md should be MM-DD and limit 1 to 1000.")
 			return
@@ -580,8 +594,9 @@ func (s *Store) Routes(m *api.Mux) {
 		Method: "GET", Path: "/api/trash", Tag: "Bin", Needs: api.Read,
 		Summary: "List what is in the Bin",
 		Doc:     "Every file in the Bin, from every source, newest first: files removed while reviewing, screenshots, and anything an addon moved there.",
-		Returns: []TrashItem{},
-		Errors:  []api.Error{unreadable},
+		Params:  []api.Param{api.Query("paged", "string", "Set to 1 to return a TrashPage object instead of the legacy array."), api.Query("limit", "integer", "Page size, 1 to 100; default 50."), api.Query("after", "string", "The preceding page next cursor.")},
+		Returns: []TrashItem{}, Alternatives: []any{TrashPage{}},
+		Errors: []api.Error{unreadable},
 	}, func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
@@ -594,12 +609,26 @@ func (s *Store) Routes(m *api.Mux) {
 			failFor(w, err, "")
 			return
 		}
+		if r.URL.Query().Get("paged") == "1" {
+			limit, ok := pageLimit(w, r)
+			if !ok {
+				return
+			}
+			page, err := trashWindow(items, limit, r.URL.Query().Get("after"))
+			if err != nil {
+				failFor(w, err, "")
+				return
+			}
+			writeJSON(w, page)
+			return
+		}
 		writeJSON(w, items)
 	})
 	m.HandleFunc(api.Route{
 		Method: "GET", Path: "/api/trash/deleting", Tag: "Bin", Needs: api.Read,
 		Summary: "List files waiting to be deleted for good",
 		Doc:     "Files deleted from the Bin wait on disk for the grace period before they are gone. This lists them, the grace period, and how the last run went.",
+		Params:  []api.Param{api.Query("paged", "string", "Set to 1 for bounded cards with totals and whole-batch counts."), api.Query("summary", "string", "Set to 1 for totals and grace settings without cards; overrides paged."), api.Query("limit", "integer", "Page size, 1 to 100; default 50."), api.Query("after", "string", "The preceding page next cursor.")},
 		Returns: DeletingReport{},
 		Errors:  []api.Error{unreadable},
 	}, func(w http.ResponseWriter, r *http.Request) {
@@ -612,6 +641,34 @@ func (s *Store) Routes(m *api.Mux) {
 		if err != nil {
 			failFor(w, err, "")
 			return
+		}
+		report.Total = len(report.Items)
+		report.Groups = map[string]TrashGroupSize{}
+		for _, item := range report.Items {
+			report.Bytes += item.Size
+			g := report.Groups[item.Group]
+			g.Files++
+			g.Bytes += item.Size
+			report.Groups[item.Group] = g
+		}
+		if r.URL.Query().Get("summary") == "1" {
+			report.Items = []DeletingItem{}
+			report.Groups = nil
+		} else if r.URL.Query().Get("paged") == "1" {
+			limit, ok := pageLimit(w, r)
+			if !ok {
+				return
+			}
+			report.Items, report.Next, err = window(report.Items, limit, r.URL.Query().Get("after"), func(item DeletingItem) string { return item.DueAt + ":" + item.Key })
+			if err != nil {
+				failFor(w, err, "")
+				return
+			}
+			groups := map[string]TrashGroupSize{}
+			for _, item := range report.Items {
+				groups[item.Group] = report.Groups[item.Group]
+			}
+			report.Groups = groups
 		}
 		writeJSON(w, report)
 	})
@@ -723,6 +780,7 @@ func (s *Store) Routes(m *api.Mux) {
 		Summary: "Set the Bin's grace period",
 		Doc:     "How many days a file deleted from the Bin waits on disk before it is gone. The answer is the list of files waiting, under the new period.",
 		Body:    GraceChoice{},
+		Params:  []api.Param{api.Query("paged", "string", "Set to 1 for bounded cards with totals and whole-batch counts."), api.Query("summary", "string", "Set to 1 for totals and grace settings without cards; overrides paged."), api.Query("limit", "integer", "Page size, 1 to 100; default 50."), api.Query("after", "string", "The preceding page next cursor.")},
 		Returns: DeletingReport{},
 		Errors:  []api.Error{{Status: 400, When: fmt.Sprintf("The period is not 0 to %d days", MaxGraceDays)}, notJSON, offSite, unreadable},
 	}, func(w http.ResponseWriter, r *http.Request) {

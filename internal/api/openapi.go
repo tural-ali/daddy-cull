@@ -270,7 +270,15 @@ func (b *Book) OpenAPI(info Info) map[string]any {
 		case r.Produces != "":
 			ok["content"] = map[string]any{r.Produces: map[string]any{"schema": Schema{"type": "string", "format": "binary"}}}
 		case r.Returns != nil:
-			ok["content"] = map[string]any{"application/json": map[string]any{"schema": s.of(reflect.TypeOf(r.Returns))}}
+			schema := s.of(reflect.TypeOf(r.Returns))
+			if len(r.Alternatives) > 0 {
+				variants := []any{schema}
+				for _, value := range r.Alternatives {
+					variants = append(variants, s.of(reflect.TypeOf(value)))
+				}
+				schema = Schema{"anyOf": variants}
+			}
+			ok["content"] = map[string]any{"application/json": map[string]any{"schema": schema}}
 		}
 		responses[strconv.Itoa(r.successStatus())] = ok
 		// Every route sits behind the addon guard, and an addon's own route

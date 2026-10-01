@@ -117,6 +117,8 @@ type Route struct {
 	Body any
 	// Returns is a value of the response's type, or nil for none.
 	Returns any
+	// Alternatives lists other successful JSON response types for legacy-compatible endpoints.
+	Alternatives []any
 	// Produces is the response's media type when it is not JSON, such as
 	// image/jpeg or text/event-stream.
 	Produces string

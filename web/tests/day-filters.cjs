@@ -30,6 +30,7 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   };
   await page.route('**/api/**',route=>{
     const url=new URL(route.request().url());
+    if(url.pathname==='/api/search')return route.fulfill({json:{assets:[],next:''}});
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:5,synthetic:false,snapshotAt:'2026-09-06 01:49:00',candidates:0,calendarDays:2,reviewedDays:0,decisions:0,favourites:0,evidence:0,fullHashes:0,marked:0,calendarDates:366,reviewedDates:40,streak:13,reviewedToday:true}});
     if(url.pathname==='/api/streak')return route.fulfill({json:{streak:13,reviewedToday:true,best:13,days:[]}});
     if(url.pathname==='/api/today/09-07')return route.fulfill({json:{md:'09-07',label:'7 September',previous:'09-06',next:'09-08',years:[{day:'2010-09-07',year:2010,files:5,bytes:500,status:'pending',assets}],memories:5,bytes:500}});
@@ -114,8 +115,10 @@ const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
   // A date still goes to the date.
   await box.pressSequentially('zzz');
   await page.keyboard.press('Enter');
-  await page.getByText('Type a date, such as 14 Aug 2019, or a filter, such as videos.').waitFor();
-  await box.fill('');
+  await page.waitForURL(/\/library\?q=zzz$/);
+  await page.getByRole('heading',{name:'Library',exact:true}).waitFor();
+  await page.goBack();
+  await page.locator('.gal figure').first().waitFor();
 
   // The keys and the viewer walk only what is shown.
   await page.locator('.gal figure').first().click();

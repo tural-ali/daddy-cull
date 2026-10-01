@@ -1,3 +1,4 @@
+import {Library} from './Library';
 import {Fragment,useCallback,useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import {Layout,type LegacyRoute} from './Layout';
 import {PageGuide,syncGuides} from './PageGuide';
@@ -53,6 +54,7 @@ async function json<T>(url:string):Promise<T>{
 }
 
 function routeFor(path:string):LegacyRoute{
+  if(path==='/library')return 'library';
   if(path==='/year')return 'year';
   if(path==='/duplicates')return 'dupes';
   if(path==='/upgrades')return 'upgrades';
@@ -74,7 +76,7 @@ function routeFor(path:string):LegacyRoute{
 // Cull's own pages that belong to an addon.
 const addonPaths=new Set(['/screenshots','/social','/shadows','/upgrades','/photos','/google-photos']);
 
-const routeTitles:Record<LegacyRoute,string>={today:'Today',year:'Year',dupes:'Duplicates',upgrades:'Upgrades',shadows:'Shadowed',shots:'Screenshots',social:'Saved from social',photos:'Apple Photos',google:'Google Photos',log:'Log',bin:'Bin',settings:'Settings',addons:'Addons',developers:'Developers',setup:'Set up',frame:'Addon'};
+const routeTitles:Record<LegacyRoute,string>={library:'Library',today:'Today',year:'Year',dupes:'Duplicates',upgrades:'Upgrades',shadows:'Shadowed',shots:'Screenshots',social:'Saved from social',photos:'Apple Photos',google:'Google Photos',log:'Log',bin:'Bin',settings:'Settings',addons:'Addons',developers:'Developers',setup:'Set up',frame:'Addon'};
 
 /** The browser tab names the page, and the date for a day, so several open
  * tabs can be told apart. */
@@ -188,6 +190,7 @@ export function App(){
         const owner=ownerOf(addons,path);
         if(owner&&!owner.on)return {route,content:<AddonMissing addon={owner} label={routeTitles[route]}/>};
       }
+      if(path==='/library')return {route,content:<Library initial={await json<import('../api').Page>(`/api/search${location.search||'?limit=50'}`)}/>};
       if(path==='/addons')return {route,content:<Addons/>};
       if(path==='/developers')return {route,content:<Developers/>};
       if(path==='/setup')return {route,content:<Setup initial={await readSetup()}/>};
@@ -206,7 +209,7 @@ export function App(){
       // Coverage against the files that could possibly be duplicates is what makes
       // an empty result readable: no groups found is a different statement from no
       // groups because nothing was ever hashed.
-      if(path==='/duplicates')return {route,content:<Duplicates report={await json<DuplicateReport>('/api/duplicate-report?limit=1000')}/>};
+      if(path==='/duplicates')return {route,content:<Duplicates report={await json<DuplicateReport>('/api/duplicate-report?paged=1&limit=50')}/>};
       if(path==='/upgrades')return {route,content:<Upgrades initial={await json<UpgradePage>('/api/upgrades')}/>};
       if(path==='/log')return {route,content:<Log initial={await json<HistoryEvent[]>(`/api/log?limit=${logPage}`)}/>};
       if(path==='/photos')return {route,content:<Photos/>};

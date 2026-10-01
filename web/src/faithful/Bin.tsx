@@ -18,7 +18,9 @@ export type TrashItem={key:string;group:string;source:'marked'|'bin'|'legacy'|'s
   live?:boolean};
 /** A file deleted from the Bin and still on disk until its grace period ends. */
 export type DeletingItem=TrashItem&{deletedAt:string;dueAt:string;attempts:number;lastError?:string};
-export type DeletingReport={graceDays:number;graceError?:string;items:DeletingItem[];lastRun:string;lastDeleted:number;lastError:string;checkIntervalMinutes:number};
+export type DeletingReport={total?:number;bytes?:number;next?:string;groups?:Record<string,GroupSize>;graceDays:number;graceError?:string;items:DeletingItem[];lastRun:string;lastDeleted:number;lastError:string;checkIntervalMinutes:number};
+type GroupSize={files:number;bytes:number};
+type TrashPage={items:TrashItem[];total:number;bytes:number;next:string;groups:Record<string,GroupSize>};
 type Result={done:number;bytes:number;failures:{name:string;error:string}[];keptDays?:number};
 /** How many file names a failure lists before summing up the rest. */
 const shownNames=12;
@@ -42,8 +44,8 @@ async function post(path:string,body:unknown):Promise<Result>{
   if(!response.ok)throw new Error((result as {error?:string}).error||'The Bin request failed.');
   return result as Result;
 }
-export async function readDeleting():Promise<DeletingReport>{
-  const response=await fetch('/api/trash/deleting');
+export async function readDeleting(query=''):Promise<DeletingReport>{
+  const response=await fetch(`/api/trash/deleting${query}`);
   if(!response.ok)throw new Error('The list of deleted files could not be read. Check that the local service is running.');
   return response.json();
 }
@@ -79,6 +81,12 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   const [items,setItems]=useState<(TrashItem|DeletingItem)[]|null>(null);
   const [report,setReport]=useState<DeletingReport|null>(null);
   const [busy,setBusy]=useState('');
+  const [after,setAfter]=useState('');
+  const [next,setNext]=useState('');
+  const [total,setTotal]=useState(0);
+  const [allBytes,setAllBytes]=useState(0);
+  const [groupSizes,setGroupSizes]=useState<Record<string,GroupSize>>({});
+  const [reading,setReading]=useState(true);
   // The control whose action is running, so the orb shows where the click was.
   const [doing,setDoing]=useState<Control|null>(null);
   const [message,setMessage]=useState('');
@@ -88,18 +96,23 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   const dialog=useRef<HTMLDialogElement>(null);
   useDialogKeys(dialog);
 
-  async function refresh(){
+  async function refresh(cursor=after){
+    setReading(true);setError('');
+    const query=`?paged=1&limit=100&after=${encodeURIComponent(cursor)}`;
     try{
-      const waiting=await readDeleting();
-      setReport(waiting);
-      let next:(TrashItem|DeletingItem)[]=waiting.items;
       if(mode==='bin'){
-        const response=await fetch('/api/trash');
-        if(!response.ok)throw new Error('The Bin could not be read. Check that the local service is running.');
-        next=await response.json();
+        // The recovery policy and the Bin contents fail independently.
+        void readDeleting('?summary=1').then(setReport).catch(reason=>setError((reason as Error).message));
+        const response=await fetch(`/api/trash${query}`);
+        if(!response.ok)throw new Error('The Bin could not be read. Try again.');
+        const data:TrashPage|TrashItem[]=await response.json();
+        const page=Array.isArray(data)?{items:data,total:data.length,bytes:data.reduce((sum,item)=>sum+item.size,0),next:'',groups:{}}:data;
+        setItems(page.items);setTotal(page.total);setAllBytes(page.bytes);setNext(page.next);setGroupSizes(page.groups);onCount?.(page.total);
+      }else{
+        const page=await readDeleting(query);setReport(page);setItems(page.items);setTotal(page.total??page.items.length);setAllBytes(page.bytes??page.items.reduce((sum,item)=>sum+item.size,0));setNext(page.next??'');setGroupSizes(page.groups??{});
       }
-      setItems(next);onCount?.(next.length);
-    }catch(reason){setError((reason as Error).message)}
+      setAfter(cursor);
+    }catch(reason){setError((reason as Error).message)}finally{setReading(false)}
   }
   const firstRead=useEffectEvent(()=>{void refresh()});
   useEffect(()=>firstRead(),[]);
@@ -114,8 +127,10 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   const grace=report?.graceDays??0;
   const picks=usePicks(list,item=>item.group);
   const chosen=list.filter(item=>picks.picked.has(item.group));
-  const chosenBytes=chosen.reduce((sum,item)=>sum+item.size,0);
-  const totalBytes=list.reduce((sum,item)=>sum+item.size,0);
+  const selectedGroups=[...new Set(chosen.map(item=>item.group))];
+  const chosenCount=selectedGroups.reduce((sum,group)=>sum+(groupSizes[group]?.files??chosen.filter(item=>item.group===group).length),0);
+  const chosenBytes=selectedGroups.reduce((sum,group)=>sum+(groupSizes[group]?.bytes??chosen.filter(item=>item.group===group).reduce((n,item)=>n+item.size,0)),0);
+  const totalBytes=allBytes;
   const allSelected=list.length>0&&chosen.length===list.length;
   const previews:LightboxItem[]=list.filter(item=>item.preview).map(item=>({key:item.key,base:item.preview!,name:item.name,kind:item.kind,detail:caption(item),day:dayOfPath(item.original)??undefined}));
   // Only the Bin's own previews have addresses; the Log's list sits under the
@@ -153,11 +168,11 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   async function queue(control:Control,label:string,action:BinAction,keys:string[],said:(count:number)=>string){
     setBusy(label);setDoing(control);setError('');setMessage('');setFailures([]);
     try{
-      const task=await queueBin(action,keys,action==='restore'?undefined:`DELETE ${action==='empty'?list.length:keys.length}`);
+      const task=await queueBin(action,keys,action==='restore'?undefined:`DELETE ${action==='empty'?total:chosenCount}`);
       queued.current.set(task.id,action);
       const asked=new Set(keys),groups=new Set(list.filter(item=>asked.has(item.key)).map(item=>item.group));
       const left=action==='empty'?[]:list.filter(item=>!groups.has(item.group));
-      setItems(left);onCount?.(left.length);picks.clear();
+      setItems(left);setTotal(current=>Math.max(0,current-task.total));if(mode==='bin')onCount?.(Math.max(0,total-task.total));picks.clear();
       setMessage(said(task.total));
     }catch(reason){setError((reason as Error).message)}
     finally{setBusy('');setDoing(null);binChanged()}
@@ -187,23 +202,23 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   function deleted(result:Result){
     if(result.keptDays){
       const until=new Date(Date.now()+result.keptDays*86400000).toLocaleDateString('en-GB',{day:'numeric',month:'long'});
-      return `${files(result.done)} deleted from the Bin. They stay on disk until ${until} and can be restored from the Log until then.`;
+      return `${files(result.done)} deleted from the Bin. They stay on disk until ${until} and can be restored from Pending deletion until then.`;
     }
     return `${files(result.done)} permanently deleted, freeing ${bytes(result.bytes)}.`;
   }
   function consequence(what:string,size:number){
     return grace>0
-      ?`${what} (${bytes(size)}) leave the Bin, sidecars included. They stay on disk for ${grace} day${grace===1?'':'s'}, restorable from the Log, and are then deleted automatically.`
+      ?`${what} (${bytes(size)}) leave the Bin, sidecars included. They stay on disk for ${grace} day${grace===1?'':'s'}, restorable in Pending deletion, and are then deleted automatically.`
       :`${what} (${bytes(size)}) will be permanently deleted, sidecars included. This cannot be undone.`;
   }
   function remove(){
-    const keys=chosen.map(item=>item.key),count=chosen.length;
+    const keys=chosen.map(item=>item.key),count=chosenCount;
     if(mode==='deleting'){
       setPending({
         title:`Delete ${files(count)} now?`,
         body:`${files(count)} (${bytes(chosenBytes)}) will be permanently deleted now instead of when their grace period ends, sidecars included. This cannot be undone.`,
         confirm:`Delete ${files(count)} now`,
-        run:()=>queue('delete','Deleting…','purge-now',keys,total=>`Permanently deleting ${files(total)} now. ${going}`),
+        run:()=>queue('delete','Deleting…','purge-now',keys,amount=>`Permanently deleting ${files(amount)} now. ${going}`),
       });
       return;
     }
@@ -211,39 +226,39 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
       title:grace>0?`Delete ${files(count)}?`:`Delete ${files(count)} for good?`,
       body:consequence(files(count),chosenBytes),
       confirm:`Delete ${files(count)}`,
-      run:()=>queue('delete','Deleting…','delete',keys,total=>grace>0?`Deleting ${files(total)} from the Bin. They stay on disk for ${grace} day${grace===1?'':'s'}, restorable from the Log. ${going}`:`Permanently deleting ${files(total)}. ${going}`),
+      run:()=>queue('delete','Deleting…','delete',keys,amount=>grace>0?`Deleting ${files(amount)} from the Bin. They stay on disk for ${grace} day${grace===1?'':'s'}, restorable in Pending deletion. ${going}`:`Permanently deleting ${files(amount)}. ${going}`),
     });
   }
   function empty(){
-    const count=list.length;
+    const count=total;
     setPending({
       title:'Empty the Bin?',
       body:consequence(`All ${files(count)} in the Bin`,totalBytes),
       confirm:'Empty the Bin',
-      run:()=>queue('empty','Emptying…','empty',[],total=>`Emptying the Bin of ${files(total)}. ${going}`),
+      run:()=>queue('empty','Emptying…','empty',[],amount=>`Emptying the Bin of ${files(amount)}. ${going}`),
     });
   }
 
-  useSelectionBar({count:chosen.length,busy:!!busy,clear:picks.clear,actions:[
+  useSelectionBar({count:chosenCount,busy:!!busy||reading,clear:picks.clear,actions:[
     {label:allSelected?'Deselect all':`Select all ${list.length.toLocaleString()}`,icon:'select_all',keys:'Mod+A',onClick:()=>allSelected?picks.clear():picks.all()},
     {label:'Restore',icon:'restore_from_trash',keys:'R',onClick:()=>restore(chosen.map(item=>item.key),'restore')},
-    {label:mode==='bin'?(grace>0?'Delete':'Delete for good'):'Delete now',icon:'delete_forever',keys:'Delete',danger:true,onClick:remove},
+    {disabled:!report,label:mode==='bin'?(grace>0?'Delete':'Delete for good'):'Delete now',icon:'delete_forever',keys:'Delete',danger:true,onClick:remove},
   ]});
 
   // Emptying the Bin is the page's own action, so it sits in the top bar
   // with every other page's.
-  usePageActions(mode==='bin'&&list.length>0?{actions:[{label:'Empty Bin',icon:'delete',keys:'Shift+Delete',disabled:!!busy&&doing!=='empty',busy:doing==='empty',onClick:empty}]}:null);
+  usePageActions(mode==='bin'&&total>0?{actions:[{label:'Empty Bin',icon:'delete',keys:'Shift+Delete',disabled:!report||reading||!!busy&&doing!=='empty',busy:doing==='empty',onClick:empty}]}:null);
 
-  const summary=items===null?<Busy label={mode==='bin'?'Reading the Bin…':'Reading deleted files…'}/>:<><b>{list.length.toLocaleString()}</b> file{list.length===1?'':'s'} · <b>{bytes(totalBytes)}</b>{chosen.length>0&&<span className="dim"> · {bytes(chosenBytes)} selected</span>}</>;
+  const summary=items===null?(reading?<Busy label={mode==='bin'?'Reading the Bin…':'Reading deleted files…'}/>:null):<><b>{total.toLocaleString()}</b> file{total===1?'':'s'} · <b>{bytes(totalBytes)}</b>{chosen.length>0&&<span className="dim"> · {bytes(chosenBytes)} selected</span>}</>;
   const hint=mode==='bin'
-    ?(report===null?'':grace>0?<>Deleted files stay on disk for {grace} more day{grace===1?'':'s'}, restorable from the foot of the <a href="/log">Log</a>, then are deleted automatically. <a href="/settings#bin">Change</a></>:<>Deleting from the Bin is immediate and cannot be undone. <a href="/settings#bin">Keep deleted files for a while instead</a></>)
+    ?(report===null?'':grace>0?<>Deleted files stay on disk for {grace} more day{grace===1?'':'s'}, restorable in <a href="/bin?tab=deleting">Pending deletion</a>, then are deleted automatically. <a href="/settings#bin">Change</a></>:<>Deleting from the Bin is immediate and cannot be undone. <a href="/settings#bin">Keep deleted files for a while instead</a></>)
     :(report===null?'':<>Deleted from the Bin, still on disk. Each is deleted automatically {grace} day{grace===1?'':'s'} after it was deleted, checked every {report.checkIntervalMinutes} minutes. <a href="/settings#bin">Change</a></>);
   // On the Log the waiting list only exists while something is waiting; once the
   // last file is restored or deleted, only the sentence saying so remains.
-  if(mode==='deleting'&&items!==null&&list.length===0&&!error)return message?<p className="flash" role="status">{message}</p>:null;
+
   return <>
     <section className={mode==='bin'?'binhead':'binhead deletinghead'}>
-      {mode==='bin'?<h1>Bin</h1>:<h2>Deleted, waiting to go</h2>}
+      <h1>{mode==='bin'?'Bin':'Pending deletion'}</h1>
       <p className="ysum">{summary}</p>
       {hint&&<p className="hint">{hint}</p>}
       {report?.graceError&&<p className="note warn" role="alert">Automatic deletion is paused: {report.graceError} Save a number of days in <a href="/settings#bin">Settings</a> to resume it.</p>}
@@ -255,7 +270,14 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
       <span className="mono">{group.names.slice(0,shownNames).join(', ')}{group.names.length>shownNames&&<> and {(group.names.length-shownNames).toLocaleString()} more</>}</span>
     </li>)}</ul></div>}
     {error&&<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>{setError('');void refresh()}}>Reload</button></p>}
-    {mode==='bin'&&items!==null&&list.length===0&&!error&&<p className="note">The Bin is empty. Nothing has been removed, or everything removed has been dealt with.</p>}
+    {mode==='bin'&&items!==null&&total===0&&!error&&<p className="note">The Bin is empty. Nothing has been removed, or everything removed has been dealt with.</p>}
+    {mode==='deleting'&&items!==null&&total===0&&!error&&<p className="note">No files are waiting for permanent deletion.</p>}
+    {items!==null&&list.length===0&&total>0&&!error&&<p className="note">No files remain on this page. Return to the first page to see the rest.</p>}
+    {(after||next)&&<nav className="queuepages" aria-label="Bin pages">
+      {after&&<button className="btn" disabled={reading||!!busy} onClick={()=>{picks.clear();void refresh('')}}>First page</button>}
+      {next&&<button className="btn" disabled={reading||!!busy} onClick={()=>{picks.clear();void refresh(next)}}>{reading?<Busy label="Reading files…"/>:'Next 100 files'}</button>}
+      <span className="dim">{list.length} files on this page</span>
+    </nav>}
     {list.length>0&&<Rows className="bingrid">
       {list.map((item,index)=>{
         const waiting='dueAt' in item?item:null;
@@ -277,7 +299,7 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
       // engines move a batch only as a whole, so the button says so.
       const item=list.find(other=>other.key===current.key);
       if(!item)return null;
-      const batch=list.filter(other=>other.group===item.group).length;
+      const batch=groupSizes[item.group]?.files??list.filter(other=>other.group===item.group).length;
       if(item.source==='bin'||batch===1)return <button type="button" className="rvbtn" disabled={!!busy} {...keyProps('R')} onClick={()=>restoreFile(item)}>{face('lightbox','Restore this file')}<Kbd keys="R"/></button>;
       return <button type="button" className="rvbtn" disabled={!!busy} {...keyProps('R')} onClick={()=>restore([current.key],'lightbox')}>{face('lightbox',`Restore with its batch (${batch} files)`)}<Kbd keys="R"/></button>;
     }}/>}
@@ -297,6 +319,4 @@ function TrashBoard({mode,onCount}:{mode:Mode;onCount?:(count:number)=>void}){
   </>;
 }
 
-export function Bin({onCount}:{onCount?:(count:number)=>void}){return <TrashBoard mode="bin" onCount={onCount}/>}
-/** The Log's list of files deleted from the Bin and not yet gone. Renders nothing when there are none. */
-export function Deleting(){return <TrashBoard mode="deleting"/>}
+export function Bin({onCount}:{onCount?:(count:number)=>void}){const deleting=new URLSearchParams(location.search).get('tab')==='deleting';return <><nav className="queuepages" aria-label="Bin sections"><a className="btn" aria-current={!deleting?'page':undefined} href="/bin">Removed</a><a className="btn" aria-current={deleting?'page':undefined} href="/bin?tab=deleting">Pending deletion</a></nav><TrashBoard key={String(deleting)} mode={deleting?'deleting':'bin'} onCount={onCount}/></>}

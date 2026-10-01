@@ -33,9 +33,8 @@ const waiting={key:'w1',group:'g1',source:'bin',name:'OLD.JPG',original:'/archiv
   assert.equal(await page.locator('.logtile').count(),200);
   const first=await page.locator('.logtile').first().boundingBox();
   assert.ok(first.y<400,`the latest choice is in view on opening, not at ${first.y}`);
-  await page.getByRole('heading',{name:'Deleted, waiting to go'}).waitFor();
-  const [grid,deleting]=await Promise.all([page.locator('.loggrid').boundingBox(),page.getByRole('heading',{name:'Deleted, waiting to go'}).boundingBox()]);
-  assert.ok(deleting.y>grid.y+grid.height,'the waiting files come after the choices');
+  assert.equal(await page.locator('.bingrid').count(),0,'Log never mounts the recovery queue');
+  assert.equal(await page.getByRole('link',{name:'Recover files pending permanent deletion'}).getAttribute('href'),'/bin?tab=deleting');
 
   await page.getByRole('button',{name:'Show earlier choices'}).click();
   await page.locator('.logtile').nth(229).waitFor();

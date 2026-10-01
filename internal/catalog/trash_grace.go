@@ -155,6 +155,14 @@ type DeletingItem struct {
 // DeletingReport is what the Log and Settings pages show about deletions still
 // waiting and about the reaper's last run.
 type DeletingReport struct {
+	// Total counts all matching entries before pagination.
+	Total  int                       `json:"total"`
+	// Bytes is the total size of all matching files.
+	Bytes  int64                     `json:"bytes"`
+	// Next is a continuation cursor; empty means no further page.
+	Next   string                    `json:"next"`
+	// Groups counts full batches so a page cannot understate an action.
+	Groups map[string]TrashGroupSize `json:"groups,omitempty"`
 	// GraceDays is how many days a card deleted from the Bin stays on disk
 	// before the reaper deletes it, from 0 to 365; 0 means deletion is
 	// immediate. It is 0 when GraceError is set.

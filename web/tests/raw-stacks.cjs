@@ -117,7 +117,7 @@ const colours={1:'#7a5b3a',2:'#2f4f6f',3:'#4f6f2f',4:'#6f2f4f',5:'#3a6b6b',6:'#6
   assert.equal((await rows())[4],'Records where it was taken');
   await page.keyboard.press('r');
   await page.keyboard.press('r');
-  assert.equal(await viewer.getByRole('button',{name:'Compare similar photos'}).count(),0,'the files of the stack are not similar photos');
+  assert.equal(await viewer.getByRole('button',{name:'Compare similar photos'}).count(),1,'nearby burst comparison is available for every still photo');
   await page.evaluate(()=>document.getAnimations().forEach(animation=>animation.finish()));
   if(shots)await page.screenshot({path:`${shots}/raw-stack-viewer.png`});
   await page.keyboard.press('i');

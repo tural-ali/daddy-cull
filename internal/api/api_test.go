@@ -118,3 +118,23 @@ func TestConformsRefusesNullForAList(t *testing.T) {
 		t.Fatal("an undocumented field was accepted")
 	}
 }
+
+func TestConformsLegacyAndPagedResponse(t *testing.T) {
+	type page struct {
+		Items []int `json:"items"`
+	}
+	b := NewBook()
+	route := Route{Method: "GET", Path: "/api/items", Tag: "Test", Needs: Read, Summary: "List", Returns: []int{}, Alternatives: []any{page{}}}
+	b.add(route)
+	doc := b.OpenAPI(Info{Title: "Test", Version: Version})
+	for _, body := range []string{`[]`, `[1,2]`, `{"items":[1,2]}`} {
+		if err := Conforms(doc, route, []byte(body)); err != nil {
+			t.Fatal(body, err)
+		}
+	}
+	for _, body := range []string{`null`, `{"items":null}`, `{"wrong":[]}`} {
+		if err := Conforms(doc, route, []byte(body)); err == nil {
+			t.Fatal("invalid response accepted", body)
+		}
+	}
+}

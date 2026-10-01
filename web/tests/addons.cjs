@@ -45,7 +45,7 @@ const shots=process.env.SHOTS;
   await page.getByRole('heading',{name:'Addons',level:1}).waitFor();
   await page.getByRole('switch',{name:'Screenshots'}).waitFor();
   assert.equal(await page.title(),'Addons · Daddy, Cull!');
-  assert.deepEqual(await sidebar(),[': Today, Year','Collections: Duplicates, Screenshots','Sync: Apple Photos','History: Log, Bin'],'only the pages of addons that are on');
+  assert.deepEqual(await sidebar(),[': Today, Year, Find photos','Collections: Duplicates, Screenshots','Sync: Apple Photos','History: Log, Bin'],'only the pages of addons that are on');
   assert.equal(await page.getByRole('navigation',{name:'Settings'}).getByRole('link',{name:'Addons'}).getAttribute('aria-current'),'page');
 
   // Each row says whether it is ready, and why not.
@@ -69,7 +69,7 @@ const shots=process.env.SHOTS;
   await page.getByRole('switch',{name:'Screenshots'}).click();
   await page.waitForFunction(()=>document.querySelector('[role=switch][aria-labelledby=addon-screenshots]')?.getAttribute('aria-checked')==='false');
   assert.deepEqual(posts.shift(),{id:'screenshots',body:{on:false}});
-  assert.deepEqual(await sidebar(),[': Today, Year','Collections: Duplicates','Sync: Apple Photos','History: Log, Bin']);
+  assert.deepEqual(await sidebar(),[': Today, Year, Find photos','Collections: Duplicates','Sync: Apple Photos','History: Log, Bin']);
   assert.equal(await status('screenshots'),'Off. 12 screenshots wait for review.');
 
   // Its address now says it is off, and how to turn it on.
@@ -95,7 +95,7 @@ const shots=process.env.SHOTS;
   await ask.getByRole('button',{name:/^Turn on/}).click();
   await nav.getByRole('link',{name:'Hello'}).waitFor();
   assert.deepEqual(posts.shift(),{id:'hello-cull',body:{on:true}});
-  assert.deepEqual(await sidebar(),[': Today, Year','Collections: Duplicates','Sync: Apple Photos','Tools: Hello','History: Log, Bin'],'a page of your own joins its section');
+  assert.deepEqual(await sidebar(),[': Today, Year, Find photos','Collections: Duplicates','Sync: Apple Photos','Tools: Hello','History: Log, Bin'],'a page of your own joins its section');
   assert.equal(await nav.getByRole('link',{name:'Hello'}).getAttribute('href'),'/addons/hello-cull/hello');
 
   // A failure says so on the row and leaves the switch where it was.
@@ -112,7 +112,7 @@ const shots=process.env.SHOTS;
   announce();
   await page.waitForFunction(()=>![...document.querySelectorAll('nav[aria-label="Main navigation"] a')].some(link=>link.textContent.trim()==='Apple Photos'));
   assert.equal(await page.getByRole('switch',{name:'Apple Photos'}).getAttribute('aria-checked'),'false');
-  assert.deepEqual(await sidebar(),[': Today, Year','Collections: Duplicates','Tools: Hello','History: Log, Bin'],'an empty section is left out');
+  assert.deepEqual(await sidebar(),[': Today, Year, Find photos','Collections: Duplicates','Tools: Hello','History: Log, Bin'],'an empty section is left out');
 
   // Day theme and a phone: nothing runs off the side.
   await page.evaluate(()=>{localStorage.setItem('cull-theme','day');window.dispatchEvent(new StorageEvent('storage',{key:'cull-theme'}))});

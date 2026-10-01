@@ -59,7 +59,11 @@ func (s *Store) KeepShapes(ctx context.Context, roots MediaRoots) {
 		} else if read > 0 {
 			log.Printf("photo exposures: read %d in %s", read, time.Since(started).Round(time.Second))
 		}
-		if !s.waitForChange(ctx, seen, shapeEvery) {
+		delay := shapeEvery
+		if read > 0 {
+			delay = time.Second
+		}
+		if !s.waitForChange(ctx, seen, delay) {
 			return
 		}
 	}

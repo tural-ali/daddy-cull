@@ -118,7 +118,7 @@ const fixture=()=>[
   assert.equal(await page.locator('.gbar.selecting').count(),0);
 
   // With a grace period, deleting only schedules: the wording says the files
-  // stay on disk and can be restored from the Log until they go.
+  // stay on disk and can be restored from Pending deletion until they go.
   bin=fixture();grace=30;
   await page.goto((process.env.APP_URL||'http://127.0.0.1:8842')+'/bin');
   await page.locator('.bingrid figure').nth(4).waitFor();
@@ -126,9 +126,9 @@ const fixture=()=>[
   await bar.getByRole('button',{name:'Delete',exact:true}).click();
   const kept=page.getByRole('dialog',{name:'Delete 1 file?'});
   await kept.waitFor();
-  assert.match(await kept.innerText(),/stay on disk for 30 days, restorable from the Log, and are then deleted automatically/);
+  assert.match(await kept.innerText(),/stay on disk for 30 days, restorable in Pending deletion, and are then deleted automatically/);
   await kept.getByRole('button',{name:'Delete 1 file'}).click();
-  await page.getByText(/1 file deleted from the Bin\. They stay on disk until .+ and can be restored from the Log until then\./).waitFor();
+  await page.getByText(/1 file deleted from the Bin\. They stay on disk until .+ and can be restored from Pending deletion until then\./).waitFor();
   assert.deepEqual(posts[3],{path:'/api/tasks/bin',body:{action:'delete',keys:['marked:11'],confirmation:'DELETE 1'}});
   assert.equal(await page.locator('.bingrid figure').count(),4);
 

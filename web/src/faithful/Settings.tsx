@@ -65,7 +65,7 @@ function BinSettings(){
   }
   return <>
     <h2 id="bin">Bin</h2>
-    <p className="hint">Files you delete from the Bin stay on disk this long, restorable from the <a href="/log">Log</a>, and are then deleted automatically. Zero deletes them at once. A change also applies to files already waiting.</p>
+    <p className="hint">Files you delete from the Bin stay on disk this long, restorable from the <a href="/bin?tab=deleting">Pending deletion</a>, and are then deleted automatically. Zero deletes them at once. A change also applies to files already waiting.</p>
     {error&&<p className="note warn" role="alert">{error}</p>}
     {message&&<p className="flash" role="status">{message}</p>}
     {report?.graceError&&<p className="note warn" role="alert">Automatic deletion is paused: {report.graceError} Save a number of days to resume it.</p>}
@@ -79,7 +79,7 @@ function BinSettings(){
     {changed&&soon>0&&<p className="note warn">{soon.toLocaleString()} file{soon===1?' has':'s have'} already waited longer than {value} day{value===1?'':'s'} and will be deleted at the next check, within {report?.checkIntervalMinutes??15} minutes.</p>}
     {report===null&&!error&&<p className="hint"><Busy label="Reading the deletion schedule…"/></p>}
     {report&&<dl className="kv">
-      <div><dt>Waiting to be deleted</dt><dd>{items.length===0?'nothing':<><a href="/log">{items.length.toLocaleString()} file{items.length===1?'':'s'}</a> · {bytes(items.reduce((sum,item)=>sum+item.size,0))}</>}</dd></div>
+      <div><dt>Waiting to be deleted</dt><dd>{items.length===0?'nothing':<><a href="/bin?tab=deleting">{items.length.toLocaleString()} file{items.length===1?'':'s'}</a> · {bytes(items.reduce((sum,item)=>sum+item.size,0))}</>}</dd></div>
       <div><dt>Next to go</dt><dd>{next?<>{next.name} on {longDate(next.dueAt)}</>:'nothing is scheduled'}</dd></div>
       <div><dt>Last automatic check</dt><dd>{report.lastRun?<>{ago(report.lastRun)}, {report.lastDeleted>0?`deleted ${report.lastDeleted.toLocaleString()} file${report.lastDeleted===1?'':'s'}`:'nothing was due'}</>:'not yet run'}</dd></div>
       {report.lastError&&<div><dt>Problem</dt><dd className="warntext">{report.lastError}</dd></div>}

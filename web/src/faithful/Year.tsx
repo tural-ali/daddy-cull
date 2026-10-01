@@ -1,3 +1,4 @@
+import {resumeSession} from './ReviewSession';
 import {ProgressBar} from '../ProgressBar';
 import {useContext,type CSSProperties} from 'react';
 import {OpeningContext} from './YearOpening';
@@ -47,6 +48,7 @@ function describe(cell:CalendarCell){
 }
 
 export function Year({months,prog,streak}:YearData){
+  const resume=resumeSession();
   const dates=Math.max(1,prog.dates),percent=prog.done/dates*100;
   // Today is the viewer's own date, not the server's, so the outline moves at
   // the viewer's midnight.
@@ -61,6 +63,7 @@ export function Year({months,prog,streak}:YearData){
       {streak>0&&<span className="dim"> · {streak} day streak</span>}
     </p>
     <ProgressBar className="pbar wide" label="Calendar dates reviewed" value={prog.done} max={dates}/>
+    {resume&&<p className="queuepages"><a className="btn" href={resume}>Resume your review session</a></p>}
     <div className="calendar">
       {months.map((month,row)=><div className="cmonth" key={month.name}>
         <span className="mlabel" style={{'--far':far(row,-1).toFixed(3)} as CSSProperties}>{month.name.slice(0,3)}</span>

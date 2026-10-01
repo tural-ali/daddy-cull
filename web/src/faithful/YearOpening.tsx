@@ -1,8 +1,8 @@
-import {createContext,useEffect,useRef,useState,type CSSProperties} from 'react';
-import {Logo,logoTilePoints} from '../Logo';
+import {createContext,useEffect,useRef,useState} from 'react';
+import {Logo} from '../Logo';
 
 // The app's own address opens on the year, the way a phone opens on its home
-// screen: the logo alone in the middle, light passing over it, then the camera
+// screen: the logo alone in the middle, then the camera
 // dives in through the day tiles and every date of the calendar flies in from
 // in front of the screen to settle in its place. Loading the year plays it,
 // at the bare address or /year, a reload included; Year in the sidebar simply
@@ -15,9 +15,9 @@ export type OpeningPhase='logo'|'dive';
 /** Which part of the opening is playing, for the Year page to join in. */
 export const OpeningContext=createContext<OpeningPhase|null>(null);
 
-// The logo shows at least this long, so its light passes once whole, and the
+// The logo rests briefly so its full silhouette reads, and the
 // dive and the dates' arrival take this long after it.
-const LOGO=1650,DIVE=2550;
+const LOGO=1200,DIVE=2850;
 
 /** Whether this page load opens with the logo: one at the bare address or
  * /year does, read before the app rewrites the one to the other, and never
@@ -59,29 +59,26 @@ export function useOpening(start:boolean,ready:boolean,stop:boolean):OpeningPhas
   return stop?null:phase;
 }
 
-/** The same outlines as the SVG, extruded with front, back and edge faces.
- * All dimensions share an em unit so the geometry scales with the wordmark. */
-function OpeningMark(){
-  return <div className="openingmark"><div className="openingcamera">
-    {logoTilePoints.map((points,index)=><div className={`openingsolid solid${index}`} key={index}>
-      <div className="openingface back" style={{clipPath:`polygon(${points.map(([x,y])=>`${x/184*100}% ${y/104*100}%`).join(',')})`}}/>
-      {points.map(([x,y],edge)=>{
-        const [nextX,nextY]=points[(edge+1)%points.length];
-        const angle=Math.atan2(nextY-y,nextX-x);
-        return <div className="openingedge" key={edge} style={{
-          width:`${Math.hypot(nextX-x,nextY-y)}em`,
-          transform:`translate3d(${x}em,${y}em,-12em) rotateZ(${angle}rad) rotateX(90deg)`,
-          '--edge-light':`${18+Math.round((Math.sin(angle)+1)*14)}%`,
-        } as CSSProperties}/>;
-      })}
-      <div className="openingface front" style={{clipPath:`polygon(${points.map(([x,y])=>`${x/184*100}% ${y/104*100}%`).join(',')})`}}/>
-    </div>)}
-  </div></div>;
-}
-
-/** The logo over the whole window, until the camera has gone through it. */
+/** Keep a plain SVG as the fallback while the optional 3D renderer loads. */
 export function YearOpening({phase}:{phase:OpeningPhase}){
-  return <div className={`opening ${phase}`} aria-hidden="true">
-    <div className="openingstage"><div className="openingworld"><Logo className="openinglogo" shine/><OpeningMark/></div></div>
+  const host=useRef<HTMLDivElement>(null);
+  const scene=useRef<Awaited<ReturnType<typeof import('./logoScene')['logoScene']>>|null>(null);
+  const [solid,setSolid]=useState(false);
+  const diving=useRef<number|null>(null);
+  useEffect(()=>{
+    let active=true,frame=0;
+    const element=host.current!;
+    const svg=element.querySelector('svg')!;
+    void import('./logoScene').then(module=>{
+      if(!active||diving.current!==null)return;
+      scene.current=module.logoScene(element,svg);
+      const draw=()=>{scene.current?.draw(diving.current===null?0:(performance.now()-diving.current)/1550);frame=requestAnimationFrame(draw)};
+      draw();setSolid(true);
+    }).catch(()=>{/* WebGL unavailable: the centred SVG push still reveals the year. */});
+    return()=>{active=false;cancelAnimationFrame(frame);scene.current?.dispose();scene.current=null};
+  },[]);
+  useEffect(()=>{if(phase==='dive')diving.current=performance.now()},[phase]);
+  return <div ref={host} className={`opening ${phase}${solid?' solid':''}`} aria-hidden="true">
+    <div className="openingstage"><div className="openingworld"><Logo className="openinglogo"/></div></div>
   </div>;
 }

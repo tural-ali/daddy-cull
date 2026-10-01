@@ -1399,84 +1399,20 @@ main.selecting .mo.sel:not(:focus-visible) { box-shadow: none; transform: none; 
 .cell > .freshdot { position: absolute; top: -3px; right: -3px; box-shadow: 0 0 0 2px var(--bg); }
 
 /* -------------------------------------------------------------- opening -- */
-/* One camera move: reveal, light sweep, orbit into the solid mark, pass its
-   edges, then settle the dates from the same vanishing point. */
-.opening {
-  position: fixed; inset: 0; z-index: 400;
-  display: grid; place-items: center; overflow: clip;
-  pointer-events: none;
-}
+/* A rigid logo and one straight camera move through its centre. */
+.opening { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; overflow: clip; pointer-events: none; }
 .opening::before { content: ""; position: absolute; inset: 0; background: var(--bg); }
-.openingstage {
-  position: relative; width: min(76vw, 620px); aspect-ratio: 2016 / 308;
-  /* One original mark unit: logo width / 2016 * 2.595. */
-  font-size: min(.0978vw, .7981px);
-  perspective: 1000px; perspective-origin: 50% 50%;
-}
-.openingworld { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; }
-.openingstage::before {
-  content: ""; position: absolute; inset: -120% -20%;
-  background: radial-gradient(ellipse, color-mix(in srgb, var(--logo-mint) 10%, transparent), transparent 65%);
-  animation: opening-bloom 1.2s ease-out both;
-}
-.openinglogo {
-  position: relative; display: block; width: 100%; height: auto;
-  transform-origin: 12.53% 50%;
-  animation: opening-logo 650ms cubic-bezier(.16, 1, .3, 1) both;
-}
-.opening .shine {
-  transform: translateX(-560px) skewX(-20deg);
-  animation: opening-shine 1050ms cubic-bezier(.4, 0, .25, 1) 450ms both;
-}
-.openingmark {
-  position: absolute; left: .6944%; top: 3.8961%; width: 184em; height: 104em;
-  visibility: hidden; transform-style: preserve-3d;
-}
-.openingcamera, .openingsolid { position: absolute; inset: 0; transform-style: preserve-3d; }
-.openingface { position: absolute; inset: 0; background: var(--solid); backface-visibility: hidden; }
-.openingface.front { background: linear-gradient(135deg, color-mix(in srgb, var(--solid), white 28%), var(--solid) 48%, color-mix(in srgb, var(--solid), black 12%)); }
-.openingface.back { transform: translateZ(-12em); backface-visibility: visible; }
-.openingedge {
-  position: absolute; top: 0; left: 0; height: 12em; transform-origin: 0 0;
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--solid), black 65%), color-mix(in srgb, var(--solid), black var(--edge-light)) 80%, var(--solid));
-}
-.solid0 { --solid: var(--logo-coral); --layer: 38em; }
-.solid1 { --solid: var(--logo-amber); --layer: 0em; }
-.solid2 { --solid: var(--logo-mint); --layer: -38em; }
-.opening.dive::before { animation: opening-clear 1300ms linear both; }
-.opening.dive .openingstage::before { animation: opening-fade 400ms ease-in both; }
-.opening.dive .openinglogo { animation: none; }
-.opening.dive .openingworld { animation: opening-camera 1300ms cubic-bezier(.55, 0, .75, .5) both; }
-.opening.dive .openinglogo .tile { visibility: hidden; }
-.opening.dive .shine { display: none; }
-.opening.dive .openingmark { visibility: visible; }
-.opening.dive .openingcamera { animation: opening-orbit 1300ms ease-in-out both; }
-.opening.dive .openingsolid { animation: opening-separate 1300ms ease-in-out both; }
-@keyframes opening-logo { from { opacity: 0; transform: translateY(8px) scale(.94); } }
-@keyframes opening-bloom { from { opacity: 0; } }
-@keyframes opening-shine {
-  from { transform: translateX(-560px) skewX(-20deg); }
-  to { transform: translateX(2300px) skewX(-20deg); }
-}
-@keyframes opening-fade { to { opacity: 0; } }
-/* One straight camera push. The wordmark and solid tiles share a plane and
-   travel together until they pass the eye; there is no lateral re-centring. */
-@keyframes opening-camera {
-  from { transform: translateZ(0); }
-  to { transform: translateZ(1120px); }
-}
-@keyframes opening-orbit {
-  0% { transform: rotateX(0) rotateY(0); }
-  45% { transform: rotateX(16deg) rotateY(-32deg); }
-  100% { transform: rotateX(9deg) rotateY(-18deg); }
-}
-@keyframes opening-separate {
-  to { transform: translateZ(var(--layer)); }
-}
-@keyframes opening-clear {
-  0%, 55% { opacity: 1; }
-  100% { opacity: 0; }
-}
+.openingstage { position: relative; width: min(76vw, 620px); aspect-ratio: 2016 / 308; perspective: 1000px; }
+.openingworld { width: 100%; height: 100%; transform-style: preserve-3d; }
+.openinglogo { display: block; width: 100%; height: auto; }
+.openingcanvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.opening.solid .openingstage { visibility: hidden; }
+.opening.logo .openingcanvas, .opening.logo .openingstage { animation: opening-logo 500ms ease-out both; }
+.opening.dive::before { animation: opening-clear 1650ms linear both; }
+.opening.dive:not(.solid) .openingworld { animation: opening-camera 1550ms cubic-bezier(.55, 0, .75, .5) both; }
+@keyframes opening-logo { from { opacity: 0; } }
+@keyframes opening-camera { from { transform: translateZ(0); } to { transform: translateZ(1120px); } }
+@keyframes opening-clear { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
 .yearview.opening-held :is(h1, .ysum, .pbar, .calendar, .legend) { opacity: 0; }
 /* Keep the calendar's horizontal scroll container on narrow screens.
    Perspective lives on the month rows: transforms must not flatten at the
@@ -1487,10 +1423,10 @@ main.selecting .mo.sel:not(:focus-visible) { box-shadow: none; transform: none; 
   .yearview.opening-arrive .calendar { overflow: visible; }
 }
 .yearview.opening-arrive .cell:not(.blank) {
-  animation: opening-date 1000ms cubic-bezier(.16, 1, .3, 1) calc(1250ms + var(--far, 1) * 220ms) both;
+  animation: opening-date 1000ms cubic-bezier(.16, 1, .3, 1) calc(1550ms + var(--far, 1) * 220ms) both;
   will-change: transform, opacity;
 }
-.yearview.opening-arrive :is(h1, .ysum, .pbar, .legend, .mlabel) { animation: opening-rise 700ms cubic-bezier(.16, 1, .3, 1) 1450ms both; }
+.yearview.opening-arrive :is(h1, .ysum, .pbar, .legend, .mlabel) { animation: opening-rise 700ms cubic-bezier(.16, 1, .3, 1) 1750ms both; }
 @keyframes opening-date {
   0% { opacity: 0; transform: translate3d(var(--fly-x), var(--fly-y), 480px) rotateX(8deg) scale(1.35); }
   20% { opacity: 1; }
@@ -1537,7 +1473,7 @@ main.selecting .mo.sel:not(:focus-visible) { box-shadow: none; transform: none; 
 .kv { margin: .6rem 0 1rem; display: grid; gap: .3rem; }
 .kv div { display: flex; gap: .8rem; border-bottom: 1px solid var(--line); padding-bottom: .3rem; }
 .kv dt { flex: 0 0 15rem; color: var(--muted); font-size: 13px; }
-.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+.kv dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
 .kv.mono dd { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
 .cmd {
   margin: .5rem 0 0; padding: .6rem .8rem; overflow-x: auto;
@@ -3252,3 +3188,49 @@ ul.answers { margin: 0; padding: 0; list-style: none; display: grid; gap: .5rem;
 .rvinfo .irow.ifile:hover { background: rgb(255 255 255 / 6%); }
 .rvinfo .irow.ifile[aria-pressed="true"] { background: rgb(255 255 255 / 10%); }
 .rvinfo .irow.ifile:focus-visible { outline: 2px solid rgb(255 255 255 / 70%); outline-offset: -2px; }
+
+/* Bounded queues share compact controls and never squeeze a phone's action. */
+.queuepages { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.queuepages [aria-current="page"] { background: var(--accent); color: var(--bg); }
+@media (width <= 480px) {
+  .gbar:has(.pageacts) .brand { margin-right: 0; padding-right: 4px; }
+  .gbar:has(.pageacts) .brand svg:not(.brandmark) { display: none; }
+  .gbar:has(.pageacts) .brand .brandmark { display: block; height: 22px; }
+  .dupelabel { flex-wrap: wrap; }
+}
+
+.burstcompare { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.burstcompare .ctop { flex-wrap: wrap; gap: 8px; padding: 0; }
+.burstcompare .hint { margin: 0; }
+.comparepair { display: grid; grid-template-columns: 1fr 1fr; flex: 1; min-height: 0; gap: 12px; }
+.compareframe { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 2px solid transparent; border-radius: 12px; overflow: hidden; }
+.compareframe.focused { border-color: var(--accent); }
+.compareframe > button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
+.compareimage { display: grid; place-items: center; flex: 1; overflow: hidden; min-height: 0; touch-action: none; cursor: grab; background: #08090a; }
+.compareimage img { width: 100%; height: 100%; min-height: 0; object-fit: contain; user-select: none; }
+.comparestrip { display: flex; gap: 8px; overflow-x: auto; flex: none; max-height: 130px; }
+.comparestrip button { flex: 0 0 130px; display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 2px solid transparent; border-radius: 8px; color: var(--text); background: var(--bg-2); cursor: pointer; overflow: hidden; }
+.comparestrip button.on { border-color: var(--accent); }
+.comparestrip img { width: 100%; height: 56px; object-fit: contain; }
+.comparestrip b, .comparestrip small { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+.burstcompare .cbot { flex-wrap: wrap; gap: 8px; padding: 0; }
+@media (width <= 600px) { .burstcompare { padding: 8px; gap: 8px; } .comparepair { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } .comparestrip { max-height: 100px; } }
+
+.libraryfilters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 20px 0; }
+.libraryfilters label, .saveview label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); min-width: 0; }
+.libraryfilters input, .libraryfilters select, .saveview input { min-width: 0; max-width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--bg-2); font: inherit; }
+.libraryfilters .librarycheck { flex-direction: row; align-items: center; min-height: 40px; }
+.saveview { display: flex; gap: 12px; align-items: end; margin-bottom: 16px; }
+.librarygrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr)); gap: 12px; }
+.librarytile { display: flex; flex-direction: column; min-width: 0; gap: 4px; color: var(--text); overflow: hidden; }
+.librarytile > img { width: 100%; height: 160px; object-fit: contain; background: var(--bg-2); border-radius: 8px; }
+.librarytile > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.librarytile small { color: var(--muted); }
+
+.reviewsession { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 16px 0; color: var(--muted); font-size: 13px; }
+.reviewsession .pbar { max-width: 160px; }
+
+.sessionclock { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); z-index: 5; }
+.sessionpause { padding: 8px 14px; color: white; background: rgb(20 20 20 / 80%); border: 1px solid rgb(255 255 255 / 20%); border-radius: 18px; white-space: nowrap; cursor: pointer; }
+
+@media (width <= 600px) { .rvtop .rvact.cmp, .rvtop .rvact.zoom { display: none; } }

@@ -2,7 +2,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const assert=require('node:assert/strict');
 
 // Loading the app's own address opens on the year with the logo alone in the
-// middle, light passing over it; the camera dives through the day tiles and
+// middle, without shine; the camera passes through the solid logo and
 // every date flies in to its place. The bare address and /year play it, so a
 // reload does too; Year in the sidebar and a visitor who asks for less motion
 // see the calendar at once, and any key skips it.
@@ -51,27 +51,23 @@ const playing=page=>page.evaluate(()=>document.getAnimations().filter(animation=
   await opening.waitFor();
   assert.equal(new URL(page.url()).pathname,'/year','the bare address is the year');
   assert.match(await opening.getAttribute('class'),/\blogo\b/,'the logo shows first');
-  assert.equal(await opening.locator('svg[aria-label="Daddy, Cull!"] .shine').count(),1,'light passes over the logo');
+  assert.equal(await opening.locator('svg[aria-label="Daddy, Cull!"] .shine').count(),0,'the opening logo has no shine');
   await page.waitForTimeout(700);
   const logo=await opening.locator('svg').boundingBox();
   assert.ok(Math.abs(logo.x+logo.width/2-720)<2&&Math.abs(logo.y+logo.height/2-450)<2,`the logo is in the middle: ${JSON.stringify(logo)}`);
   if(shots)await page.screenshot({path:`${shots}/opening-logo.png`});
   await page.locator('.opening.dive').waitFor();
   assert.ok(await page.locator('.yearview.opening-arrive').count(),'the dates fly in as the camera dives');
-  assert.equal(await page.locator('.openingedge').count(),16,'every outline edge has a solid side face');
-  const camera=await page.locator('.openingworld').evaluate(world=>{
-    const animation=world.getAnimations()[0],time=animation.currentTime;
-    const frames=[300,700].map(at=>{animation.currentTime=at;const box=world.getBoundingClientRect();return {centre:box.x+box.width/2,width:box.width}});
-    animation.currentTime=time;
-    return {frames,wordOpacity:getComputedStyle(world.querySelector('.word')).opacity,logoAnimation:getComputedStyle(world.querySelector('.openinglogo')).animationName};
-  });
-  assert.ok(camera.frames.every(frame=>Math.abs(frame.centre-720)<1),'the camera travels straight without sideways re-centring');
-  assert.ok(camera.frames[1].width>camera.frames[0].width,'the whole logo grows in one camera move');
-  assert.equal(camera.wordOpacity,'1','the wordmark travels with the mark');
-  assert.equal(camera.logoAnimation,'none','the wordmark never fades away independently');
-  assert.equal(await page.locator('.openingface').count(),6,'all three tiles have front and back faces');
+  await page.locator('.opening.solid canvas').waitFor();
+  const camera=page.locator('.openingcanvas');
+  assert.equal(await camera.getAttribute('data-parts'),'5','tiles and both wordmark paths are extruded');
+  const before=Number(await camera.getAttribute('data-camera-z'));
+  await page.waitForTimeout(120);
+  const after=Number(await camera.getAttribute('data-camera-z'));
+  assert.ok(after<before,'the camera moves forward through one rigid logo');
+  assert.equal(await page.locator('.opening .shine').count(),0);
   const delays=await page.locator('.cell:not(.blank)').evaluateAll(cells=>cells.map(cell=>parseFloat(getComputedStyle(cell).animationDelay)));
-  assert.ok(Math.min(...delays)>=1.25&&Math.max(...delays)<=1.48,'the dates wait for the camera pass');
+  assert.ok(Math.min(...delays)>=1.55&&Math.max(...delays)<=1.78,'the dates wait for the camera pass');
   assert.ok(Math.max(...delays)-Math.min(...delays)>.15,'the centre arrives before the edges');
   const hidden=await page.locator('.cell:not(.blank)').evaluateAll(cells=>cells.every(cell=>getComputedStyle(cell).opacity==='0'));
   assert.ok(hidden,'no dates appear before the zoom');
@@ -82,7 +78,7 @@ const playing=page=>page.evaluate(()=>document.getAnimations().filter(animation=
     }
     await page.evaluate(()=>{for(const animation of document.getAnimations())animation.play()});
   }
-  await opening.waitFor({state:'detached',timeout:4000});
+  await opening.waitFor({state:'detached',timeout:5000});
   assert.equal(await page.locator('.yearview').getAttribute('class'),'yearview','the year is left as it always is');
   assert.equal(await playing(page),0);
   // Every date is in its place and can be pressed.
@@ -134,7 +130,7 @@ const playing=page=>page.evaluate(()=>document.getAnimations().filter(animation=
   await page.waitForTimeout(1800);
   assert.equal(await page.locator('.opening.logo').count(),1,'wait on the logo until the archive arrives');
   await page.locator('.opening.dive').waitFor();
-  await page.locator('.opening').waitFor({state:'detached',timeout:4000});
+  await page.locator('.opening').waitFor({state:'detached',timeout:5000});
   await page.close();
   page=await open(browser,'/',{yearError:true});
   await page.getByRole('alert').waitFor();
@@ -150,7 +146,7 @@ const playing=page=>page.evaluate(()=>document.getAnimations().filter(animation=
     await hold(page,1600);
     if(shots)await page.screenshot({path:`${shots}/opening-${width}-landing.png`});
     const movingWidth=await page.evaluate(()=>document.documentElement.scrollWidth);
-    await page.locator('.opening').waitFor({state:'detached',timeout:4000});
+    await page.locator('.opening').waitFor({state:'detached',timeout:5000});
     assert.equal(await playing(page),0);
     assert.ok(movingWidth<=await page.evaluate(()=>document.documentElement.scrollWidth),`no added viewport overflow at ${width}px`);
     if(shots)await page.screenshot({path:`${shots}/opening-${width}-end.png`});

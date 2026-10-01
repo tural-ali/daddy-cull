@@ -26,17 +26,20 @@ const provenFormatPairs = `SELECT fp.heic_id,fp.jpeg_id FROM format_pairs fp
 	JOIN assets j ON j.id=fp.jpeg_id JOIN exposures ej ON ej.asset_id=j.id AND ej.size_bytes=j.size_bytes
 	WHERE eh.taken!='' AND eh.subsec!='' AND eh.model!='' AND ej.taken=eh.taken AND ej.subsec=eh.subsec AND ej.model=eh.model`
 
-// FillExposures reads when and with what each file of a pair was taken, for
+// FillExposures reads capture time and camera for up to 500 photographs, for
 // the files not read yet or changed since, and returns how many it recorded.
 // A file that cannot be opened is left for a later pass; one the reader
 // cannot make sense of is recorded with nothing, which proves nothing.
 func (s *Store) FillExposures(ctx context.Context, roots MediaRoots) (int, error) {
+	// Sample the remaining backlog so unreadable files cannot occupy the first
+	// 500 slots forever and prevent older photographs from being indexed.
 	rows, err := s.read.QueryContext(ctx, `SELECT a.id,a.relative_path,a.size_bytes FROM assets a
 		LEFT JOIN exposures x ON x.asset_id=a.id
-		WHERE (a.id IN (SELECT heic_id FROM format_pairs) OR a.id IN (SELECT jpeg_id FROM format_pairs))
+		WHERE a.kind IN ('image','raw')
 		AND (x.asset_id IS NULL OR x.size_bytes<>a.size_bytes)
-		AND NOT EXISTS (SELECT 1 FROM file_state f WHERE f.asset_id=a.id AND f.state IN ('bin','purged'))
-		ORDER BY a.captured_at DESC`)
+		AND NOT EXISTS (SELECT 1 FROM file_state f WHERE f.asset_id=a.id AND f.state!='restored')
+		AND NOT EXISTS (SELECT 1 FROM missing_assets m WHERE m.asset_id=a.id)
+		ORDER BY random() LIMIT 500`)
 	if err != nil {
 		return 0, err
 	}

@@ -11,7 +11,7 @@ import {useShownPath} from './libraryPath';
 export type {DuplicateGroup} from './Today';
 export type DuplicateMember=DuplicateGroup['members'][number];
 export type DuplicateCandidate={size:number;reclaimable:number;hashed:number;members:DuplicateMember[]};
-export type DuplicateReport={groups:DuplicateGroup[];unproven:DuplicateCandidate[];candidates:number;hashed:number;settled:boolean};
+export type DuplicateReport={total?:number;next?:string;groups:DuplicateGroup[];unproven:DuplicateCandidate[];candidates:number;hashed:number;settled:boolean};
 
 export function bytes(value:number){return value<1024**2?`${(value/1024).toFixed(1)} KB`:value<1024**3?`${(value/1024**2).toFixed(1)} MB`:`${(value/1024**3).toFixed(1)} GB`}
 function name(path:string){return path.split('/').pop()||path}
@@ -225,7 +225,10 @@ export async function keepOnly(sets:{keeper:Asset;members:Asset[];favourite:bool
   await sendDecisions(sets.flatMap(({keeper,members,favourite})=>members.map(member=>({assetId:member.id,status:member.id===keeper.id?'keep':'cull',favourite:member.id===keeper.id&&favourite,expectedRevision:member.revision,requestId:requestID()}))));
 }
 
-export function Duplicates({report}:{report:DuplicateReport}){
+export function Duplicates({report:initial}:{report:DuplicateReport}){
+  const [report,setReport]=useState(initial);
+  const [paging,setPaging]=useState(false);
+  const [after,setAfter]=useState('');
   const shown=useShownPath();
   // A set of one is not a set; the server never sends one, and the page would
   // offer to merge a file with nothing if it did.
@@ -259,23 +262,34 @@ export function Duplicates({report}:{report:DuplicateReport}){
       const removed=chosen.reduce((total,group)=>total+group.members.length-1,0);
       const reclaimed=chosen.reduce((total,group)=>total+group.reclaimable,0);
       setGroups(current=>current.filter(group=>!gone.has(key(group))));
+      setReport(current=>({...current,total:current.total===undefined?undefined:Math.max(0,current.total-chosen.length)}));
       setMessage(`${removed} ${removed===1?'copy':'copies'} marked for the Bin, ${bytes(reclaimed)} in all. Nothing has moved yet: open Bin to carry it out, and it stays restorable after that.`);
     }catch(reason){setError((reason as Error).message)}finally{setBusy(false)}
   }
 
+  async function readPage(cursor:string){
+    setPaging(true);setError('');
+    try{
+      const response=await fetch(`/api/duplicate-report?paged=1&limit=50&after=${encodeURIComponent(cursor)}`);
+      if(!response.ok)throw new Error('The next duplicates could not be read. Try again.');
+      const next:DuplicateReport=await response.json();
+      setReport(next);setGroups(next.groups);setAfter(cursor);setOverrides({});setSkipped(new Set());setMessage('');window.scrollTo(0,0);
+    }catch(reason){setError((reason as Error).message)}finally{setPaging(false)}
+  }
+
   // Merging everything is the page's own action, in the top bar with every
   // other page's.
-  usePageActions(groups.length>0?{actions:[{label:`Merge all ${active.length.toLocaleString()}`,short:'Merge all',icon:'filter_none',keys:'Shift+M',primary:true,disabled:busy||active.length===0,onClick:()=>void resolve(active)}]}:null);
+  usePageActions(groups.length>0?{actions:[{label:report.total!==undefined?`Merge ${active.length.toLocaleString()} on this page`:`Merge all ${active.length.toLocaleString()}`,short:report.total!==undefined?'Merge page':'Merge all',icon:'filter_none',keys:'Shift+M',primary:true,disabled:busy||paging||active.length===0,onClick:()=>void resolve(active)}]}:null);
 
   return <section className="dupehead dupepage">
     <h1>Duplicates</h1>
-    <p className="ysum"><b>{groups.length.toLocaleString()}</b> {groups.length===1?'group':'groups'} · <b>{bytes(freeing)}</b> can be freed
+    <p className="ysum"><b>{groups.length.toLocaleString()}</b> {groups.length===1?'group':'groups'}{report.total!==undefined&&<> on this page · {report.total.toLocaleString()} groups remaining</>} · <b>{bytes(freeing)}</b> can be freed
       <span className="dim"> · {report.hashed.toLocaleString()} of {report.candidates.toLocaleString()} possible duplicates checked</span></p>
     <p className="hint">Every group is proven on a full hash: the copies are byte-identical, or, for videos marked same footage, their pictures and sound are identical and only their metadata differs. Merging keeps the ticked copy and marks the rest for the Bin, where they stay restorable. Click another copy to keep that one instead.</p>
 
     {groups.length>0&&<div className="dupebulk">
       <label className="dupekeep">Keep
-        <select value={rule} disabled={busy} onChange={event=>{setRule(event.target.value as Rule);setOverrides({})}}>
+        <select value={rule} disabled={busy||paging} onChange={event=>{setRule(event.target.value as Rule);setOverrides({})}}>
           {RULES.map(entry=><option key={entry.key} value={entry.key} title={entry.hint}>{entry.label.toLowerCase()}</option>)}
         </select>
       </label>
@@ -287,12 +301,13 @@ export function Duplicates({report}:{report:DuplicateReport}){
     {message&&<p className="flash" role="status">{message}</p>}
     {error&&<p className="note warn" role="alert">{error}</p>}
 
-    {groups.length===0&&(report.settled
+    {groups.length===0&&!report.next&&(report.total??0)===0&&(report.settled
       ? <p className="note ok">{report.candidates===0
           ? 'No two files in this catalogue are even the same length, so there is nothing that could be a byte-identical duplicate.'
           : `All ${report.candidates.toLocaleString()} files that share a size with another file have been hashed, and none of them match. There are no byte-identical duplicates.`}</p>
       : <p className="note warn">This page cannot yet tell you whether duplicates exist. {report.hashed.toLocaleString()} of the {report.candidates.toLocaleString()} files that share a size with another file have a cached full hash, so {(report.candidates-report.hashed).toLocaleString()} remain unchecked. An empty result here would mean the evidence is missing, not that the archive is clean.</p>)}
 
+    {groups.length===0&&(report.total??0)>0&&<p className="note">This page is cleared. Open the next page or return to the first page to continue.</p>}
     {ordered.map(group=>{
       const groupKey=key(group);
       const keeperID=keeperOf(group);
@@ -304,17 +319,21 @@ export function Duplicates({report}:{report:DuplicateReport}){
         <header className="dupegrouphead">
           <h2>{datesOf(group.members)}</h2>
           {group.proof==='footage'&&<span className="dupeproof" title="The pictures and sound are identical, byte for byte, and play the same way. Only the metadata differs, such as dates, names or where it is kept in the file.">Same footage, different metadata</span>}
-          <button type="button" className="dupelink" disabled={busy||skip} title={`Keeps ${name(keeper.path)} because ${reason}, and marks the other ${group.members.length-1} for the Bin`} onClick={()=>void resolve([group])}>Merge {group.members.length} copies</button>
-          <button type="button" className="dupelink quiet" disabled={busy} onClick={()=>setSkipped(current=>{const next=new Set(current);if(next.has(groupKey))next.delete(groupKey);else next.add(groupKey);return next})}>{skip?'Include':'Skip'}</button>
+          <button type="button" className="dupelink" disabled={busy||paging||skip} title={`Keeps ${name(keeper.path)} because ${reason}, and marks the other ${group.members.length-1} for the Bin`} onClick={()=>void resolve([group])}>Merge {group.members.length} copies</button>
+          <button type="button" className="dupelink quiet" disabled={busy||paging} onClick={()=>setSkipped(current=>{const next=new Set(current);if(next.has(groupKey))next.delete(groupKey);else next.add(groupKey);return next})}>{skip?'Include':'Skip'}</button>
         </header>
         {/* One of N, never none: clicking a copy moves the tick to it, and no
             click can clear it, so a group can never have every copy marked. */}
         <ul className="dupetiles">{group.members.map(member=><Tile key={member.id} member={member} previewID={group.members[0].id}
-          label={labels.get(member.id)??name(member.path)} keeper={member.id===keeperID} flags={flagsOf(member,group.members)} disabled={busy||skip}
+          label={labels.get(member.id)??name(member.path)} keeper={member.id===keeperID} flags={flagsOf(member,group.members)} disabled={busy||paging||skip}
           onKeep={()=>setOverrides(current=>({...current,[groupKey]:member.id}))}/>)}</ul>
       </article>;
     })}
 
+    {(after||report.next)&&<nav className="queuepages" aria-label="Duplicate pages">
+      {after&&<button className="btn" disabled={paging||busy} onClick={()=>void readPage('')}>First page</button>}
+      {report.next&&<button className="btn primary" disabled={paging||busy} onClick={()=>void readPage(report.next!)}>{paging?<Busy label="Reading duplicates…"/>:'Next 50 groups'}</button>}
+    </nav>}
     {report.unproven.length>0&&<>
       <h2 className="binsec">Possible duplicates, not proven</h2>
       <p className="hint">These files are exactly the same length as each other, which is the only way two files can be byte-identical. That is not evidence that they are: same-length files are usually different. Nothing here can be acted on until a full hash settles it, so no action is offered. At most <strong>{bytes(report.unproven.reduce((total,group)=>total+group.reclaimable,0))}</strong> is involved.</p>

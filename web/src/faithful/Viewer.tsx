@@ -1,4 +1,5 @@
-import {useEffect,useEffectEvent,useLayoutEffect,useMemo,useRef,useState,type CSSProperties,type MouseEvent,type RefObject} from 'react';
+import {Compare} from './Compare';
+import {useEffect,useEffectEvent,useLayoutEffect,useRef,useState,type CSSProperties,type MouseEvent,type RefObject,type ReactNode} from 'react';
 import {SessionVideo} from '../SessionVideo';
 import {Icon,type IconName} from '../Icon';
 import {binChanged,type Asset,type FileDetails,type Status} from '../api';
@@ -7,7 +8,7 @@ import {undoKeys,type HistoryEntry} from './history';
 import {Kbd,tipProps} from './keys';
 import {TurnedControls} from './TurnedControls';
 import {useShownPath} from './libraryPath';
-import {fileFormat as format} from './stacks';
+import {fileFormat as format,stacksBehind,stackOf} from './stacks';
 
 function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
 function preview(asset:Asset){return `/api/media/${asset.id}/preview?size=large`}
@@ -38,7 +39,7 @@ const flightTime=320;
 /** `behindOf` names the files behind a photo that stands for a RAW and its
  * exports, `onSeparate` shows them as separate photos when they turn out
  * not to belong together, and `onRemoveFormat` removes one of them alone. */
-export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onRecord,behindOf,onSeparate,onRemoveFormat,onTurn}:{assets:Asset[];initialID:number;onClose:()=>void;onSave:(asset:Asset,status:Status,favourite?:boolean)=>boolean;onPatch:(id:number,change:Partial<Asset>)=>void;dayOf?:(asset:Asset)=>string;onMove?:(id:number)=>void;onRecord?:(entry:HistoryEntry)=>void;behindOf?:(asset:Asset)=>Asset[]|undefined;onSeparate?:(photo:Asset,files:Asset[])=>void;onRemoveFormat?:(photo:Asset,file:Asset)=>void;onTurn?:(asset:Asset,quarters:number)=>void}){
+export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onRecord,behindOf,onSeparate,onRemoveFormat,onTurn,sessionControl}:{sessionControl?:ReactNode;assets:Asset[];initialID:number;onClose:()=>void;onSave:(asset:Asset,status:Status,favourite?:boolean)=>boolean;onPatch:(id:number,change:Partial<Asset>)=>void;dayOf?:(asset:Asset)=>string;onMove?:(id:number)=>void;onRecord?:(entry:HistoryEntry)=>void;behindOf?:(asset:Asset)=>Asset[]|undefined;onSeparate?:(photo:Asset,files:Asset[])=>void;onRemoveFormat?:(photo:Asset,file:Asset)=>void;onTurn?:(asset:Asset,quarters:number)=>void}){
   const onDisk=useShownPath();
   const initialIndex=Math.max(0,assets.findIndex(asset=>asset.id===initialID));
   const [at,setAt]=useState(initialIndex);
@@ -70,6 +71,9 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   const [bare,setBare]=useState(false);
   const [related,setRelated]=useState<Asset[]|null>(null);
   const [focus,setFocus]=useState(0);
+  const compareBehind=stacksBehind(related??[]);
+  const compareHidden=new Set([...compareBehind.values()].flat().map(file=>file.id));
+  const comparePhotos=(related??[]).filter(file=>!compareHidden.has(file.id));
   const [error,setError]=useState('');
   const [copied,setCopied]=useState(false);
   // Why the current file could not be drawn, keyed by its id so the next file
@@ -129,7 +133,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   const date=capture?.toLocaleDateString('en-GB',{year:'numeric',month:'long',day:'numeric',...zone})??'Date unknown';
   const weekday=capture?.toLocaleDateString('en-GB',{weekday:'short',...zone})??'';
   const time=dayOnly?'':capture?.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})??'';
-  const compareFiles=useMemo(()=>related??[],[related]);
+  const [comparing,setComparing]=useState(false);
   const media=useRef<HTMLImageElement&HTMLVideoElement>(null);
   const stage=useRef<HTMLDivElement>(null);
 
@@ -225,20 +229,27 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     navigator.clipboard.writeText(onDisk((onStage??current).path)).then(()=>{setCopied(true);window.setTimeout(()=>setCopied(false),1500)},()=>setError('The path could not be copied.'));
   }
   // A stack's own files are not similar photos to compare with.
-  const similar=(current?.relatedCount??0)-(others?.length??0);
+  const similar=current?.kind!=='video'?1:(current?.relatedCount??0)-(others?.length??0);
   async function openCompare(){
     if(!current||similar<1)return;
     setError('');
     try{
-      const response=await fetch(`/api/assets/${current.id}/related`);
+      let response=await fetch(`/api/assets/${current.id}/burst`);
+      if(!response.ok)response=await fetch(`/api/assets/${current.id}/related`);
       if(!response.ok)throw new Error('The related files could not be loaded.');
       const files:Asset[]=await response.json();
-      setRelated(files);setFocus(Math.max(0,files.findIndex(file=>file.id===current.id)));
+      const grouped=stacksBehind(files);
+      const hidden=new Set([...grouped.values()].flat().map(file=>file.id));
+      const photos=files.filter(file=>!hidden.has(file.id));
+      if(photos.length<2){setError('No nearby shots found yet. Camera metadata is indexed in the background.');return}
+      setRelated(files);setFocus(Math.max(0,photos.findIndex(file=>file.id===current.id||file.stack?.includes(current.id))));
     }catch(reason){setError((reason as Error).message)}
   }
   async function saveGroup(mode:'keep-all'|'keep-focus'|'cull-all'){
-    if(!related?.length)return;
-    const jobs=related.map((asset,index)=>({assetId:asset.id,status:mode==='keep-all'?'keep':mode==='cull-all'?'cull':index===focus?'keep':'cull',favourite:mode==='cull-all'||(mode==='keep-focus'&&index!==focus)?false:asset.favourite,expectedRevision:asset.revision,requestId:requestID()}));
+    if(!related?.length||comparing)return;
+    setComparing(true);
+    const selected=new Set(stackOf(comparePhotos[focus],compareBehind).map(file=>file.id));
+    const jobs=related.map(asset=>{const keeping=mode==='keep-all'||(mode==='keep-focus'&&selected.has(asset.id));return {assetId:asset.id,status:keeping?'keep':'cull',favourite:keeping?asset.favourite:false,expectedRevision:asset.revision,requestId:requestID()}});
     const journal=`cull.group.pending.${requestID()}`;
     try{
       localStorage.setItem(journal,JSON.stringify(jobs));
@@ -249,7 +260,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       jobs.forEach((job,index)=>onPatch(job.assetId,{status:job.status as Status,favourite:job.favourite,revision:results[index].revision}));
       onRecord?.({kind:'decisions',label:`chose among ${related.length} similar photos`,before:related.map(asset=>({id:asset.id,status:asset.status,favourite:asset.favourite})),after:jobs.map(job=>({id:job.assetId,status:job.status as Status,favourite:job.favourite}))});
       localStorage.removeItem(journal);setRelated(null);step(1);
-    }catch(reason){setError((reason as Error).message)}
+    }catch(reason){setError((reason as Error).message)}finally{setComparing(false)}
   }
 
   const shownID=current?.id;
@@ -292,9 +303,8 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       }
       if(help&&key==='escape'){setHelp(false);return}
       if(related){
-        if(/^[1-9]$/.test(key))setFocus(Math.min(Number(key)-1,related.length-1));
+        if(/^[1-9]$/.test(key))setFocus(Math.min(Number(key)-1,comparePhotos.length-1));
         else if(key==='c'||key==='escape')setRelated(null);
-        else if(key==='x'){const asset=related[focus];if(asset)onSave(asset,asset.status==='cull'?'unreviewed':'cull')}
         return;
       }
       if(key==='arrowright')step(1);
@@ -357,6 +367,8 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
         <button type="button" className="rvact" aria-label="More" aria-haspopup="menu" aria-expanded={menu} {...tipProps('More')} onClick={event=>{event.stopPropagation();setMenu(value=>!value)}}><Icon name="more_vert"/></button>
         {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events -- keeps a click inside the menu from closing the viewer; Esc closes the menu */}
         {menu&&<div className="rvmenu" role="menu" tabIndex={-1} onClick={event=>event.stopPropagation()}>
+          {similar>0&&<button type="button" role="menuitem" onClick={()=>{setMenu(false);void openCompare()}}><Icon name="compare"/>Compare nearby photos<Kbd keys="C"/></button>}
+          <button type="button" role="menuitem" onClick={()=>{setMenu(false);setZoom(value=>!value)}}><Icon name="zoom_in"/>Zoom<Kbd keys="Z"/></button>
           {dayOf&&<a role="menuitem" href={dayOf(current)} target="_blank" rel="noopener" onClick={()=>setMenu(false)}><Icon name="open_in_new"/>Open this day in a new tab</a>}
           <button type="button" role="menuitem" onClick={()=>{setMenu(false);copyPath()}}><Icon name="content_copy"/>Copy file path</button>
           {others&&onSeparate&&<button type="button" role="menuitem" onClick={()=>{setMenu(false);setSide(0);onSeparate(current,others)}}><Icon name="link_off"/>Show the {stack.map(format).join(', ').replace(/, ([^,]*)$/,' and $1')} separately</button>}
@@ -392,9 +404,8 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
         {stack.map((file,index)=><button type="button" className="irow ifile" key={file.id} aria-pressed={index===side} onClick={()=>setSide(index)} onMouseUp={event=>event.currentTarget.blur()}><Icon name={file.kind==='raw'?'raw_on':'image'}/><div><b>{file.path.split('/').pop()}</b><span>{megabytes(file)} · {format(file)}{index===side?', shown':''}</span></div></button>)}
       </>}
     </aside>
-    {related&&<div className="rvcmp"><div className="ctop"><b>Similar photos</b><span className="cpos">{focus+1} / {related.length}</span><span className="hint">1–9 focus a frame · X marks it · C back</span><button type="button" className="rvx cmpx" aria-label="Close compare" {...tipProps('Close','C')} onClick={()=>setRelated(null)}>×</button></div><div className="cgrid">{compareFiles.map((asset,index)=>
-      // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- 1 to 9 focus a frame from the keyboard
-      <figure className={index===focus?'on':''} key={asset.id} onClick={()=>setFocus(index)}><img src={preview(asset)} alt={asset.path.split('/').pop()}/><span className="pick">{index+1}</span><figcaption>{asset.path.split('/').pop()} · {asset.status}</figcaption></figure>)}</div><div className="cfacts"><div className="verdict tied"><b>Possible copies or companion files</b><ul><li>Inspect before choosing</li><li>No file moves from this screen</li></ul></div></div><div className="cbot"><button type="button" className="rvbtn" onClick={()=>void saveGroup('keep-all')}>Keep all</button><button type="button" className="rvbtn cull" onClick={()=>void saveGroup('keep-focus')}>Keep the focused one, remove the rest</button><button type="button" className="rvbtn cull cmpall" onClick={()=>void saveGroup('cull-all')}>Remove all</button></div></div>}
+    {sessionControl&&<div className="sessionclock">{sessionControl}</div>}
+    {related&&<Compare assets={comparePhotos} focus={focus} onFocus={setFocus} onClose={()=>setRelated(null)} busy={comparing} onChoose={mode=>void saveGroup(mode)}/>}
     {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- a click dismisses the sheet; ? and Esc do the same */}
     {help&&<div className="rvkeys" onClick={()=>setHelp(false)}><table><tbody><tr><td>→ ←</td><td>next / previous</td></tr><tr><td>K</td><td>keep and continue, again to undo</td></tr><tr><td>X</td><td>remove (clears keep and favourite), again to undo</td></tr>{others&&onRemoveFormat&&<tr><td>X then O / X</td><td>remove only the file shown / the whole photo</td></tr>}<tr><td>F</td><td>favourite</td></tr><tr><td>I</td><td>info panel</td></tr><tr><td>Z</td><td>zoom</td></tr>{live&&<tr><td>L</td><td>play the Live Photo, again to stop</td></tr>}{onTurn&&<tr><td>] / [</td><td>rotate clockwise / anticlockwise, in Cull only</td></tr>}<tr><td>H</td><td>hide the controls, again to show them</td></tr><tr><td>C</td><td>compare a group</td></tr>{others&&<tr><td>R</td><td>show the next file of this photo, such as its RAW</td></tr>}<tr><td>{undoKeys.undo} / {undoKeys.redo}</td><td>{onRecord?'undo / redo the last choice':'undo / redo, on the day page'}</td></tr><tr><td>G / Esc / Space</td><td>back to the grid</td></tr><tr><td>?</td><td>this list</td></tr></tbody></table></div>}
     {error&&<div className="toast err">{error}</div>}

@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 )
@@ -60,6 +61,9 @@ type DuplicateGroup struct {
 // calendar date while retaining every copy elsewhere in the archive so the
 // reviewer can make one informed choice.
 func (s *Store) ExactDuplicates(ctx context.Context, md string, limit int) ([]DuplicateGroup, error) {
+	if limit < 1 || limit > 1000 {
+		return nil, ErrInvalid
+	}
 	if md != "" {
 		if _, ok := validMonthDay(md); !ok {
 			return nil, ErrInvalid
@@ -99,7 +103,7 @@ func (s *Store) SocialDuplicates(ctx context.Context, limit int) ([]DuplicateGro
 // copyGroups returns the groups of copies with a file for which touches is
 // true.
 func (s *Store) copyGroups(ctx context.Context, limit int, touches func(DuplicateMember) bool) ([]DuplicateGroup, error) {
-	if limit < 1 || limit > 1000 {
+	if limit < 0 || limit > 1000 {
 		return nil, ErrInvalid
 	}
 	rows, err := s.read.QueryContext(ctx, `WITH live AS (
@@ -291,6 +295,10 @@ type DuplicateCandidate struct {
 // result readable: when every candidate is hashed the answer is complete, even
 // if almost nothing else in the archive has ever been hashed.
 type DuplicateReport struct {
+	// Total counts all matching entries before pagination.
+	Total int `json:"total"`
+	// Next is a continuation cursor; empty means no further page.
+	Next string `json:"next"`
 	// Groups are the proven groups of identical files, as GET /api/duplicates
 	// lists them.
 	Groups []DuplicateGroup `json:"groups"`
@@ -409,4 +417,28 @@ func (s *Store) DuplicateOverview(ctx context.Context, md string, limit int) (Du
 	report.Candidates, report.Hashed = candidates, hashed
 	report.Settled = candidates == hashed
 	return report, nil
+}
+
+// DuplicateWindow includes every proven group in its count, then enriches only
+// the displayed window. A group key survives unrelated decisions and removals.
+func (s *Store) DuplicateWindow(ctx context.Context, limit int, after string) (DuplicateReport, error) {
+	report := DuplicateReport{Groups: []DuplicateGroup{}, Unproven: []DuplicateCandidate{}}
+	groups, err := s.copyGroups(ctx, 0, func(DuplicateMember) bool { return true })
+	if err != nil {
+		return report, err
+	}
+	report.Total = len(groups)
+	report.Groups, report.Next, err = window(groups, limit, after, func(g DuplicateGroup) string { return g.Hash + fmt.Sprintf(":%020d", g.Size) })
+	if err != nil {
+		return report, err
+	}
+	if after == "" {
+		report.Unproven, err = s.UnprovenDuplicates(ctx, 20)
+		if err != nil {
+			return report, err
+		}
+	}
+	report.Candidates, report.Hashed, err = s.DuplicateStatus(ctx)
+	report.Settled = report.Candidates == report.Hashed
+	return report, err
 }

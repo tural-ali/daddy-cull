@@ -18,10 +18,11 @@ func TestWebAppNeverServesAStalePage(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	app := webApp(dir, []string{"/bin", "/year"})
+	app := webApp(dir, appRoutes)
 	for _, c := range []struct{ path, body, cache string }{
 		{"/", "app", "no-cache"},
 		{"/bin", "app", "no-cache"},
+		{"/library?q=Sony", "app", "no-cache"},
 		{"/on/09-23", "app", "no-cache"},
 		{"/day/2020-09-23", "app", "no-cache"},
 		{"/on/09-23/photo/42", "app", "no-cache"},

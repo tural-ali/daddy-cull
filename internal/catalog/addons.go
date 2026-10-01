@@ -463,7 +463,14 @@ func (s *Store) BuiltInAddons(needs AddonNeeds) []addon.BuiltIn {
 	social := count("SELECT count(*) FROM social_items s LEFT JOIN decisions d ON d.asset_id=s.asset_id WHERE s.state='waiting'" + socialPending)
 	anySocial := count("SELECT count(*) FROM (SELECT 1 FROM social_items LIMIT 1)")
 	shadows := count("SELECT count(*) FROM (SELECT 1 FROM shadow_entries GROUP BY kind,group_key)")
-	upgrades := count("SELECT count(DISTINCT archive_asset_id) FROM upgrade_candidates")
+	upgrades := count(`SELECT count(DISTINCT c.archive_asset_id) FROM upgrade_candidates c
+	 JOIN assets a ON a.id=c.archive_asset_id JOIN assets source ON source.id=c.source_asset_id
+	 LEFT JOIN upgrade_history h ON h.archive_file=a.relative_path
+	 LEFT JOIN assets accepted ON accepted.source_id='archive' AND accepted.relative_path=h.accepted_as
+	 LEFT JOIN decisions original_choice ON original_choice.asset_id=a.id
+	 LEFT JOIN decisions accepted_choice ON accepted_choice.asset_id=accepted.id
+	 WHERE COALESCE(h.accepted_as,'')='' OR accepted.id IS NULL
+	 OR (COALESCE(original_choice.status,'unreviewed')!='cull' AND COALESCE(accepted_choice.status,'unreviewed')!='cull')`)
 	anyUpgrades := count("SELECT (SELECT count(*) FROM (SELECT 1 FROM upgrade_candidates LIMIT 1))+(SELECT count(*) FROM (SELECT 1 FROM upgrade_history LIMIT 1))")
 	classic := count("SELECT count(*) FROM legacy_culled WHERE restored_at IS NULL AND purged_at IS NULL")
 	anyClassic := count("SELECT count(*) FROM (SELECT 1 FROM legacy_culled LIMIT 1)")

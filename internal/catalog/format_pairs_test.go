@@ -170,8 +170,8 @@ func TestFormatPairsStackOnlyOneExposure(t *testing.T) {
 		t.Fatalf("photos before reading %d, want 12 less the RAW's two exports", got)
 	}
 	read, err := s.FillExposures(ctx, MediaRoots{Archive: root, RawTool: tool})
-	if err != nil || read != 6 {
-		t.Fatalf("read %d (%v), want the six files of a pair", read, err)
+	if err != nil || read != 12 {
+		t.Fatalf("read %d (%v), want all twelve photographs indexed", read, err)
 	}
 	if got := stacks(); got != "map[1:[2] 2:[1] 7:[8 9] 8:[7 9] 9:[7 8]]" {
 		t.Fatal("after reading", got)

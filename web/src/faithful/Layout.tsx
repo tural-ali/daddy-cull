@@ -18,7 +18,7 @@ import {GuideButton} from './PageGuide';
 import {SideLibrary} from './SideLibrary';
 import type {LibraryTotals} from './Settings';
 
-export type LegacyRoute='today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'google'|'log'|'bin'|'settings'|'addons'|'developers'|'setup'|'frame';
+export type LegacyRoute='library'|'today'|'year'|'dupes'|'upgrades'|'shadows'|'shots'|'social'|'photos'|'google'|'log'|'bin'|'settings'|'addons'|'developers'|'setup'|'frame';
 type Item={href:string;route?:LegacyRoute;label:string;icon:IconName};
 type Section={title?:string;items:Item[]};
 
@@ -60,6 +60,7 @@ function sidebar(addons:Addon[]|null):Section[]{
     {items:[
       {href:'/today',route:'today',label:'Today',icon:'photo'},
       {href:'/year',route:'year',label:'Year',icon:'calendar_month'},
+      {href:'/library',route:'library',label:'Find photos',icon:'search'},
     ]},
     {title:'Collections',items:[{href:'/duplicates',route:'dupes',label:'Duplicates',icon:'filter_none'},...pages.collections]},
     {title:'Sync',items:pages.sync},
@@ -75,7 +76,7 @@ function sidebar(addons:Addon[]|null):Section[]{
 // Pages built around a grid run the full width of the panel, as in Google
 // Photos; the Year calendar, Settings and Apple Photos keep a reading measure,
 // since a calendar stretched across a wide screen is hard to read along a row.
-const gridRoutes=new Set<LegacyRoute>(['today','dupes','upgrades','shadows','shots','social','log','bin','frame']);
+const gridRoutes=new Set<LegacyRoute>(['library','today','dupes','upgrades','shadows','shots','social','log','bin','frame']);
 
 /** The search field goes to a typed date. On a date's page that date sits in
  * the field as a pill, and the pill opens a calendar to pick another. A page
@@ -106,7 +107,7 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
     if(suggestions.length>0){pick(suggestions[Math.min(active,suggestions.length-1)]);return}
     const path=pathForDate(value);
     if(path)navigate(path);
-    else setProblem(filters?'Type a date, such as 14 Aug 2019, or a filter, such as videos.':'Type a date, such as 14 Aug 2019, or 14 Aug for every year.');
+    else navigate(`/library?q=${encodeURIComponent(value.trim())}`);
   }
   function keys(event:ReactKeyboardEvent<HTMLInputElement>){
     if(suggestions.length>0&&(event.key==='ArrowDown'||event.key==='ArrowUp')){
@@ -137,7 +138,7 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
       <input ref={input} type="search" value={value} role="combobox" aria-expanded={listing} aria-controls={listing?'search-suggestions':undefined}
         aria-activedescendant={listing?`search-suggestion-${Math.min(active,suggestions.length-1)}`:undefined} aria-autocomplete="list"
         aria-label={filters?'Filter, or go to a date':'Go to a date'} aria-invalid={problem?true:undefined} aria-describedby={problem?'search-problem':undefined}
-        placeholder={filters?(on?'Add a filter or date':'Filter, or go to another date'):date?'Go to another date':'Go to a date, like 14 Aug 2019'} autoComplete="off" enterKeyHint="go"
+        placeholder={filters?(on?'Add a filter or date':'Filter, or go to another date'):date?'Go to another date':'Find photos, cameras or a date'} autoComplete="off" enterKeyHint="go"
         onChange={event=>{setValue(event.target.value);setProblem('');setActive(0)}} onKeyDown={keys}/>
       {!value&&<span className="searchkey"><Kbd keys="/"/></span>}
       {filters&&<FilterButton filters={filters} button={filterButton} open={open==='filters'} onToggle={()=>setOpen(current=>current==='filters'?null:'filters')}/>}

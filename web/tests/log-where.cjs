@@ -33,7 +33,7 @@ const events=[event(0),event(1,'bin'),event(2,'deleting'),event(3,'deleted')];
   assert.equal(await tile(1).getByRole('button',{name:'Undo'}).count(),1,'a file in its day folder can be undone');
   for(const [id,label] of [[2,'In the Bin'],[3,'Waiting to go']]){
     assert.equal(await tile(id).getByRole('button',{name:'Undo'}).count(),0,`${label}: no Undo the Bin would refuse`);
-    assert.equal(await tile(id).getByRole('link',{name:label}).getAttribute('href'),'/bin');
+    assert.equal(await tile(id).getByRole('link',{name:label}).getAttribute('href'),id===3?'/bin?tab=deleting':'/bin');
   }
   const gone=tile(4);
   assert.match(await gone.innerText(),/Deleted from the Bin/);

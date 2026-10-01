@@ -1,0 +1,102 @@
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const assert=require('node:assert/strict');
+const base=process.env.APP_URL||'http://127.0.0.1:8842';
+const file=(id,extra={})=>({id,path:`/archive/2020/2020-01/2020-01-02/SHOT_${id}.JPG`,capturedAt:1577966400+id,kind:'image',size:100,source:'archive',status:'unreviewed',favourite:false,revision:0,relatedCount:0,alternativeCount:0,...extra});
+(async()=>{
+ const browser=await chromium.launch({channel:'chrome',headless:true});
+ const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+ const assets=[file(1,{stack:[2]}),file(2,{path:'/archive/2020/2020-01/2020-01-02/SHOT_1.ARW',kind:'raw',stack:[1]}),file(3)];
+ const pages=[],batches=[],errors=[];let failedBin=false;
+ page.on('pageerror',error=>errors.push(error.message));
+ await page.route('**/api/**',async route=>{
+  const req=route.request(),url=new URL(req.url()),p=url.pathname;
+  if(p==='/api/stats')return route.fulfill({json:{total:3,calendarDays:1,reviewedDays:0,decisions:0,favourites:0,marked:0,bin:205}});
+  if(p==='/api/search'){pages.push(url.searchParams.toString());return route.fulfill({json:{assets:url.searchParams.has('after')?[assets[2]]:[assets[0]],next:url.searchParams.has('after')?'':'next50'}})}
+  if(p==='/api/today/01-02')return route.fulfill({json:{md:'01-02',label:'2 January',previous:'01-01',next:'01-03',years:[{day:'2020-01-02',year:2020,files:3,bytes:300,status:'pending',assets}],memories:3,bytes:300}});
+  if(p==='/api/assets/1/burst')return route.fulfill({json:assets});
+  if(p==='/api/decisions/batch'){const jobs=req.postDataJSON();batches.push(jobs);return route.fulfill({json:jobs.map(()=>({revision:1}))})}
+  if(p==='/api/trash/deleting')return route.fulfill({json:{items:[],graceDays:30,total:0,bytes:0,next:'',groups:{},checkIntervalMinutes:15,lastRun:'',lastError:'',lastDeleted:0}});
+  if(p==='/api/trash'){
+   if(failedBin)return route.fulfill({status:503,json:{error:'fixture outage'}});
+   const after=url.searchParams.get('after');pages.push(`bin:${after}`);
+   const items=Array.from({length:after?5:100},(_,i)=>({key:`bin:batch:${(after?200:0)+i}`,group:'bin:batch',source:'bin',name:`FILE_${i}.JPG`,original:'/archive/2020-01-02/FILE.JPG',kind:'image',size:100,sidecars:0,removedAt:'2026-10-01T12:00:00Z',preview:'/api/media/1'}));
+   return route.fulfill({json:{items,total:205,bytes:20500,next:after?'':'last',groups:{'bin:batch':{files:205,bytes:20500}}}});
+  }
+  if(p==='/api/duplicate-report')return route.fulfill({json:{groups:[{hash:'fixture',proof:'bytes',size:100,reclaimable:100,members:[file(101,{day:'2020-01-02'}),file(102,{day:'2020-01-02'})]}],total:1001,next:'more',candidates:2002,hashed:2002,settled:true,unproven:[]}});
+  if(p.startsWith('/api/duplicates'))return route.fulfill({json:[]});
+  if(p.startsWith('/api/media/'))return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#456b78"/><circle cx="400" cy="300" r="120" fill="#ed9865"/></svg>'});
+  return route.fulfill({status:404,json:{error:'not mocked'}});
+ });
+ await page.goto(`${base}/library?q=Sony`);
+ await page.getByRole('heading',{name:'Library',exact:true}).waitFor();
+ assert.match(await page.locator('.librarytile').getAttribute('href'),/\/day\/2020-01-02\/photo\/1$/);
+ await page.getByLabel('Save this view').fill('Sony favourites');
+ await page.getByRole('button',{name:'Save view',exact:true}).click();
+ await page.getByRole('link',{name:'Sony favourites',exact:true}).waitFor();
+ await page.getByRole('link',{name:'Next 50 files'}).click();
+ await page.waitForFunction(()=>document.querySelector('.librarytile')?.textContent.includes('SHOT_3'));
+ assert.ok(pages.some(query=>query.includes('q=Sony')&&query.includes('after=next50')));
+ for(const width of [320,768,1024,1440]){await page.setViewportSize({width,height:900});await page.waitForTimeout(300);if(process.env.SHOTS)await page.screenshot({path:`${process.env.SHOTS}/library-${width}.png`});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`Library fits ${width}: ${JSON.stringify(await page.evaluate(()=>[...document.querySelectorAll('body *')].filter(n=>n.getBoundingClientRect().right>innerWidth+1).slice(0,15).map(n=>[n.tagName,n.className,n.getBoundingClientRect().right])) )}`)}
+ await page.goto(`${base}/on/01-02`);
+ await page.getByRole('button',{name:'Review for 5 minutes'}).click();
+ const viewer=page.getByRole('dialog',{name:'Photo review'});
+ await viewer.waitFor();
+ await page.keyboard.press('ArrowRight');
+ await page.waitForURL(/\/photo\/3$/);
+ await page.getByRole('button',{name:'Pause review session'}).click();
+ await viewer.waitFor({state:'hidden'});
+ await page.reload();
+ await page.getByRole('button',{name:'Resume session',exact:true}).click();
+ await page.waitForURL(/\/photo\/3$/);
+ assert.equal(JSON.parse(await page.evaluate(()=>localStorage.getItem('cull.review.session'))).current,3);
+ await page.getByRole('button',{name:'Pause review session'}).click();
+ await viewer.waitFor({state:'hidden'});
+ await page.evaluate(()=>{const value=JSON.parse(localStorage.getItem('cull.review.session'));value.seconds=299;localStorage.setItem('cull.review.session',JSON.stringify(value))});
+ await page.reload();await page.clock.install();
+ await page.getByRole('button',{name:'Resume session',exact:true}).click();
+ await page.clock.runFor(2200);
+ await viewer.waitFor({state:'hidden'});
+ assert.equal(JSON.parse(await page.evaluate(()=>localStorage.getItem('cull.review.session'))).finished,true,'five active minutes closes the session');
+ await page.clock.resume();
+ await page.locator('[data-asset="1"]').click();
+ await viewer.getByRole('button',{name:'Compare similar photos'}).click();
+ const compare=page.getByRole('region',{name:'Compare nearby photos'});
+ await compare.waitFor();
+ assert.equal(await compare.locator('.comparestrip button').count(),2,'RAW and JPEG are a single choice');
+ await compare.getByRole('button',{name:'Zoom in',exact:true}).click();
+ const transforms=await compare.locator('.compareimage img').evaluateAll(nodes=>nodes.map(node=>node.style.transform));
+ assert.equal(transforms[0],transforms[1]);assert.match(transforms[0],/scale\(2\)/);
+ const stage=await compare.locator('.compareimage').first().boundingBox();
+ await page.mouse.move(stage.x+80,stage.y+80);await page.mouse.down();await page.mouse.move(stage.x+160,stage.y+130);await page.mouse.up();
+ const dragged=await compare.locator('.compareimage img').evaluateAll(nodes=>nodes.map(node=>node.style.transform));
+ assert.equal(dragged[0],dragged[1]);assert.notEqual(dragged[0],transforms[0]);
+ if(process.env.SHOTS)await page.screenshot({path:`${process.env.SHOTS}/burst-compare.png`});
+ await compare.getByRole('button',{name:'Keep selected, remove the rest'}).click();
+ await compare.waitFor({state:'hidden'});
+ assert.deepEqual(batches[0].map(job=>[job.assetId,job.status]),[[1,'keep'],[2,'keep'],[3,'cull']]);
+ await page.goto(`${base}/bin`);
+ await page.locator('.bingrid figure').nth(99).waitFor();
+ assert.equal(await page.locator('.bingrid figure').count(),100);
+ await page.getByRole('checkbox').first().click();
+ assert.equal(await page.locator('.selcount').innerText(),'205 selected');
+ await page.getByRole('toolbar',{name:'Selection'}).getByRole('button',{name:'Delete',exact:true}).click();
+ const confirm=page.getByRole('dialog',{name:'Delete 205 files?'});await confirm.waitFor();
+ await confirm.getByRole('button',{name:'Cancel'}).click();
+ await page.getByRole('button',{name:'Next 100 files'}).click();
+ await page.waitForFunction(()=>document.querySelectorAll('.bingrid figure').length===5);
+ assert.equal(await page.locator('.selcount').count(),0,'changing page clears selection');
+ failedBin=true;await page.reload();
+ await page.getByRole('alert').filter({hasText:'The Bin could not be read'}).waitFor();
+ assert.equal(await page.locator('.binhead [role="progressbar"]').count(),0,'a failed read stops its loader');
+ failedBin=false;
+ await page.goto(`${base}/duplicates`);
+ await page.locator('.dupegroup').waitFor();
+ for(const width of [320,390,768,1024,1440]){
+  await page.setViewportSize({width,height:900});
+  const action=await page.getByRole('button',{name:'Merge 1 on this page',exact:true}).boundingBox();
+  assert.ok(action&&action.x>=0&&action.x+action.width<=width,`Merge fits ${width}: ${JSON.stringify(action)}`);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`Duplicates fits ${width}`);
+ }
+ assert.deepEqual(errors,[]);
+ await browser.close();console.log('review improvements: search, resume, linked comparison, stack decisions, bounded queues, full-batch counts and mobile actions verified');
+})().catch(error=>{console.error(error);process.exit(1)});

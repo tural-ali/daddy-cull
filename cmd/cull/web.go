@@ -12,6 +12,8 @@ import (
 // that reused yesterday's page would keep running yesterday's app after a
 // deploy. A bundle under /assets/ carries a content hash in its name, so it can
 // be kept for good; a new build gets a new name.
+var appRoutes = []string{"/library", "/year", "/today", "/duplicates", "/upgrades", "/shadows", "/screenshots", "/social", "/log", "/bin", "/photos", "/google-photos", "/settings", "/addons", "/developers", "/setup", "/addons/{id}/{page}"}
+
 func webApp(dir string, routes []string) http.Handler {
 	mux := http.NewServeMux()
 	page := func(w http.ResponseWriter, r *http.Request) {
