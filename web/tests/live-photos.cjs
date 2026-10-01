@@ -35,6 +35,12 @@ const colours={1:'#7a5b3a',2:'#2f4f6f'};
     return route.fulfill({status:404,json:{error:'not mocked'}});
   });
 
+  // Boxes match to a tenth of a pixel: layout rounds differently on each
+  // system, a misfit of a pixel or more is still caught.
+  const sameBox=(actual,expected,label)=>{
+    for(const key of ['x','y','width','height'])assert.ok(Math.abs(actual[key]-expected[key])<0.1,`${label}: ${key} ${actual[key]} is not ${expected[key]}`);
+  };
+
   await page.goto(`${base}/on/09-26`);
   const tile=page.locator('[data-asset="1"]');
   await tile.waitFor();
@@ -49,7 +55,7 @@ const colours={1:'#7a5b3a',2:'#2f4f6f'};
   assert.equal(await inTile.evaluate(video=>video.muted),true);
   assert.equal(new URL(page.url()).pathname,'/on/09-26','the badge does not open the photo');
   const [tileBox,videoBox]=await Promise.all([tile.boundingBox(),inTile.boundingBox()]);
-  assert.deepEqual(videoBox,tileBox,'the video fills the tile');
+  sameBox(videoBox,tileBox,'the video fills the tile');
   await page.waitForFunction(()=>{const video=document.querySelector('video.liveclip');return video&&video.currentTime>0});
   if(shots)await page.screenshot({path:`${shots}/live-tile.png`});
   await tile.getByRole('button',{name:'Stop the Live Photo'}).click();
@@ -69,7 +75,7 @@ const colours={1:'#7a5b3a',2:'#2f4f6f'};
   assert.equal(await onStage.evaluate(video=>video.muted),false);
   await page.waitForFunction(()=>{const video=document.querySelector('video.rvlive');return video&&video.currentTime>0});
   const still=await viewer.locator('.rvstage img').boundingBox();
-  assert.deepEqual(await onStage.boundingBox(),still,'the video covers the still exactly');
+  sameBox(await onStage.boundingBox(),still,'the video covers the still exactly');
   assert.equal(await viewer.getByRole('button',{name:'Stop the Live Photo'}).getAttribute('aria-pressed'),'true');
   if(shots)await page.screenshot({path:`${shots}/live-viewer.png`});
   await onStage.waitFor({state:'detached',timeout:6000});
