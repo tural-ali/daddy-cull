@@ -364,13 +364,16 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
         </div>}
       </div>
     </div>
+    {/* The stage's children are keyed by the file they show, so each sort has
+        a key of its own: a clip and its controls, or a still and its Live
+        Photo video, sharing one would leave the clip behind on moving on. */}
     {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- clicking the photo hides the controls; H does the same */}
     <div ref={stage} className={`rvstage${zoom?' zoom':''}${current.kind==='video'?' hasvideo':''}`} onClick={event=>{if((event.target as HTMLElement).tagName==='IMG')setBare(value=>!value)}}>
       <button type="button" className="rvnav prev" aria-label="Previous" {...tipProps('Previous','ArrowLeft')} onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
       {broken?.id===onStage.id?<div className="rvgone" role="status"><b>{broken.gone?'This file is no longer in the archive':'This file could not be shown'}</b><span>{broken.gone?'It was moved or removed on the server since the last scan. It leaves review at the next nightly scan.':'Try again in a moment.'}</span></div>
         :current.kind==='video'?<SessionVideo ref={media} key={current.id} data-turn={turn||undefined} controls={!turn} autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onLoadedData={()=>setShown(current.id)} onError={()=>failed(current.id)}/>:<img ref={media} key={onStage.id} data-turn={turn||undefined} src={preview(onStage)} alt={onStage.path.split('/').pop()} onLoad={()=>setShown(current.id)} onError={()=>failed(onStage.id)}/>}
-      {live&&livePlays&&current.kind!=='video'&&broken?.id!==onStage.id&&<LiveClip key={live.id} src={`/api/media/${live.id}/live`} still={media} turn={turn} onDone={()=>setPlaying(null)} onFail={()=>{setPlaying(null);setError('The Live Photo video could not be played.')}}/>}
-      {current.kind==='video'&&turn!==0&&broken?.id!==onStage.id&&<TurnedControls key={current.id} video={media}/>}
+      {live&&livePlays&&current.kind!=='video'&&broken?.id!==onStage.id&&<LiveClip key={`live:${live.id}`} src={`/api/media/${live.id}/live`} still={media} turn={turn} onDone={()=>setPlaying(null)} onFail={()=>{setPlaying(null);setError('The Live Photo video could not be played.')}}/>}
+      {current.kind==='video'&&turn!==0&&broken?.id!==onStage.id&&<TurnedControls key={`controls:${current.id}`} video={media}/>}
       <button type="button" className="rvnav next" aria-label="Next" {...tipProps('Next','ArrowRight')} onClick={event=>{event.stopPropagation();step(1)}}>›</button>
     </div>
     <aside className="rvinfo" aria-label="Info">
