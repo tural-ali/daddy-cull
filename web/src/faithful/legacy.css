@@ -2799,6 +2799,38 @@ dialog.confirm.psetup { width: min(40rem, calc(100vw - 2rem)); }
   .pageload { animation: pageload-in 0s .18s both; }
 }
 
+/* Moving between pages. The page left fades and lifts as the next is read;
+   the next rises into its place. Back runs the other way, down and in from
+   above. A date pressed in the year zooms in on its square as the square
+   grows to fill the panel, and the day's photographs come in after it one by
+   one; from a day, the year zooms out onto that day's square. Nothing moves
+   once a page is in, so nothing inside is drawn relative to a moving box. */
+.pagestage.leaving { animation: page-leave 140ms cubic-bezier(.4, 0, 1, 1) both; }
+.pagestage.leaving.back { animation-name: page-leave-back; }
+.pagestage.leaving.zoom { animation: page-zoom-in 360ms cubic-bezier(.5, 0, .75, 0) both; }
+.pagestage.entering { animation: page-enter 340ms cubic-bezier(.2, .8, .2, 1) both; }
+.pagestage.entering.back { animation-name: page-enter-back; }
+.pagestage.entering.zoom { animation: none; }
+.pagestage.entering.zoom .jgrid figure { animation: page-photo 460ms cubic-bezier(.2, .8, .2, 1) calc(60ms + var(--i, 32) * 12ms) both; }
+.pagestage.entering.fromday { animation: page-zoom-out 480ms cubic-bezier(.2, .8, .2, 1) both; }
+/* A zoom stays inside the panel rather than spilling over the sidebar. */
+main:has(> .pagestage:is(.leaving.zoom, .entering.fromday)) { overflow: clip; }
+@keyframes page-leave { to { opacity: 0; transform: translateY(-6px); } }
+@keyframes page-leave-back { to { opacity: 0; transform: translateY(6px); } }
+@keyframes page-enter { from { opacity: 0; transform: translateY(10px); } }
+@keyframes page-enter-back { from { opacity: 0; transform: translateY(-10px); } }
+@keyframes page-zoom-in { to { opacity: 0; transform: scale(2.4); } }
+@keyframes page-zoom-out { from { opacity: 0; transform: scale(2.2); } }
+@keyframes page-photo { from { opacity: 0; transform: translateY(14px) scale(.94); } }
+/* The date's square on its way to filling the panel, above the page and
+   below the top bar. Its size and colour are animated from the script. */
+.zoomtile {
+  position: fixed; z-index: 20;
+  display: grid; place-items: center; overflow: hidden;
+  font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1;
+  pointer-events: none;
+}
+
 /* A file on its way to the Bin: its picture drawn in to a dot, then thrown
    into the Bin in the sidebar. See binFlight.ts. */
 .binfly {

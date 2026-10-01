@@ -32,7 +32,8 @@ export function usePageActions(page:PageActions|null){
     if(!current||current.actions.length===0){set(null);return}
     set({note:current.note,actions:current.actions.map((action,index)=>({...action,onClick:()=>latest.current?.actions[index]?.onClick()}))});
   },[signature,set]);
-  useEffect(()=>()=>set(null),[set]);
+  // Taken away as the page goes, before the page after it puts up its own.
+  useLayoutEffect(()=>()=>set(null),[set]);
 }
 
 export function PageActionButtons({page}:{page:PageActions}){

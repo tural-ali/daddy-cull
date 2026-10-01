@@ -1,5 +1,6 @@
 import {Fragment,useCallback,useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import {Layout,type LegacyRoute} from './Layout';
+import {PageGuide} from './PageGuide';
 import {dayName} from './goto';
 import {Today,type TodayData} from './Today';
 import {Year,type YearData} from './Year';
@@ -28,8 +29,15 @@ import {Snacks} from './Snacks';
 import {CATALOGUE_CHANGED,catalogueGeneration,quietEnough,watchCatalogue} from './catalogueWatch';
 import {NAVIGATED,RELOAD_PAGE,currentVisit,followLinks,navigate,reloadPage,savedScroll} from './router';
 import {settled} from '../saving';
+import {LEAVE,ZOOM,calm,growSquare,squareOrigin,staggerGrid,takeZoom} from './pageMotion';
 
-type PageState={route:LegacyRoute;content:ReactNode};
+type Loaded={route:LegacyRoute;content:ReactNode};
+/** The page in the panel. key names the visit it was read for, so a page
+ * kept on screen while it leaves is not drawn afresh. phase is where it is in
+ * a move: leaving as the next is read, entering once drawn, or shown; motion
+ * says how: out of a date's square (zoom), back through the history (back),
+ * or from a day to the year, onto that day's square (fromday). */
+type PageState=Loaded&{key:string;phase:'shown'|'leaving'|'entering';motion?:'zoom'|'back'|'fromday';origin?:string;md?:string};
 /** The page the app is on: its path, which visit to it this is, and whether
  * the visit was reached with Back or Forward rather than a link. */
 type Place={path:string;visit:number;returned:boolean};
@@ -100,7 +108,10 @@ export function App(){
   const [place,setPlace]=useState<Place>(()=>({path:currentPath(),visit:currentVisit(),returned:false}));
   const path=place.path;
   const [stats,setStats]=useState<Stats|null>(null);
-  const [page,setPage]=useState<PageState>(()=>({route:routeFor(path),content:<Opening label="Opening the catalogue…"/>}));
+  const [page,setPage]=useState<PageState>(()=>({route:routeFor(path),content:<Opening label="Opening the catalogue…"/>,key:'start',phase:'shown'}));
+  const stage=useRef<HTMLDivElement>(null);
+  // The page last drawn, for the year to zoom out onto the day it came from.
+  const drawnPath=useRef<string|null>(null);
   const [error,setError]=useState('');
   const [recovered,setRecovered]=useState(false);
   // A page load at the bare address opens with the logo, which the camera
@@ -158,7 +169,7 @@ export function App(){
     window.addEventListener(CATALOGUE_CHANGED,reread);
     return()=>{controller.abort();clearTimeout(timer);window.removeEventListener(BIN_CHANGED,reread);window.removeEventListener(BIN_CHANGED,worked);window.removeEventListener(CATALOGUE_CHANGED,reread)};
   },[recovered,readStats]);
-  const load=useCallback(async():Promise<PageState>=>{
+  const load=useCallback(async():Promise<Loaded>=>{
     const route=routeFor(path);
       // A page that belongs to an addon shows only while the addon is on.
       if(route==='frame'||ownerOf(currentAddons(),path)||addonPaths.has(path)){
@@ -220,11 +231,30 @@ export function App(){
     first.current=false;
     setError('');setNotice(null);
     touched.current=false;
-    if(moving){
-      // The old page goes at once, so nothing on it can be pressed, and the
-      // panel starts from its top while the next one is read.
-      setPage({route:routeFor(place.path),content:<Opening label={`Opening ${titleFor(place.path)}…`}/>});
-      window.scrollTo(0,0);
+    // The page left can no longer be pressed. It fades as the next is read,
+    // or, for a date pressed in the year, zooms into the date as its square
+    // grows to fill the panel; a read still going once it has gone shows an
+    // orb, from the panel's top. With less motion it goes at once.
+    const loading=():PageState=>({route:routeFor(place.path),content:<Opening label={`Opening ${titleFor(place.path)}…`}/>,key:`loading:${place.visit}`,phase:'shown'});
+    let left:Promise<void>=Promise.resolve();
+    let square:ReturnType<typeof growSquare>|null=null;
+    let arrived=false;
+    const still=calm();
+    const zoom=moving?takeZoom(place.path):null;
+    if(moving&&still){setPage(loading());window.scrollTo(0,0)}
+    else if(moving){
+      let origin:string|undefined;
+      if(zoom){
+        square=growSquare(zoom);
+        const box=stage.current?.getBoundingClientRect();
+        if(box)origin=`${zoom.rect.left-box.left+zoom.rect.width/2}px ${zoom.rect.top-box.top+zoom.rect.height/2}px`;
+      }
+      setPage(current=>({...current,phase:'leaving',motion:zoom?'zoom':place.returned?'back':undefined,origin}));
+      left=new Promise(resolve=>setTimeout(resolve,zoom?ZOOM:LEAVE));
+      void left.then(()=>{
+        if(!active||arrived)return;
+        if(!zoom){setPage(loading());window.scrollTo(0,0)}
+      });
     }
     (async()=>{
       // A choice still being saved on the page just left, or one kept in a
@@ -243,12 +273,46 @@ export function App(){
       generation.current=next;
       const result=await load();
       if(!active)return;
+      await left;
+      if(!active)return;
+      arrived=true;
       arrival.current=place.returned?savedScroll()??0:location.hash?'hash':moving?0:null;
-      setPage(result);
+      const came=drawnPath.current?.match(/^\/(?:on|day\/\d{4})[/-](\d{2}-\d{2})$/);
+      const motion=square?'zoom':came&&result.route==='year'?'fromday':place.returned?'back':undefined;
+      setPage({...result,key:String(place.visit),phase:moving&&!still?'entering':'shown',motion,md:came?.[1]});
+      drawnPath.current=place.path;
+      square?.fade();
+      square=null;
       if(result.route==='year')setYearShown(true);
-    })().catch(reason=>{if(active)setError((reason as Error).message)});
-    return()=>{active=false};
+    })().catch(reason=>{if(active){square?.remove();setError((reason as Error).message)}});
+    return()=>{active=false;square?.remove()};
   },[load,recovered,place,readStats]);
+  // A page coming in rises into place, and once it has, it is left with no
+  // motion on it at all, so nothing inside is drawn relative to a moving box.
+  // Out of a date, its photographs come in one after another; from a day,
+  // the year zooms out onto that day's square.
+  useLayoutEffect(()=>{
+    if(page.phase!=='entering'||!stage.current)return;
+    const unstagger=page.motion==='zoom'?staggerGrid(stage.current):undefined;
+    if(page.motion==='fromday'&&page.md){
+      const origin=squareOrigin(stage.current,page.md);
+      if(origin)stage.current.style.transformOrigin=origin;
+    }
+    const key=page.key,el=stage.current;
+    const timer=setTimeout(()=>{
+      el.style.transformOrigin='';
+      setPage(current=>current.key===key&&current.phase==='entering'?{...current,phase:'shown',motion:undefined,origin:undefined}:current);
+    },page.motion==='zoom'?1000:page.motion==='fromday'?520:380);
+    return()=>{clearTimeout(timer);unstagger?.()};
+  },[page.phase,page.key,page.motion,page.md]);
+  // Keys meant for the page left do nothing while it goes, from the moment
+  // it starts to.
+  useLayoutEffect(()=>{
+    if(page.phase!=='leaving')return;
+    const swallow=(event:KeyboardEvent)=>{event.stopImmediatePropagation();event.preventDefault()};
+    window.addEventListener('keydown',swallow,{capture:true});
+    return()=>window.removeEventListener('keydown',swallow,{capture:true});
+  },[page.phase]);
   useLayoutEffect(()=>{
     const to=arrival.current;
     if(to===null)return;
@@ -260,12 +324,12 @@ export function App(){
   // Read the page again in place, where it was scrolled to. A read that fails
   // leaves the page as it was, and the next check tries again.
   const refresh=useCallback(async(next:number)=>{
-    let result:PageState;
+    let result:Loaded;
     try{result=await load()}catch{return}
     generation.current=next;
     touched.current=false;
     keepScroll.current=window.scrollY;
-    setPage(result);
+    setPage(current=>({...result,key:current.key,phase:'shown'}));
     setVersion(current=>current+1);
     setNotice(document.hidden?null:'refreshed');
   },[load]);
@@ -312,12 +376,12 @@ export function App(){
     const again=()=>{void (async()=>{
       await settled();
       const next=await catalogueGeneration().catch(()=>null);
-      let result:PageState;
+      let result:Loaded;
       try{result=await load()}catch{location.reload();return}
       if(next!==null)generation.current=next;
       touched.current=false;
       keepScroll.current=window.scrollY;
-      setPage(result);
+      setPage(current=>({...result,key:current.key,phase:'shown'}));
       setVersion(current=>current+1);
       void readStats();
     })()};
@@ -337,7 +401,7 @@ export function App(){
     lastGate.current=gate;
     if(previous&&gate&&previous!==gate&&previous.startsWith(`${path}|`))reloadPage();
   },[gate,path]);
-  return <OpeningContext value={opening}><Layout opening={opening!==null} route={page.route} path={place.path} visit={place.visit} binFiles={stats?.bin??stats?.marked??0} reviewed={stats?.calendarDates?{done:stats.reviewedDates??0,total:stats.calendarDates}:undefined} library={stats?.library} streak={stats?.streak!==undefined?{days:stats.streak,today:!!stats.reviewedToday}:undefined} notifications={stats?.notifications} onNotificationsRead={()=>setStats(current=>current&&{...current,notifications:0})}>{error?<p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p>:<Fragment key={`${place.visit}:${version}`}>{page.content}</Fragment>}
+  return <OpeningContext value={opening}><Layout opening={opening!==null} route={routeFor(place.path)} shown={page.route} path={place.path} visit={place.visit} binFiles={stats?.bin??stats?.marked??0} reviewed={stats?.calendarDates?{done:stats.reviewedDates??0,total:stats.calendarDates}:undefined} library={stats?.library} streak={stats?.streak!==undefined?{days:stats.streak,today:!!stats.reviewedToday}:undefined} notifications={stats?.notifications} onNotificationsRead={()=>setStats(current=>current&&{...current,notifications:0})}>{error?<><PageGuide route={page.route}/><p className="note warn" role="alert">{error} <button className="btn small" onClick={()=>location.reload()}>Retry</button></p></>:<div ref={stage} className={['pagestage',page.phase!=='shown'&&page.phase,page.phase!=='shown'&&page.motion].filter(Boolean).join(' ')} inert={page.phase==='leaving'} style={page.phase==='leaving'&&page.origin?{transformOrigin:page.origin}:undefined}><PageGuide route={page.route}/><Fragment key={`${page.key}:${version}`}>{page.content}</Fragment></div>}
     {notice&&<Snacks><div className="snack" role="status">{notice==='refreshed'?'Updated with new files from the archive.':<>New files arrived in the archive. <button type="button" className="snackact" onClick={()=>void refreshNow()}>Refresh</button></>}</div></Snacks>}
   </Layout>{opening&&<YearOpening phase={opening}/>}</OpeningContext>;
 }

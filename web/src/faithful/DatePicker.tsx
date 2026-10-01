@@ -24,7 +24,8 @@ export function usePageDate(date:PageDate|null){
   latest.current=date;
   const signature=date?JSON.stringify(date):'';
   useLayoutEffect(()=>{set(latest.current)},[signature,set]);
-  useEffect(()=>()=>set(null),[set]);
+  // Taken away as the page goes, before the page after it puts up its own.
+  useLayoutEffect(()=>()=>set(null),[set]);
 }
 
 function two(value:number){return String(value).padStart(2,'0')}

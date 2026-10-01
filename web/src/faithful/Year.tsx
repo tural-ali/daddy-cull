@@ -1,5 +1,6 @@
 import {useContext,type CSSProperties} from 'react';
 import {OpeningContext} from './YearOpening';
+import {zoomFrom} from './pageMotion';
 
 // fresh counts files that reached the archive after the date was reviewed and
 // still wait: the date's red dot.
@@ -66,6 +67,7 @@ export function Year({months,prog,streak}:YearData){
           key={cell.md} className={`cell ${heat(cell)}${cell.md===today?' now':''}`} href={`/on/${cell.md}`}
           style={{'--depth':depth(cell,busiest).toFixed(3),'--far':far(row,index).toFixed(3)} as CSSProperties}
           title={describe(cell)} aria-label={describe(cell)}
+          onClick={event=>{if(event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey)zoomFrom(event.currentTarget)}}
         >{cell.dom}{(cell.fresh??0)>0&&<span className="freshdot" aria-hidden="true"/>}</a>)}
       </div>)}
     </div>

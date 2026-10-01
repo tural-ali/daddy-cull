@@ -13,7 +13,7 @@ import {DateCalendar,DatePill,PageDateProvider,type PageDate} from './DatePicker
 import {GridZoom} from './gridZoom';
 import {FilterButton,FilterMenu,FilterPills,PageFiltersProvider,matchFilters,unusualSort,type PageFilters,type Suggestion} from './SearchFilters';
 import {Kbd,Tips,tipProps,useShortcut} from './keys';
-import {GuideButton,PageGuide} from './PageGuide';
+import {GuideButton} from './PageGuide';
 import {SideLibrary} from './SideLibrary';
 import type {LibraryTotals} from './Settings';
 
@@ -160,10 +160,12 @@ function DateSearch({date,filters}:{date:PageDate|null;filters:PageFilters|null}
 /** The app's frame: a top bar with the logo, the review streak and date
  * search, a sidebar of destinations ending in Settings, and the page on a
  * raised panel beside it. Below tablet width the sidebar folds on its own
- * into a rail of icons, so there is no menu button to reach for. */
+ * into a rail of icons, so there is no menu button to reach for. route is
+ * where the app is going, for the sidebar; shown is the page in the panel,
+ * which is still the last one while it leaves. */
 const narrowQuery='(max-width: 1000px)';
 
-export function Layout({opening=false,route,path,visit,binFiles,reviewed,library,streak,notifications,onNotificationsRead,flash,children}:{opening?:boolean;route:LegacyRoute;path:string;visit:number;binFiles:number;reviewed?:{done:number;total:number};library?:LibraryTotals;streak?:{days:number;today:boolean};notifications?:number;onNotificationsRead?:()=>void;flash?:string;children:ReactNode}){
+export function Layout({opening=false,route,shown=route,path,visit,binFiles,reviewed,library,streak,notifications,onNotificationsRead,flash,children}:{opening?:boolean;route:LegacyRoute;shown?:LegacyRoute;path:string;visit:number;binFiles:number;reviewed?:{done:number;total:number};library?:LibraryTotals;streak?:{days:number;today:boolean};notifications?:number;onNotificationsRead?:()=>void;flash?:string;children:ReactNode}){
   const [selection,setSelection]=useState<Selection|null>(null);
   const addons=useAddons();
   const sections=useMemo(()=>sidebar(addons),[addons]);
@@ -213,7 +215,7 @@ export function Layout({opening=false,route,path,visit,binFiles,reviewed,library
       <DateSearch key={visit} date={pageDate} filters={pageFilters}/>
       <div className="gbaracts">
         {pageActions&&<PageActionButtons page={pageActions}/>}
-        {!selection&&<GuideButton route={route}/>}
+        {!selection&&<GuideButton route={shown}/>}
       </div>
     </header>}
     <aside id="side" className="side">
@@ -245,12 +247,12 @@ export function Layout({opening=false,route,path,visit,binFiles,reviewed,library
         </a>
       </nav>
     </aside>
-    <GridZoom enabled={gridRoutes.has(route)}/>
+    <GridZoom enabled={gridRoutes.has(shown)}/>
     <Tips/>
     {intro&&streak&&<StreakIntro streak={streak} target={pill} onDone={()=>{setIntro(false);setBump(true)}}/>}
     <div className="panel">
       {flash&&<p className="flash" role="status">{flash}</p>}
-      <main className={`${gridRoutes.has(route)?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}><PageActionsProvider value={setPageActions}><PageDateProvider value={setPageDate}><PageFiltersProvider value={setPageFilters}><PageGuide route={route}/>{children}</PageFiltersProvider></PageDateProvider></PageActionsProvider></SelectionProvider></main>
+      <main className={`${gridRoutes.has(shown)?'wide':''}${selection?' selecting':''}`||undefined}><SelectionProvider value={setSelection}><PageActionsProvider value={setPageActions}><PageDateProvider value={setPageDate}><PageFiltersProvider value={setPageFilters}>{children}</PageFiltersProvider></PageDateProvider></PageActionsProvider></SelectionProvider></main>
       <div className="snacks" id="snacks"/>
     </div>
   </div>;

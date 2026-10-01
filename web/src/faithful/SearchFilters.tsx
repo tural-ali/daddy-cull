@@ -37,7 +37,8 @@ export function usePageFilters(filters:PageFilters|null){
     set(current?{options:current.options,toggle:id=>latest.current?.toggle(id),clear:()=>latest.current?.clear(),
       sort:current.sort&&{options:current.sort.options,value:current.sort.value,set:id=>latest.current?.sort?.set(id)}}:null);
   },[signature,set]);
-  useEffect(()=>()=>set(null),[set]);
+  // Taken away as the page goes, before the page after it puts up its own.
+  useLayoutEffect(()=>()=>set(null),[set]);
 }
 
 /** The filters and orders a typed word could mean: two letters or more,

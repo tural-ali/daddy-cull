@@ -32,7 +32,8 @@ export function useSelectionBar(selection:Selection|null){
       actions:current.actions.map((action,index)=>({...action,onClick:()=>latest.current?.actions[index]?.onClick()})),
     });
   },[signature,set]);
-  useEffect(()=>()=>set(null),[set]);
+  // Taken away as the page goes, before the page after it puts up its own.
+  useLayoutEffect(()=>()=>set(null),[set]);
 }
 
 export function SelectionBar({selection}:{selection:Selection}){
