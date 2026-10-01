@@ -22,6 +22,7 @@ func init() {
 		"daddy-cull/next/internal/catalog.Asset":                            "Asset is a file in the catalogue, with the choice saved for it.",
 		"daddy-cull/next/internal/catalog.Asset.AlternativeCount":           "AlternativeCount counts other versions of the same picture.",
 		"daddy-cull/next/internal/catalog.Asset.CapturedAt":                 "CapturedAt is when it was taken, in Unix seconds. Exactly midnight UTC means only the date is known, from the folder it is filed in.",
+		"daddy-cull/next/internal/catalog.Asset.ComparisonPending":          "ComparisonPending means background analysis of nearby files is still running.",
 		"daddy-cull/next/internal/catalog.Asset.ComparisonReason":           "ComparisonReason explains why this file was offered in a burst comparison.",
 		"daddy-cull/next/internal/catalog.Asset.Duration":                   "Duration is how long a video runs, in seconds, once it has been read.",
 		"daddy-cull/next/internal/catalog.Asset.Favourite":                  "Favourite is whether the file has a heart.",

@@ -42,8 +42,11 @@ type Store struct {
 	immichWake  chan struct{}
 	// sidecarRoots is where copy groups read each copy's sidecars from, and
 	// sidecarCache what they read, by file. See sidecar_facts.go.
-	sidecarRoots atomic.Pointer[MediaRoots]
-	sidecarCache sync.Map
+	sidecarRoots       atomic.Pointer[MediaRoots]
+	sidecarCache       sync.Map
+	comparisonWake     chan struct{}
+	comparisonPriority atomic.Int64
+	comparisonRunning  atomic.Bool
 }
 
 func Open(path string) (*Store, error) {
@@ -216,6 +219,18 @@ CREATE TABLE IF NOT EXISTS asset_evidence (
 );
 CREATE INDEX IF NOT EXISTS asset_evidence_full_hash ON asset_evidence(full_hash) WHERE full_hash IS NOT NULL;
 CREATE INDEX IF NOT EXISTS asset_evidence_perceptual_hash ON asset_evidence(perceptual_hash) WHERE perceptual_hash IS NOT NULL;
+-- Visual suggestions have their own versioned evidence, never byte identity.
+CREATE TABLE IF NOT EXISTS photo_similarity (
+ asset_id INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
+ size_bytes INTEGER NOT NULL,
+ algorithm TEXT NOT NULL,
+ fingerprint TEXT NOT NULL,
+ aspect REAL NOT NULL,
+ red REAL NOT NULL,
+ green REAL NOT NULL,
+ blue REAL NOT NULL,
+ checked_at INTEGER NOT NULL
+);
 -- A video's footage, as footage.go reads it: its media data's length, the
 -- hash of how its header plays it, and once another video matches both, the
 -- hash of the footage itself. media_bytes is 0, and playback_hash NULL, for a
@@ -539,7 +554,7 @@ COMMIT;`, applicationID)); err != nil {
 		r.Close()
 		return fail(err)
 	}
-	return &Store{read: r, write: w, immichWake: make(chan struct{}, 1)}, nil
+	return &Store{read: r, write: w, immichWake: make(chan struct{}, 1), comparisonWake: make(chan struct{}, 1)}, nil
 }
 
 // allowRefusedImmichState is the version 9 change: a heart on a photo that

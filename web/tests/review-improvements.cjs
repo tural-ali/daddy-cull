@@ -60,7 +60,7 @@ const file=(id,extra={})=>({id,path:`/archive/2020/2020-01/2020-01-02/SHOT_${id}
  await page.clock.resume();
  await page.locator('[data-asset="1"]').click();
  await viewer.getByRole('button',{name:'Compare similar photos'}).click();
- const compare=page.getByRole('region',{name:'Compare nearby photos'});
+ const compare=page.getByRole('dialog',{name:'Compare nearby photos'});
  await compare.waitFor();
  assert.equal(await compare.locator('.comparestrip button').count(),2,'RAW and JPEG are a single choice');
  await compare.getByRole('button',{name:'Zoom in',exact:true}).click();
@@ -71,7 +71,12 @@ const file=(id,extra={})=>({id,path:`/archive/2020/2020-01/2020-01-02/SHOT_${id}
  const dragged=await compare.locator('.compareimage img').evaluateAll(nodes=>nodes.map(node=>node.style.transform));
  assert.equal(dragged[0],dragged[1]);assert.notEqual(dragged[0],transforms[0]);
  if(process.env.SHOTS)await page.screenshot({path:`${process.env.SHOTS}/burst-compare.png`});
- await compare.getByRole('button',{name:'Keep selected, remove the rest'}).click();
+ const removeOthers=compare.getByRole('button',{name:'Keep keeper, remove others'});
+ assert.equal(await removeOthers.isDisabled(),true,'inspection never picks a keeper implicitly');
+ await compare.getByRole('button',{name:'Choose as keeper',exact:true}).first().click();
+ await compare.locator('.comparestrip button').nth(1).click();
+ assert.equal(await compare.getByRole('button',{name:'Keeper chosen',exact:true}).count(),1,'browsing another candidate preserves the explicit keeper');
+ await removeOthers.click();
  await compare.waitFor({state:'hidden'});
  assert.deepEqual(batches[0].map(job=>[job.assetId,job.status]),[[1,'keep'],[2,'keep'],[3,'cull']]);
  await page.goto(`${base}/bin`);

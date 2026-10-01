@@ -1,5 +1,5 @@
 export type Status = 'unreviewed' | 'keep' | 'later' | 'cull';
-export type Asset = {comparisonReason?:string; id:number; path:string; capturedAt:number; kind:string; source:string; size:number; status:Status; favourite:boolean; revision:number;alternativeCount:number;relatedCount?:number;
+export type Asset = {comparisonReason?:string;comparisonPending?:boolean; id:number; path:string; capturedAt:number; kind:string; source:string; size:number; status:Status; favourite:boolean; revision:number;alternativeCount:number;relatedCount?:number;
   /** The other files of a RAW and its exports, on the day pages. */
   stack?:number[];
   /** Reached the archive after its day was reviewed, and still waits. */

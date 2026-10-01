@@ -1,4 +1,5 @@
 import {Compare} from './Compare';
+import {Busy} from '../Busy';
 import {useEffect,useEffectEvent,useLayoutEffect,useRef,useState,type CSSProperties,type MouseEvent,type RefObject,type ReactNode} from 'react';
 import {SessionVideo} from '../SessionVideo';
 import {Icon,type IconName} from '../Icon';
@@ -71,6 +72,10 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   const [bare,setBare]=useState(false);
   const [related,setRelated]=useState<Asset[]|null>(null);
   const [focus,setFocus]=useState(0);
+  const [finding,setFinding]=useState(false);
+  const [compareNotice,setCompareNotice]=useState('');
+  const compareRequest=useRef<AbortController|null>(null);
+  const compareDeadline=useRef(0);
   const compareBehind=stacksBehind(related??[]);
   const compareHidden=new Set([...compareBehind.values()].flat().map(file=>file.id));
   const comparePhotos=(related??[]).filter(file=>!compareHidden.has(file.id));
@@ -231,25 +236,53 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   // A stack's own files are not similar photos to compare with.
   const similar=current?.kind!=='video'?1:(current?.relatedCount??0)-(others?.length??0);
   async function openCompare(){
-    if(!current||similar<1)return;
-    setError('');
+    if(!current||similar<1||comparing)return;
+    compareRequest.current?.abort();
+    const controller=new AbortController();compareRequest.current=controller;
+    compareDeadline.current=Date.now()+30000;
+    setError('');setRelated(null);setCompareNotice('');setFinding(true);
     try{
-      let response=await fetch(`/api/assets/${current.id}/burst`);
-      if(!response.ok)response=await fetch(`/api/assets/${current.id}/related`);
+      const response=await fetch(`/api/assets/${current.id}/burst`,{signal:controller.signal});
       if(!response.ok)throw new Error('The related files could not be loaded.');
       const files:Asset[]=await response.json();
       const grouped=stacksBehind(files);
       const hidden=new Set([...grouped.values()].flat().map(file=>file.id));
       const photos=files.filter(file=>!hidden.has(file.id));
-      if(photos.length<2){setError('No nearby shots found yet. Camera metadata is indexed in the background.');return}
+      if(controller.signal.aborted)return;
       setRelated(files);setFocus(Math.max(0,photos.findIndex(file=>file.id===current.id||file.stack?.includes(current.id))));
-    }catch(reason){setError((reason as Error).message)}
+    }catch(reason){if(!controller.signal.aborted)setError((reason as Error).message)}
+    finally{if(compareRequest.current===controller)setFinding(false)}
   }
-  async function saveGroup(mode:'keep-all'|'keep-focus'|'cull-all'){
+  function closeCompare(){if(comparing)return;compareRequest.current?.abort();setFinding(false);setRelated(null)}
+  useEffect(()=>()=>{compareRequest.current?.abort()},[current?.id]);
+  useEffect(()=>{
+    if(!current||!related?.some(file=>file.comparisonPending)||comparing)return;
+    const controller=new AbortController();compareRequest.current=controller;
+    const timer=window.setTimeout(async()=>{
+      try{
+        const response=await fetch(`/api/assets/${current.id}/burst`,{signal:controller.signal});
+        if(!response.ok)throw new Error('Analysis could not be refreshed. Check again.');
+        let files:Asset[]=await response.json();
+        if(controller.signal.aborted)return;
+        if(Date.now()>compareDeadline.current){
+          files=files.map(file=>({...file,comparisonPending:false}));
+          setCompareNotice('Showing candidates found so far. Analysis continues in the background.');
+        }
+        setRelated(files);setFocus(0);
+      }catch(reason){
+        if(controller.signal.aborted)return;
+        setRelated(files=>files?.map(file=>({...file,comparisonPending:false}))??null);
+        setCompareNotice((reason as Error).message);
+      }
+    },1000);
+    return()=>{clearTimeout(timer);controller.abort()};
+  },[related,current,comparing]);
+  async function saveGroup(mode:'keep-all'|'keep-keeper',keeper?:number){
     if(!related?.length||comparing)return;
+    if(related.some(file=>file.comparisonPending)||mode==='keep-keeper'&&(keeper===undefined||!comparePhotos[keeper]))return;
     setComparing(true);
-    const selected=new Set(stackOf(comparePhotos[focus],compareBehind).map(file=>file.id));
-    const jobs=related.map(asset=>{const keeping=mode==='keep-all'||(mode==='keep-focus'&&selected.has(asset.id));return {assetId:asset.id,status:keeping?'keep':'cull',favourite:keeping?asset.favourite:false,expectedRevision:asset.revision,requestId:requestID()}});
+    const selected=new Set(keeper===undefined?[]:stackOf(comparePhotos[keeper],compareBehind).map(file=>file.id));
+    const jobs=related.map(asset=>{const keeping=mode==='keep-all'||selected.has(asset.id);return {assetId:asset.id,status:keeping?'keep':'cull',favourite:keeping?asset.favourite:false,expectedRevision:asset.revision,requestId:requestID()}});
     const journal=`cull.group.pending.${requestID()}`;
     try{
       localStorage.setItem(journal,JSON.stringify(jobs));
@@ -302,9 +335,11 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
         return;
       }
       if(help&&key==='escape'){setHelp(false);return}
+      if(finding){if(key==='c'||key==='escape')closeCompare();return}
       if(related){
+        if(comparing)return;
         if(/^[1-9]$/.test(key))setFocus(Math.min(Number(key)-1,comparePhotos.length-1));
-        else if(key==='c'||key==='escape')setRelated(null);
+        else if(key==='c'||key==='escape')closeCompare();
         return;
       }
       if(key==='arrowright')step(1);
@@ -341,7 +376,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     :current.status==='cull'?{icon:'delete' as IconName,text:'Marked for the Bin'}
     :{icon:'schedule' as IconName,text:'Not decided yet'};
   // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- a click outside the photo is the mouse's Esc
-  return <div className={`rv on${bare?' bare':''}${info?' info':''}${related?' cmp':''}${flight?` flight ${flight.mode}`:''}`} role="dialog" aria-modal="true" aria-label="Photo review" onClick={outside}>
+  return <div className={`rv on${bare?' bare':''}${info?' info':''}${related||finding?' cmp':''}${flight?` flight ${flight.mode}`:''}`} role="dialog" aria-modal="true" aria-label="Photo review" onClick={outside}>
     <div className="rvbody">
     {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- drops the focus ring a mouse click leaves on a button; keys never need it */}
     <div className="rvtop" onMouseUp={event=>(event.target as HTMLElement).closest('button')?.blur()}>
@@ -405,7 +440,8 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       </>}
     </aside>
     {sessionControl&&<div className="sessionclock">{sessionControl}</div>}
-    {related&&<Compare assets={comparePhotos} focus={focus} onFocus={setFocus} onClose={()=>setRelated(null)} busy={comparing} onChoose={mode=>void saveGroup(mode)}/>}
+    {finding&&<div className="rvcmp compareempty"><Busy label="Finding nearby shots" size={64}/><button className="btn" onClick={closeCompare}>Cancel comparison</button></div>}
+    {related&&<Compare assets={comparePhotos} focus={focus} onFocus={setFocus} onClose={closeCompare} busy={comparing} pending={related.some(file=>file.comparisonPending)} notice={compareNotice} onRefresh={()=>void openCompare()} onChoose={(mode,keeper)=>void saveGroup(mode,keeper)}/>}
     {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- a click dismisses the sheet; ? and Esc do the same */}
     {help&&<div className="rvkeys" onClick={()=>setHelp(false)}><table><tbody><tr><td>→ ←</td><td>next / previous</td></tr><tr><td>K</td><td>keep and continue, again to undo</td></tr><tr><td>X</td><td>remove (clears keep and favourite), again to undo</td></tr>{others&&onRemoveFormat&&<tr><td>X then O / X</td><td>remove only the file shown / the whole photo</td></tr>}<tr><td>F</td><td>favourite</td></tr><tr><td>I</td><td>info panel</td></tr><tr><td>Z</td><td>zoom</td></tr>{live&&<tr><td>L</td><td>play the Live Photo, again to stop</td></tr>}{onTurn&&<tr><td>] / [</td><td>rotate clockwise / anticlockwise, in Cull only</td></tr>}<tr><td>H</td><td>hide the controls, again to show them</td></tr><tr><td>C</td><td>compare a group</td></tr>{others&&<tr><td>R</td><td>show the next file of this photo, such as its RAW</td></tr>}<tr><td>{undoKeys.undo} / {undoKeys.redo}</td><td>{onRecord?'undo / redo the last choice':'undo / redo, on the day page'}</td></tr><tr><td>G / Esc / Space</td><td>back to the grid</td></tr><tr><td>?</td><td>this list</td></tr></tbody></table></div>}
     {error&&<div className="toast err">{error}</div>}

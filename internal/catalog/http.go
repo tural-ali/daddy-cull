@@ -292,7 +292,7 @@ func (s *Store) Routes(m *api.Mux) {
 		read               func(context.Context, int64) ([]Asset, error)
 	}{
 		{"/api/assets/{id}/alternatives", "List a file's other versions", "Other files that are the same picture in another form: the same photo exported again, or a copy at another size.", s.Alternatives},
-		{"/api/assets/{id}/burst", "Find nearby shots to compare", "At most 40 same-folder candidates, plus their stacked companions, supported by capture times, available perceptual fingerprints, or related filenames. These are candidates, not proof of duplication.", s.Burst},
+		{"/api/assets/{id}/burst", "Find nearby shots to compare", "At most 40 photographs in the exact same folder, plus their stacked companions (400 files maximum), supported by capture times within eight seconds or versioned local visual fingerprints. Filenames alone never suggest a burst. ComparisonPending on the selected file means its bounded nearby window is being indexed in the background. Requests never decode media. These are suggestions, never proof of duplication.", s.Burst},
 		{"/api/assets/{id}/related", "List files related to a file", "Files that belong with this one, such as the other half of a Live Photo or a RAW+JPEG pair, and near copies.", s.Related},
 	} {
 		m.HandleFunc(api.Route{

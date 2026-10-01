@@ -11,6 +11,8 @@ import (
 type Asset struct {
 	// ComparisonReason explains why this file was offered in a burst comparison.
 	ComparisonReason string `json:"comparisonReason,omitempty"`
+	// ComparisonPending means background analysis of nearby files is still running.
+	ComparisonPending bool `json:"comparisonPending,omitempty"`
 	// RelatedCount counts files related to this one, such as the other half
 	// of a Live Photo.
 	RelatedCount int `json:"relatedCount"`

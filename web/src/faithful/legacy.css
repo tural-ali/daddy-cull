@@ -3199,22 +3199,31 @@ ul.answers { margin: 0; padding: 0; list-style: none; display: grid; gap: .5rem;
   .dupelabel { flex-wrap: wrap; }
 }
 
-.burstcompare { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.rv.cmp .burstcompare { display: flex; flex-direction: column; gap: 12px; padding: 16px; overflow-y: auto; }
 .burstcompare .ctop { flex-wrap: wrap; gap: 8px; padding: 0; }
 .burstcompare .hint { margin: 0; }
-.comparepair { display: grid; grid-template-columns: 1fr 1fr; flex: 1; min-height: 0; gap: 12px; }
+.comparepair { display: grid; grid-template-columns: 1fr 1fr; flex: 1 0 240px; min-height: 240px; gap: 12px; }
 .compareframe { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 2px solid transparent; border-radius: 12px; overflow: hidden; }
 .compareframe.focused { border-color: var(--accent); }
 .compareframe > button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
 .compareimage { display: grid; place-items: center; flex: 1; overflow: hidden; min-height: 0; touch-action: none; cursor: grab; background: #08090a; }
-.compareimage img { width: 100%; height: 100%; min-height: 0; object-fit: contain; user-select: none; }
+.compareimage img { width: auto; height: auto; max-width: 100%; max-height: 100%; min-height: 0; object-fit: contain; user-select: none; grid-area: 1 / 1; }
+.compareimage > .busy { grid-area: 1 / 1; }
+.comparecaption { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 8px; }
+.comparecaption button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comparecaption span { margin-left: auto; font-size: 11px; color: var(--muted); }
+.compareframe.keeper { border-color: var(--accent); }
+.keeperchoice[aria-pressed="true"] { color: var(--accent); }
+.compareempty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; flex: 1; padding: 24px; text-align: center; }
+.rv.cmp > .compareempty, .rv.cmp .rvcmp.compareempty { display: flex; }
+.comparereference { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .comparestrip { display: flex; gap: 8px; overflow-x: auto; flex: none; max-height: 130px; }
 .comparestrip button { flex: 0 0 130px; display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 2px solid transparent; border-radius: 8px; color: var(--text); background: var(--bg-2); cursor: pointer; overflow: hidden; }
 .comparestrip button.on { border-color: var(--accent); }
 .comparestrip img { width: 100%; height: 56px; object-fit: contain; }
 .comparestrip b, .comparestrip small { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
-.burstcompare .cbot { flex-wrap: wrap; gap: 8px; padding: 0; }
-@media (width <= 600px) { .burstcompare { padding: 8px; gap: 8px; } .comparepair { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } .comparestrip { max-height: 100px; } }
+.burstcompare .cbot { flex-wrap: wrap; align-items: center; gap: 8px; padding: 0; }
+@media (width <= 600px) { .rv.cmp .burstcompare { padding: 8px; gap: 8px; } .comparepair { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; min-height: 360px; flex-basis: 360px; } .comparestrip { max-height: 100px; } }
 
 .libraryfilters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 20px 0; }
 .libraryfilters label, .saveview label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); min-width: 0; }

@@ -466,6 +466,7 @@ func main() {
 		// Grids lay photos out at their own shapes, read once per file.
 		if mediaRoots.Archive != "" && mediaRoots.RawTool != "" {
 			go s.KeepShapes(ctx, mediaRoots)
+			go s.KeepSimilarities(ctx, mediaRoots)
 		}
 		// Files that share a size are hashed until Duplicates can prove copies.
 		if mediaRoots.Archive != "" {
