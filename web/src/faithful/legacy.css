@@ -1408,8 +1408,8 @@ main.selecting .mo.sel:not(:focus-visible) { box-shadow: none; transform: none; 
 .openingcanvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .opening.solid .openingstage { visibility: hidden; }
 .opening.logo .openingcanvas, .opening.logo .openingstage { animation: opening-logo 500ms ease-out both; }
-.opening.dive::before { animation: opening-clear 1650ms linear both; }
-.opening.dive:not(.solid) .openingworld { animation: opening-camera 1550ms cubic-bezier(.55, 0, .75, .5) both; }
+.opening.dive::before { animation: opening-clear var(--opening-clear) linear both; }
+.opening.dive:not(.solid) .openingworld { animation: opening-camera var(--opening-camera) cubic-bezier(.55, 0, .75, .5) both; }
 @keyframes opening-logo { from { opacity: 0; } }
 @keyframes opening-camera { from { transform: translateZ(0); } to { transform: translateZ(1120px); } }
 @keyframes opening-clear { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
@@ -1423,10 +1423,10 @@ main.selecting .mo.sel:not(:focus-visible) { box-shadow: none; transform: none; 
   .yearview.opening-arrive .calendar { overflow: visible; }
 }
 .yearview.opening-arrive .cell:not(.blank) {
-  animation: opening-date 1000ms cubic-bezier(.16, 1, .3, 1) calc(1550ms + var(--far, 1) * 220ms) both;
+  animation: opening-date var(--opening-land) cubic-bezier(.16, 1, .3, 1) calc(var(--opening-arrive) + var(--far, 1) * var(--opening-stagger)) both;
   will-change: transform, opacity;
 }
-.yearview.opening-arrive :is(h1, .ysum, .pbar, .legend, .mlabel) { animation: opening-rise 700ms cubic-bezier(.16, 1, .3, 1) 1750ms both; }
+.yearview.opening-arrive :is(h1, .ysum, .pbar, .legend, .mlabel) { animation: opening-rise 700ms cubic-bezier(.16, 1, .3, 1) calc(var(--opening-arrive) + 100ms) both; }
 @keyframes opening-date {
   0% { opacity: 0; transform: translate3d(var(--fly-x), var(--fly-y), 480px) rotateX(8deg) scale(1.35); }
   20% { opacity: 1; }

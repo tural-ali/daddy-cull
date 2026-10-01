@@ -1,7 +1,7 @@
 import {resumeSession} from './ReviewSession';
 import {ProgressBar} from '../ProgressBar';
 import {useContext,type CSSProperties} from 'react';
-import {OpeningContext} from './YearOpening';
+import {OpeningContext,openingStyle} from './YearOpening';
 import {zoomFrom} from './pageMotion';
 
 // fresh counts files that reached the archive after the date was reviewed and
@@ -56,7 +56,7 @@ export function Year({months,prog,streak}:YearData){
   const now=new Date(),today=`${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   // While the app opens, the dates wait unseen under the logo, then fly in.
   const opening=useContext(OpeningContext);
-  return <section className={`yearview${opening==='logo'?' opening-held':opening==='dive'?' opening-arrive':''}`}>
+  return <section className={`yearview${opening==='logo'?' opening-held':opening==='dive'?' opening-arrive':''}`} style={opening?openingStyle:undefined}>
     <h1>Your archive</h1>
     <p className="ysum"><b>{prog.done.toLocaleString()} of {dates.toLocaleString()}</b> calendar dates reviewed <span className="pc">{percent.toFixed(1)}%</span>
       {prog.part>0&&<span className="dim"> · {prog.part} part-finished</span>}

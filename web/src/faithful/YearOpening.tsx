@@ -1,4 +1,4 @@
-import {createContext,useEffect,useRef,useState} from 'react';
+import {createContext,useEffect,useRef,useState,type CSSProperties} from 'react';
 import {Logo} from '../Logo';
 
 // The app's own address opens on the year, the way a phone opens on its home
@@ -17,7 +17,16 @@ export const OpeningContext=createContext<OpeningPhase|null>(null);
 
 // The logo rests briefly so its full silhouette reads, and the
 // dive and the dates' arrival take this long after it.
-const LOGO=1200,DIVE=2850;
+const LOGO=1200,CAMERA=1100,ARRIVE=950,LAND=850,STAGGER=180;
+const DIVE=ARRIVE+LAND+STAGGER+40;
+// Both the camera and the calendar use this clock, including the SVG fallback.
+export const openingStyle={
+  '--opening-camera':`${CAMERA}ms`,
+  '--opening-clear':'1000ms',
+  '--opening-arrive':`${ARRIVE}ms`,
+  '--opening-land':`${LAND}ms`,
+  '--opening-stagger':`${STAGGER}ms`,
+} as CSSProperties;
 
 /** Whether this page load opens with the logo: one at the bare address or
  * /year does, read before the app rewrites the one to the other, and never
@@ -66,19 +75,31 @@ export function YearOpening({phase}:{phase:OpeningPhase}){
   const [solid,setSolid]=useState(false);
   const diving=useRef<number|null>(null);
   useEffect(()=>{
-    let active=true,frame=0;
+    let active=true;
     const element=host.current!;
     const svg=element.querySelector('svg')!;
     void import('./logoScene').then(module=>{
       if(!active||diving.current!==null)return;
       scene.current=module.logoScene(element,svg);
-      const draw=()=>{scene.current?.draw(diving.current===null?0:(performance.now()-diving.current)/1550);frame=requestAnimationFrame(draw)};
-      draw();setSolid(true);
+      scene.current.draw(0);setSolid(true);
     }).catch(()=>{/* WebGL unavailable: the centred SVG push still reveals the year. */});
-    return()=>{active=false;cancelAnimationFrame(frame);scene.current?.dispose();scene.current=null};
+    return()=>{active=false;scene.current?.dispose();scene.current=null};
   },[]);
-  useEffect(()=>{if(phase==='dive')diving.current=performance.now()},[phase]);
-  return <div ref={host} className={`opening ${phase}${solid?' solid':''}`} aria-hidden="true">
+  useEffect(()=>{
+    if(phase!=='dive')return;
+    const began=performance.now();diving.current=began;
+    if(!scene.current)return;
+    let frame=0;
+    const draw=(now:number)=>{
+      const progress=(now-began)/CAMERA;
+      scene.current?.draw(progress);
+      if(progress<1)frame=requestAnimationFrame(draw);
+    };
+    // Follow the display's refresh rate, with no idle or finished-frame renders.
+    frame=requestAnimationFrame(draw);
+    return()=>cancelAnimationFrame(frame);
+  },[phase]);
+  return <div ref={host} className={`opening ${phase}${solid?' solid':''}`} style={openingStyle} aria-hidden="true">
     <div className="openingstage"><div className="openingworld"><Logo className="openinglogo"/></div></div>
   </div>;
 }

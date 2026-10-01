@@ -17,10 +17,19 @@ const months=length.map((days,month)=>({name:new Date(Date.UTC(2000,month,1)).to
 })}));
 
 async function open(browser,address,options={}){
-  const {yearDelay=400,yearError=false,...browserOptions}=options;
-  const page=await browser.newPage({viewport:{width:1440,height:900},...browserOptions});
+  const {yearDelay=400,yearError=false,webgl=true,...browserOptions}=options;
+  const page=await browser.newPage({viewport:{width:1440,height:900},deviceScaleFactor:2,...browserOptions});
   page.on('pageerror',error=>{throw error});
   await page.addInitScript(()=>{localStorage.setItem('cull-theme','night')});
+  await page.addInitScript(enabled=>{
+    window.openingRenders=0;
+    const clear=Object.getOwnPropertyDescriptor(WebGL2RenderingContext.prototype,'clear').value;
+    WebGL2RenderingContext.prototype.clear=function(...args){window.openingRenders++;return clear.apply(this,args)};
+    if(!enabled){
+      const getContext=Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype,'getContext').value;
+      HTMLCanvasElement.prototype.getContext=function(kind,...args){return kind.startsWith('webgl')?null:getContext.call(this,kind,...args)};
+    }
+  },webgl);
   await page.addInitScript(key=>{const now=new Date();localStorage.setItem(key,`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`)},'cull.streak-intro');
   await page.route('**/api/**',async route=>{
     const url=new URL(route.request().url());
@@ -56,6 +65,16 @@ const playing=page=>page.evaluate(()=>document.getAnimations().filter(animation=
   const logo=await opening.locator('svg').boundingBox();
   assert.ok(Math.abs(logo.x+logo.width/2-720)<2&&Math.abs(logo.y+logo.height/2-450)<2,`the logo is in the middle: ${JSON.stringify(logo)}`);
   if(shots)await page.screenshot({path:`${shots}/opening-logo.png`});
+  await page.locator('.opening.solid canvas').waitFor();
+  const idle=await page.evaluate(()=>window.openingRenders);
+  await page.waitForTimeout(100);
+  assert.equal(await page.evaluate(()=>window.openingRenders),idle,'a still logo does not spend frames rendering');
+  assert.ok(await page.locator('.openingcanvas').evaluate(canvas=>canvas.width<=innerWidth*1.5),'retina rendering has a bounded pixel cost');
+  const lettering=await opening.locator('svg .mint').evaluate(path=>({
+    stem:path.isPointInFill(new DOMPoint(1897,342)),
+    edge:path.isPointInFill(new DOMPoint(1876,342)),
+  }));
+  assert.ok(lettering.stem&&!lettering.edge,'the actual letter outlines are thinner, rather than faded or flattened');
   await page.locator('.opening.dive').waitFor();
   assert.ok(await page.locator('.yearview.opening-arrive').count(),'the dates fly in as the camera dives');
   await page.locator('.opening.solid canvas').waitFor();
@@ -67,10 +86,17 @@ const playing=page=>page.evaluate(()=>document.getAnimations().filter(animation=
   assert.ok(after<before,'the camera moves forward through one rigid logo');
   assert.equal(await page.locator('.opening .shine').count(),0);
   const delays=await page.locator('.cell:not(.blank)').evaluateAll(cells=>cells.map(cell=>parseFloat(getComputedStyle(cell).animationDelay)));
-  assert.ok(Math.min(...delays)>=1.55&&Math.max(...delays)<=1.78,'the dates wait for the camera pass');
+  assert.ok(Math.min(...delays)>=.95&&Math.max(...delays)<=1.13,'the dates arrive promptly after the camera pass');
   assert.ok(Math.max(...delays)-Math.min(...delays)>.15,'the centre arrives before the edges');
   const hidden=await page.locator('.cell:not(.blank)').evaluateAll(cells=>cells.every(cell=>getComputedStyle(cell).opacity==='0'));
   assert.ok(hidden,'no dates appear before the zoom');
+  await page.waitForFunction(()=>Number(document.querySelector('.openingcanvas')?.dataset.cameraZ)<-96);
+  assert.ok(await page.locator('.cell:not(.blank)').evaluateAll(cells=>cells.every(cell=>getComputedStyle(cell).opacity==='0')),'the camera crosses the back of the solid letters before the first dates appear');
+  await page.waitForFunction(()=>document.querySelector('.openingcanvas')?.dataset.cameraZ==='-180.00');
+  assert.ok(await page.locator('.cell:not(.blank)').evaluateAll(cells=>cells.some(cell=>Number(getComputedStyle(cell).opacity)>0)),'the grid is already arriving when the camera finishes');
+  const finished=await page.evaluate(()=>window.openingRenders);
+  await page.waitForTimeout(100);
+  assert.equal(await page.evaluate(()=>window.openingRenders),finished,'the renderer stops while the calendar settles');
   if(shots){
     for(const ms of [180,700,1100,1300,1600,2200]){
       await hold(page,ms);
@@ -96,6 +122,28 @@ const playing=page=>page.evaluate(()=>document.getAnimations().filter(animation=
   // A reload of the year, which the bare address became, plays it again.
   await page.reload();
   await page.locator('.opening').waitFor();
+  await page.close();
+
+  // A resize of the still logo redraws it without starting an idle render loop.
+  page=await open(browser,'/',{yearDelay:2400});
+  await page.locator('.opening.solid canvas').waitFor();
+  await page.setViewportSize({width:768,height:900});
+  await page.waitForTimeout(150);
+  const resized=await page.evaluate(()=>window.openingRenders);
+  const resizedLogo=await page.locator('.openinglogo').boundingBox();
+  assert.ok(Math.abs(resizedLogo.x+resizedLogo.width/2-384)<2,'the still logo remains centred after resizing');
+  await page.waitForTimeout(100);
+  assert.equal(await page.evaluate(()=>window.openingRenders),resized);
+  await page.close();
+
+  // Without WebGL the same schedule still brings in an intact calendar.
+  page=await open(browser,'/',{webgl:false});
+  await page.locator('.opening.dive').waitFor();
+  assert.equal(await page.locator('.openingcanvas').count(),0);
+  await page.waitForTimeout(1250);
+  assert.ok(await page.locator('.cell:not(.blank)').evaluateAll(cells=>cells.some(date=>Number(getComputedStyle(date).opacity)>0)));
+  await page.locator('.opening').waitFor({state:'detached',timeout:2000});
+  assert.equal(await playing(page),0);
   await page.close();
   page=await open(browser,'/year');
   await page.locator('.opening').waitFor();
