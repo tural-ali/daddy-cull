@@ -1,16 +1,20 @@
-// How one page gives way to the next. The page left fades and lifts a little
-// while it can no longer be pressed, and the next rises into its place, so a
-// move feels like turning to another part of the same place rather than a
-// fresh load. A date pressed in the year opens out of its own square: the
-// square grows to fill the panel, its colour melting into the page, and the
-// day's photographs come in after it. Going from a day back to the year zooms
-// out onto that day's square. Anyone who has asked for less motion gets the
-// pages swapped at once, as before.
+// How one page gives way to the next. The page left fades while it can no
+// longer be pressed, and the next rises into its place, so a move feels like
+// turning to another part of the same place rather than a fresh load. A date
+// pressed in the year opens out of its own square: the square grows to fill
+// the panel, its colour melting into the page, and the day's photographs come
+// in after it. Going from a day back to the year zooms out onto that day's
+// square. Anyone who has asked for less motion gets the pages swapped at
+// once, as before.
 
 /** How long the page left takes to go, and how long a date's square takes to
  * fill the panel, in milliseconds. The next page waits for whichever applies
  * before it comes in. */
 export const LEAVE=140,ZOOM=360;
+
+/** How many screens tall a page can be and still rise in; a longer one
+ * fades in where it is. */
+export const LONG=4;
 
 /** A date square pressed in the year, as it was on screen. */
 export type Zoom={href:string;rect:DOMRect;colour:string;ink:string;size:string;label:string};

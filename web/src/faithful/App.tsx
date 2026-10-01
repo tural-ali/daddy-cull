@@ -29,7 +29,7 @@ import {Snacks} from './Snacks';
 import {CATALOGUE_CHANGED,catalogueGeneration,quietEnough,watchCatalogue} from './catalogueWatch';
 import {NAVIGATED,RELOAD_PAGE,currentVisit,followLinks,navigate,reloadPage,savedScroll} from './router';
 import {settled} from '../saving';
-import {LEAVE,ZOOM,calm,growSquare,squareOrigin,staggerGrid,takeZoom} from './pageMotion';
+import {LEAVE,LONG,ZOOM,calm,growSquare,squareOrigin,staggerGrid,takeZoom} from './pageMotion';
 
 type Loaded={route:LegacyRoute;content:ReactNode};
 /** The page in the panel. key names the visit it was read for, so a page
@@ -299,11 +299,15 @@ export function App(){
       if(origin)stage.current.style.transformOrigin=origin;
     }
     const key=page.key,el=stage.current;
+    // A long page fades in rather than rising, as moving it would have the
+    // browser paint the whole of it; see legacy.css.
+    if(!page.motion||page.motion==='back')el.style.animationName=el.scrollHeight>innerHeight*LONG?'page-fade-in':'';
     const timer=setTimeout(()=>{
       el.style.transformOrigin='';
+      el.style.animationName='';
       setPage(current=>current.key===key&&current.phase==='entering'?{...current,phase:'shown',motion:undefined,origin:undefined}:current);
     },page.motion==='zoom'?1000:page.motion==='fromday'?520:380);
-    return()=>{clearTimeout(timer);unstagger?.()};
+    return()=>{clearTimeout(timer);unstagger?.();el.style.animationName=''};
   },[page.phase,page.key,page.motion,page.md]);
   // Keys meant for the page left do nothing while it goes, from the moment
   // it starts to.

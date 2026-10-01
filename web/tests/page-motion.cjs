@@ -2,8 +2,8 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const assert=require('node:assert/strict');
 
 // Moving between pages is a motion, not a fresh load: the page left fades as
-// it goes and cannot be pressed meanwhile, and the next rises in, with no
-// motion left on it after. A date pressed in the year opens out of its own
+// it goes and cannot be pressed meanwhile, and the next rises in, or fades in
+// if it is long, with no motion left on it after. A date pressed in the year opens out of its own
 // square, which grows to fill the panel before the day's photographs come in
 // one after another; from the day, the year zooms back out onto that square.
 // With less motion asked for, pages change at once.
@@ -12,6 +12,7 @@ const shots=process.env.SHOTS;
 const make=id=>({id,path:`/archive/2010/2010-09/2010-09-07/IMG_${id}.JPG`,capturedAt:Date.parse('2010-09-07T12:00:00Z')/1000+id,kind:'image',source:'archive',size:100,
   status:'unreviewed',favourite:false,revision:0,alternativeCount:0,relatedCount:0,day:'2010-09-07',width:4032,height:3024});
 const assets=Array.from({length:40},(_,index)=>make(index+1));
+const long=Array.from({length:1500},(_,index)=>make(index+1));
 const cell=(md,dom,files)=>({md,dom,years:1,files,done:0,waiting:files,state:'todo'});
 const month=(name,number,days)=>({name,cells:Array.from({length:days},(_,index)=>{
   const dom=index+1,md=`${String(number).padStart(2,'0')}-${String(dom).padStart(2,'0')}`;
@@ -34,7 +35,9 @@ async function open(browser,{reduced=false}={}){
       // Slower than the square takes to grow, as a day read over the network is.
       await new Promise(resolve=>setTimeout(resolve,120));
       const md=url.pathname.split('/')[3];
-      return route.fulfill({json:{md,label:'A day',previous:'09-06',next:'09-08',years:[{day:'2010-09-07',year:2010,files:assets.length,bytes:assets.length*100,status:'pending',assets}],memories:assets.length,bytes:assets.length*100}});
+      // Any other day is a long one, many screens of photographs.
+      const day=md==='09-07'?assets:long;
+      return route.fulfill({json:{md,label:'A day',previous:'09-06',next:'09-08',years:[{day:'2010-09-07',year:2010,files:day.length,bytes:day.length*100,status:'pending',assets:day}],memories:day.length,bytes:day.length*100}});
     }
     if(url.pathname==='/api/year')return route.fulfill({json:year});
     if(url.pathname==='/api/trash')return route.fulfill({json:[]});
@@ -150,6 +153,35 @@ const settled=async page=>{
   await side.getByRole('link',{name:'Year'}).click();
   await page.waitForFunction(()=>!document.querySelector('.pagestage.leaving'));
   assert.equal(await page.evaluate(()=>window.__keys),0,'a key pressed as the page goes reaches nothing');
+  await settled(page);
+
+  // The page left fades where it is, and a page many screens long fades in
+  // where it is too, as moving a page has the browser paint all of it, which
+  // for a long one holds everything for a second or more. A short page rises.
+  const motion=()=>page.evaluate(()=>new Promise(resolve=>{
+    const stage=document.querySelector('.pagestage'),seen={};
+    const observer=new MutationObserver(()=>{
+      const phase=stage.classList.contains('leaving')?'leaving':stage.classList.contains('entering')?'entering':null;
+      if(!phase||seen[phase])return;
+      const moving=stage.getAnimations().find(a=>(a.animationName??'').startsWith('page-'));
+      seen[phase]={name:moving?.animationName,transform:!!moving?.effect.getKeyframes().some(frame=>frame.transform&&frame.transform!=='none'),tall:Math.round(stage.scrollHeight/innerHeight)};
+      if(phase==='entering'){observer.disconnect();resolve(seen)}
+    });
+    observer.observe(stage,{attributes:true,attributeFilter:['class']});
+  }));
+  let moved=motion();
+  await side.getByRole('link',{name:'Today'}).click();
+  const toLong=await moved;
+  assert.deepEqual(toLong.leaving,{name:'page-leave',transform:false,tall:toLong.leaving.tall},`the year fades where it is: ${JSON.stringify(toLong)}`);
+  assert.ok(toLong.entering.tall>4,`the day is long: ${toLong.entering.tall} screens`);
+  assert.deepEqual([toLong.entering.name,toLong.entering.transform],['page-fade-in',false],`so it fades in where it is: ${JSON.stringify(toLong)}`);
+  await settled(page);
+  assert.equal(await page.evaluate(()=>document.querySelector('.pagestage').style.animationName),'','and keeps no motion of its own after');
+  moved=motion();
+  await side.getByRole('link',{name:/^Bin/}).click();
+  const toShort=await moved;
+  assert.deepEqual([toShort.leaving.name,toShort.leaving.transform],['page-leave',false],`the long day fades where it is: ${JSON.stringify(toShort)}`);
+  assert.deepEqual([toShort.entering.name,toShort.entering.transform],['page-enter',true],`and the Bin rises in: ${JSON.stringify(toShort)}`);
   await settled(page);
   await page.close();
 
