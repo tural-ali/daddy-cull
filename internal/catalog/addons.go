@@ -31,7 +31,9 @@ const (
 
 // Stats is what the frame of the app shows about the library.
 type Stats struct {
-	// Total counts every file in the catalogue.
+	// Total counts the files in the library, as the Library totals do: the
+	// archive, less what is in the Bin, deleted from it or missing from disk,
+	// and less Live Photo videos, which go with their photo.
 	Total int64 `json:"total"`
 	// Synthetic is true for a catalogue made up for testing, with no real files.
 	Synthetic bool `json:"synthetic"`
@@ -156,15 +158,15 @@ func (s *Store) LibraryStats(ctx context.Context) (LibraryStats, error) {
 
 // Stats counts the library, with the day of review ending at midnight in loc.
 func (s *Store) Stats(ctx context.Context, loc *time.Location) (Stats, error) {
-	n, err := s.Count(ctx)
+	library, err := s.LibraryStats(ctx)
 	if err != nil {
 		return Stats{}, err
 	}
 	var st Stats
-	st.Total = n
-	var library string
-	_ = s.read.QueryRowContext(ctx, "SELECT value FROM settings WHERE key='library'").Scan(&library)
-	st.Synthetic = library != "real"
+	st.Total = library.Photos.Files + library.Videos.Files
+	var kind string
+	_ = s.read.QueryRowContext(ctx, "SELECT value FROM settings WHERE key='library'").Scan(&kind)
+	st.Synthetic = kind != "real"
 	_ = s.read.QueryRowContext(ctx, "SELECT value FROM settings WHERE key='snapshot_at'").Scan(&st.SnapshotAt)
 	st.Candidates = countQuery(ctx, s.read, "SELECT count(*) FROM assets WHERE anchor_id IS NOT NULL")
 	st.CalendarDays = countQuery(ctx, s.read, "SELECT count(DISTINCT day) FROM asset_days")
@@ -202,9 +204,7 @@ func (s *Store) Stats(ctx context.Context, loc *time.Location) (Stats, error) {
 	st.Notifications, _ = s.UnreadNotifications(ctx)
 	// The addon is on unless someone turned it off, as its Default is always.
 	if on, chosen, err := s.AddonChoice(ctx, AddonLibrary); err == nil && (on || !chosen) {
-		if library, err := s.LibraryStats(ctx); err == nil {
-			st.Library = &library
-		}
+		st.Library = &library
 	}
 	return st, nil
 }

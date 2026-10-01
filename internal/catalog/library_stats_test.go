@@ -61,10 +61,14 @@ func TestLibraryStats(t *testing.T) {
 	if err != nil || stats.Library == nil || *stats.Library != want {
 		t.Fatalf("stats before any choice: %+v %v", stats.Library, err)
 	}
+	// Settings' Media files counts the same files, so the two never disagree.
+	if stats.Total != 4 {
+		t.Fatalf("total %d, want the library's 4", stats.Total)
+	}
 	if _, err := s.write.Exec(`INSERT INTO settings(key,value) VALUES(?,'off')`, addonSetting(AddonLibrary)); err != nil {
 		t.Fatal(err)
 	}
-	if stats, err = s.Stats(context.Background(), time.UTC); err != nil || stats.Library != nil {
-		t.Fatalf("stats with the addon off: %+v %v", stats.Library, err)
+	if stats, err = s.Stats(context.Background(), time.UTC); err != nil || stats.Library != nil || stats.Total != 4 {
+		t.Fatalf("stats with the addon off: %+v %d %v", stats.Library, stats.Total, err)
 	}
 }

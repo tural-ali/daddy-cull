@@ -676,7 +676,7 @@ func init() {
 		"daddy-cull/next/internal/catalog.Stats.Social":                     "Social counts videos probably saved from social apps that still wait for a choice, whether the Saved from social addon is on or not.",
 		"daddy-cull/next/internal/catalog.Stats.Streak":                     "Streak is how many days in a row something was reviewed, in the viewer's time zone.",
 		"daddy-cull/next/internal/catalog.Stats.Synthetic":                  "Synthetic is true for a catalogue made up for testing, with no real files.",
-		"daddy-cull/next/internal/catalog.Stats.Total":                      "Total counts every file in the catalogue.",
+		"daddy-cull/next/internal/catalog.Stats.Total":                      "Total counts the files in the library, as the Library totals do: the archive, less what is in the Bin, deleted from it or missing from disk, and less Live Photo videos, which go with their photo.",
 		"daddy-cull/next/internal/catalog.Stats.UpgradeCandidates":          "UpgradeCandidates counts archive photos with a better copy from Takeout waiting.",
 		"daddy-cull/next/internal/catalog.Stats.UpgradesAccepted":           "UpgradesAccepted counts better copies from Takeout already added to the archive.",
 		"daddy-cull/next/internal/catalog.Stats.VideoMuted":                 "VideoMuted is whether videos start muted.",
