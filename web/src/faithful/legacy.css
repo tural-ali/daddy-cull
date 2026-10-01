@@ -3234,3 +3234,9 @@ ul.answers { margin: 0; padding: 0; list-style: none; display: grid; gap: .5rem;
 .sessionpause { padding: 8px 14px; color: white; background: rgb(20 20 20 / 80%); border: 1px solid rgb(255 255 255 / 20%); border-radius: 18px; white-space: nowrap; cursor: pointer; }
 
 @media (width <= 600px) { .rvtop .rvact.cmp, .rvtop .rvact.zoom { display: none; } }
+
+@media (width <= 380px) {
+  .gbar .brand { margin-right: 0; padding-right: 4px; }
+  .gbar .brand svg:not(.brandmark) { display: none; }
+  .gbar .brand .brandmark { display: block; height: 22px; }
+}

@@ -10,7 +10,7 @@ const file=(id,extra={})=>({id,path:`/archive/2020/2020-01/2020-01-02/SHOT_${id}
  page.on('pageerror',error=>errors.push(error.message));
  await page.route('**/api/**',async route=>{
   const req=route.request(),url=new URL(req.url()),p=url.pathname;
-  if(p==='/api/stats')return route.fulfill({json:{total:3,calendarDays:1,reviewedDays:0,decisions:0,favourites:0,marked:0,bin:205}});
+  if(p==='/api/stats')return route.fulfill({json:{total:3,calendarDays:1,reviewedDays:0,decisions:0,favourites:0,marked:0,bin:205,streak:9,reviewedToday:true,notifications:1}});
   if(p==='/api/search'){pages.push(url.searchParams.toString());return route.fulfill({json:{assets:url.searchParams.has('after')?[assets[2]]:[assets[0]],next:url.searchParams.has('after')?'':'next50'}})}
   if(p==='/api/today/01-02')return route.fulfill({json:{md:'01-02',label:'2 January',previous:'01-01',next:'01-03',years:[{day:'2020-01-02',year:2020,files:3,bytes:300,status:'pending',assets}],memories:3,bytes:300}});
   if(p==='/api/assets/1/burst')return route.fulfill({json:assets});
