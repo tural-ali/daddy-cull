@@ -1,9 +1,12 @@
 package catalog
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -161,12 +164,28 @@ func readShape(ctx context.Context, roots MediaRoots, target shapeTarget) (width
 	defer cancel()
 	// -fast stops before the end of the file, which is where a phone video's
 	// index sometimes sits, but after the track headers that hold its size.
-	command := exec.CommandContext(ctx, roots.RawTool, "-j", "-n", "-fast", "-ImageWidth", "-ImageHeight", "-Orientation", "-Rotation", "/dev/fd/3")
-	command.ExtraFiles = []*os.File{file}
-	out, err := command.Output()
-	if ctx.Err() != nil {
-		// Cut short, not unreadable: try again on a later pass.
-		return 0, 0, false
+	var out []byte
+	for attempt := 0; ; attempt++ {
+		command := exec.CommandContext(ctx, roots.RawTool, "-j", "-n", "-fast", "-ImageWidth", "-ImageHeight", "-Orientation", "-Rotation", "/dev/fd/3")
+		command.ExtraFiles = []*os.File{file}
+		out, err = command.Output()
+		if ctx.Err() != nil {
+			// Cut short, not unreadable: try again on a later pass.
+			return 0, 0, false
+		}
+		// The reader now and then fails to find the file handed to it, which
+		// is open here and says nothing about the file: it is asked again,
+		// and then left for a later pass.
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && bytes.Contains(exit.Stderr, []byte("File not found")) {
+			if attempt == 0 {
+				if _, err = file.Seek(0, io.SeekStart); err == nil {
+					continue
+				}
+			}
+			return 0, 0, false
+		}
+		break
 	}
 	if err != nil {
 		return 0, 0, true
