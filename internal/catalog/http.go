@@ -157,6 +157,16 @@ type SoundChoice struct {
 	Muted *bool `json:"muted"`
 }
 
+// GuideChoice hides or shows the guide at the top of a page.
+type GuideChoice struct {
+	// Page is the page's name, such as "today" or "upgrades". Left out with
+	// hidden false, every page's guide shows again.
+	Page string `json:"page,omitempty"`
+	// Hidden is true to hide the page's guide, false to show it. It is
+	// required.
+	Hidden *bool `json:"hidden"`
+}
+
 // ReviewRequest marks a date reviewed.
 type ReviewRequest struct {
 	// RequestID makes a retry safe: the same id, 8 to 80 characters, is only acted on once.
@@ -781,6 +791,39 @@ func (s *Store) Routes(m *api.Mux) {
 		defer cancel()
 		if err := s.SetRawTogether(ctx, *input.Together); err != nil {
 			failFor(w, err, "")
+			return
+		}
+		writeJSON(w, input)
+	})
+	// Which guides are hidden is a preference too, so a guide hidden once stays
+	// hidden at every address and on every device.
+	m.HandleFunc(api.Route{
+		Method: "POST", Path: "/api/settings/guides", Tag: "Settings", Needs: api.Settings,
+		Summary: "Hide or show a page's guide",
+		Doc:     "Hides or shows the short guide at the top of one page, for every browser, or with no page and hidden false shows every guide again. The pages whose guide is hidden are read back as hiddenGuides in GET /api/stats. The answer repeats the choice saved.",
+		Body:    GuideChoice{},
+		Returns: GuideChoice{},
+		Errors:  []api.Error{{Status: 400, When: "hidden is missing, page is not a page's name, or hidden is true with no page"}, notJSON, offSite, unreadable},
+	}, func(w http.ResponseWriter, r *http.Request) {
+		const usage = "Send {\"page\": \"today\", \"hidden\": true}, or {\"hidden\": false} to show every guide."
+		var input GuideChoice
+		if !decodeBody(w, r, 1024, &input, usage) {
+			return
+		}
+		if input.Hidden == nil || (input.Page == "" && *input.Hidden) {
+			api.Fail(w, 400, usage)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		var err error
+		if input.Page == "" {
+			err = s.ShowAllGuides(ctx)
+		} else {
+			err = s.SetGuideHidden(ctx, input.Page, *input.Hidden)
+		}
+		if err != nil {
+			failFor(w, err, usage)
 			return
 		}
 		writeJSON(w, input)

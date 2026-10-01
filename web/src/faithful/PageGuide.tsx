@@ -4,10 +4,16 @@ import {Kbd,MAC,tipProps} from './keys';
 import type {LegacyRoute} from './Layout';
 
 // Each page opens with a short guide the first time it is visited: what the
-// page is for and how to work it, keys included. Hiding it is remembered in
-// this browser, and the question mark in the top bar brings it back.
+// page is for and how to work it, keys included. Hiding it is saved in the
+// catalogue, so it stays hidden at every address Cull is opened at and on
+// every device, and the question mark in the top bar brings it back. This
+// browser keeps a copy, so a page shows the right guide before the stats
+// arrive, and keeps a choice the server has not taken yet.
 
 const HIDDEN='cull-guides-hidden';
+// Set once this browser's own hidden guides, from before they were saved in
+// the catalogue, have been sent there.
+const SENT='cull-guides-sent';
 const CHANGED='cull:guides-changed';
 
 const words:Record<string,string>={Mod:MAC?'Command':'Control',ArrowLeft:'left arrow',ArrowRight:'right arrow','?':'question mark','/':'slash'};
@@ -100,9 +106,48 @@ function writeHidden(hidden:Set<string>){
   window.dispatchEvent(new Event(CHANGED));
 }
 
+// Whether the guides can be shown: once this browser has a copy from the
+// catalogue, or the stats have been read, so a guide hidden on another device
+// does not show for a moment on this one first.
+let known=(()=>{try{return localStorage.getItem(SENT)!==null}catch{return true}})();
+
+// Choices not yet saved in the catalogue, by page, '' for every page shown
+// again. They hold over what the stats say until the server has them, and are
+// sent again with the next stats when a save fails.
+const unsaved=new Map<string,boolean>();
+
+function save(page:string,hidden:boolean){
+  unsaved.set(page,hidden);
+  void fetch('/api/settings/guides',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(page?{page,hidden}:{hidden:false})})
+    .then(response=>{if(response.ok&&unsaved.get(page)===hidden)unsaved.delete(page)},()=>{/* offline: sent again with the next stats */});
+}
+
+/** Takes the hidden guides from the stats, as the catalogue has them. A
+ * browser that hid guides before they were kept there sends its own once. */
+export function syncGuides(fromServer:readonly string[]|null|undefined){
+  if(!known){known=true;window.dispatchEvent(new Event(CHANGED))}
+  if(!Array.isArray(fromServer))return;
+  const hidden=new Set(fromServer);
+  let sent=true;
+  try{sent=localStorage.getItem(SENT)!==null}catch{/* storage blocked: nothing of this browser's to send */}
+  if(!sent){
+    for(const page of readHidden())if(!hidden.has(page)){hidden.add(page);save(page,true)}
+    try{localStorage.setItem(SENT,'1')}catch{/* sent again next time, harmlessly */}
+  }
+  if(unsaved.has(''))hidden.clear();
+  for(const [page,hide] of unsaved){
+    if(!page)continue;
+    if(hide)hidden.add(page);else hidden.delete(page);
+  }
+  for(const [page,hide] of unsaved)save(page,hide);
+  writeHidden(hidden);
+}
+
 /** Shows every page's guide again, and says how many were hidden. */
 export function showAllGuides(){
   const count=readHidden().size;
+  unsaved.clear();
+  save('',false);
   writeHidden(new Set());
   return count;
 }
@@ -125,13 +170,14 @@ function setShown(route:LegacyRoute,shown:boolean){
   const hidden=readHidden();
   if(shown)hidden.delete(route);else hidden.add(route);
   writeHidden(hidden);
+  save(route,!shown);
 }
 
 /** The guide for a page, at the top of it, unless it has been hidden. */
 export function PageGuide({route}:{route:LegacyRoute}){
   const hidden=useHidden();
   const guide=guides[route];
-  if(!guide||hidden.has(route))return null;
+  if(!guide||!known||hidden.has(route))return null;
   return <aside className="guide" aria-label={guide.title}>
     <div className="guidehead">
       <Icon name="info"/>
@@ -146,7 +192,7 @@ export function PageGuide({route}:{route:LegacyRoute}){
 export function GuideButton({route}:{route:LegacyRoute}){
   const hidden=useHidden();
   if(!guides[route])return null;
-  const shown=!hidden.has(route);
+  const shown=known&&!hidden.has(route);
   return <button type="button" className={`iconbtn guidebtn${shown?' on':''}`} aria-pressed={shown} aria-label="How this page works" {...tipProps(shown?'Hide how this page works':'How this page works')} onClick={()=>{setShown(route,!shown);if(!shown)window.scrollTo(0,0)}}>
     <span className="guidemark" aria-hidden="true">?</span>
   </button>;

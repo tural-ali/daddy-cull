@@ -3,8 +3,8 @@ const assert=require('node:assert/strict');
 const {common}=require('./lib/addons.cjs');
 
 // Each page opens with a guide to how it works. Got it hides that page's
-// guide in this browser, the question mark brings it back, and Settings
-// shows every hidden guide again. On a phone the guide still shows, without
+// guide in every browser, as the catalogue keeps it, the question mark brings
+// it back, and Settings shows every hidden guide again. On a phone the guide still shows, without
 // the page scrolling sideways. Every name is a synthetic fixture.
 const base=(process.env.APP_URL||'http://127.0.0.1:8842').replace(/\/$/,'');
 const shots=process.env.SHOTS;
@@ -13,17 +13,27 @@ const photo=(id,name)=>({id,path:`/archive/2010/2010-09/2010-09-07/${name}`,capt
 const picture='<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#6b7f95"/></svg>';
 const stats={total:2,synthetic:false,snapshotAt:'2026-09-06 01:49:00',candidates:0,calendarDays:1,reviewedDays:0,decisions:0,favourites:0,evidence:0,fullHashes:0,marked:0,legacyBin:0,shadowGroups:0,screenshots:0,upgradesAccepted:0,upgradeCandidates:0,bin:0,notifications:0};
 
-async function open(browser,viewport={width:1280,height:800},theme='night'){
+// The catalogue's own copy of which guides are hidden, shared by every
+// browser the test opens, as one Cull is by every device.
+const server=new Set();
+
+async function open(browser,viewport={width:1280,height:800},theme='night',stored){
   const page=await browser.newPage({viewport});
-  await page.addInitScript(([key,chosen])=>{
+  await page.addInitScript(([key,chosen,hidden])=>{
     const now=new Date();localStorage.setItem(key,`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`);
     localStorage.setItem('cull-theme',chosen);
-  },['cull.streak-intro',theme]);
+    if(hidden&&!sessionStorage.getItem('seeded')){localStorage.setItem('cull-guides-hidden',JSON.stringify(hidden));sessionStorage.setItem('seeded','1')}
+  },['cull.streak-intro',theme,stored]);
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.route('**/api/**',route=>{
     const request=route.request(),url=new URL(request.url());
-    if(url.pathname==='/api/stats')return route.fulfill({json:stats});
+    if(url.pathname==='/api/stats')return route.fulfill({json:{...stats,hiddenGuides:[...server].sort((a,b)=>a.localeCompare(b))}});
+    if(url.pathname==='/api/settings/guides'){
+      const body=request.postDataJSON();
+      if(!body.page)server.clear();else if(body.hidden)server.add(body.page);else server.delete(body.page);
+      return route.fulfill({json:body});
+    }
     if(url.pathname==='/api/catalogue')return route.fulfill({json:{generation:1}});
     if(url.pathname==='/api/today/09-07')return route.fulfill({json:{md:'09-07',label:'7 September',previous:'09-06',next:'09-08',years:[{day:'2010-09-07',year:2010,files:2,bytes:200,status:'pending',assets:[photo(1,'ONE.JPG'),photo(2,'TWO.JPG')]}],memories:2,bytes:200}});
     if(url.pathname.startsWith('/api/media/'))return route.fulfill({contentType:'image/svg+xml',body:picture});
@@ -78,6 +88,43 @@ async function open(browser,viewport={width:1280,height:800},theme='night'){
   await page.getByRole('complementary',{name:'How a day works'}).waitFor();
   assert.deepEqual(errors,[]);
   await page.close();
+
+  // Hidden at one address, the guide stays hidden at another, or on another
+  // device: a browser that has never seen Cull before never shows it at all.
+  {
+    const {page:one,errors:problems}=await open(browser);
+    await one.goto(`${base}/on/09-07`);
+    await one.getByRole('complementary',{name:'How a day works'}).getByRole('button',{name:'Got it'}).click();
+    await one.waitForFunction(()=>!document.querySelector('.guide'));
+    for(const end=Date.now()+5000;!server.has('today')&&Date.now()<end;)await one.waitForTimeout(25);
+    assert.deepEqual([...server],['today'],'the catalogue keeps it');
+    const {page:other}=await open(browser);
+    let flashed=false;
+    await other.exposeFunction('guideShown',()=>{flashed=true});
+    await other.addInitScript(()=>new MutationObserver(()=>{if(document.querySelector('.guide'))window.guideShown()}).observe(document,{childList:true,subtree:true}));
+    await other.goto(`${base}/on/09-07`);
+    await other.locator('.gal figure').first().waitFor();
+    await other.waitForTimeout(300);
+    assert.equal(flashed,false,'another browser never shows a guide hidden elsewhere');
+    assert.equal(await other.getByRole('button',{name:'How this page works'}).getAttribute('aria-pressed'),'false');
+    // Another page's guide still shows there.
+    await other.getByRole('link',{name:'Addons'}).click();
+    await other.getByRole('complementary',{name:'How addons work'}).waitFor();
+    assert.deepEqual(problems,[]);
+    await one.close();await other.close();
+  }
+
+  // A browser that hid a guide before the catalogue kept them sends it there.
+  {
+    const {page:old}=await open(browser,undefined,'night',['addons']);
+    await old.goto(`${base}/addons`);
+    await old.getByRole('heading',{name:'Addons'}).first().waitFor();
+    for(const end=Date.now()+5000;!server.has('addons')&&Date.now()<end;)await old.waitForTimeout(25);
+    assert.deepEqual([...server].sort((a,b)=>a.localeCompare(b)),['addons','today'],'its own hidden guide reaches the catalogue');
+    assert.equal(await old.locator('.guide').count(),0);
+    await old.close();
+    server.clear();
+  }
 
   // A phone shows the guide in the width it has.
   {

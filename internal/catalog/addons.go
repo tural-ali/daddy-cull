@@ -104,6 +104,9 @@ type Stats struct {
 	VideoMuted bool `json:"videoMuted"`
 	// RawTogether is whether a RAW and its exports show as one photo.
 	RawTogether bool `json:"rawTogether"`
+	// HiddenGuides lists the pages whose guide is hidden, such as "upgrades",
+	// or is null when that could not be read.
+	HiddenGuides []string `json:"hiddenGuides"`
 	// Notifications counts unread notifications.
 	Notifications int `json:"notifications"`
 	// Library counts what the library holds, as photos and videos, while the
@@ -201,6 +204,9 @@ func (s *Store) Stats(ctx context.Context, loc *time.Location) (Stats, error) {
 	st.ReviewedToday = activity.Today
 	st.VideoMuted, _ = s.VideoMuted(ctx)
 	st.RawTogether, _ = s.RawTogether(ctx)
+	// Left null when it cannot be read, so a browser keeps what it knows
+	// rather than showing every guide again.
+	st.HiddenGuides, _ = s.HiddenGuides(ctx)
 	st.Notifications, _ = s.UnreadNotifications(ctx)
 	// The addon is on unless someone turned it off, as its Default is always.
 	if on, chosen, err := s.AddonChoice(ctx, AddonLibrary); err == nil && (on || !chosen) {

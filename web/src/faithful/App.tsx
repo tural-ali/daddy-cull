@@ -1,6 +1,6 @@
 import {Fragment,useCallback,useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import {Layout,type LegacyRoute} from './Layout';
-import {PageGuide} from './PageGuide';
+import {PageGuide,syncGuides} from './PageGuide';
 import {dayName} from './goto';
 import {Today,type TodayData} from './Today';
 import {Year,type YearData} from './Year';
@@ -147,6 +147,9 @@ export function App(){
     const stop=followLinks();
     return()=>{window.removeEventListener(NAVIGATED,pushed);window.removeEventListener('popstate',popped);stop()};
   },[place.visit]);
+  // The guides hidden in the catalogue, as each read of the stats has them.
+  const statsRead=stats!==null,guidesHidden=stats?.hiddenGuides;
+  useEffect(()=>{if(statsRead)syncGuides(guidesHidden)},[statsRead,guidesHidden]);
   const readStats=useCallback(()=>json<Stats>(`/api/stats?tz=${zone}`).then(setStats).catch(()=>{}),[]);
   useEffect(()=>{
     recoverPending().then(()=>setRecovered(true)).catch(reason=>setError((reason as Error).message));

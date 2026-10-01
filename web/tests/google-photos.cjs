@@ -106,7 +106,7 @@ async function open(browser,options,viewport={width:1280,height:800},theme='nigh
   {
     const {page,errors}=await open(browser,{archives:false});
     await page.goto(`${base}/google-photos`);
-    await page.getByRole('heading',{name:'Google Photos'}).waitFor();
+    await page.getByRole('heading',{name:'Google Photos',exact:true}).waitFor();
     assert.equal(await page.locator('details.gsteps').getAttribute('open'),'','the steps are open while nothing has arrived');
     assert.equal(await page.locator('.gsteps li').count(),6);
     assert.equal(await page.locator('.gsteps a[href="https://takeout.google.com"]').count(),1,'the steps link to Takeout');
