@@ -283,7 +283,9 @@ export function App(){
       setPending(false);
       arrival.current=place.returned?savedScroll()??0:location.hash?'hash':moving?0:null;
       const came=drawnPath.current?.match(/^\/(?:on|day\/\d{4})[/-](\d{2}-\d{2})$/);
-      const motion=square?'zoom':came&&result.route==='year'?'fromday':place.returned?'back':undefined;
+      // Sidebar navigation uses the shared transition regardless of the page
+      // left. The calendar zoom-out belongs to a history return from a day.
+      const motion=square?'zoom':place.returned&&came&&result.route==='year'?'fromday':place.returned?'back':undefined;
       setPage({...result,key:String(place.visit),phase:moving&&!still?'entering':'shown',motion,md:came?.[1]});
       drawnPath.current=place.path;
       square?.fade();

@@ -156,10 +156,13 @@ const settled=async page=>{
     });
     observer.observe(stage,{attributes:true,attributeFilter:['class']});
   });
+  await watch(page);
   await side.getByRole('link',{name:'Year'}).click();
+  await page.locator('main .cell').first().waitFor();
   await page.waitForFunction(()=>!document.querySelector('.pagestage.leaving'));
   assert.equal(await page.evaluate(()=>window.__keys),0,'a key pressed as the page goes reaches nothing');
   await settled(page);
+  assert.deepEqual((await phases(page)).filter(p=>p.className!=='pagestage waiting').map(p=>p.className),['pagestage leaving','pagestage entering','pagestage'],'Today to Year uses the same sidebar transition as Bin to Year');
 
   // The page left fades where it is, and a page many screens long fades in
   // where it is too, as moving a page has the browser paint all of it, which
