@@ -273,7 +273,7 @@ func main() {
 		go func() {
 			resumed, err := engine.ResumeMoves(ctx)
 			if resumed > 0 {
-				log.Printf("bin: finished %d batches a restart cut short on their way in", resumed)
+				log.Printf("bin: batches a restart cut short on their way in, now finished: %d", resumed)
 			}
 			if err != nil {
 				log.Printf("bin: %v", err)
