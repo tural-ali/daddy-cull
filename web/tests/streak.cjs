@@ -71,10 +71,16 @@ async function open(browser,options={}){
   assert.equal(await calendar.locator('.d.on').count(),inMonth,'this month\'s review days are lit');
   await page.waitForTimeout(400);
   if(shots)await page.screenshot({path:`${shots}/streak-5-calendar.png`});
-  if(days.some(day=>!day.startsWith(ym))){
-    await calendar.getByRole('button',{name:'Previous month'}).click();
+  // The older run is 36 to 40 days back, a month or two before this one
+  // depending on the date, so the calendar goes back as far as its month.
+  const earlier=days.filter(day=>!day.startsWith(ym));
+  if(earlier.length){
+    const month=earlier.at(-1).slice(0,7);
+    const steps=now.getFullYear()*12+now.getMonth()-(Number(month.slice(0,4))*12+Number(month.slice(5,7))-1);
+    for(let step=0;step<steps;step++)await calendar.getByRole('button',{name:'Previous month'}).click();
     await calendar.locator('.d.on').first().waitFor();
-    await calendar.getByRole('button',{name:'Next month'}).click();
+    assert.equal(await calendar.locator('.d.on').count(),earlier.filter(day=>day.startsWith(month)).length,`${month}'s review days are lit`);
+    for(let step=0;step<steps;step++)await calendar.getByRole('button',{name:'Next month'}).click();
   }
   assert.equal(await calendar.getByRole('button',{name:'Next month'}).isDisabled(),true,'no months ahead of today');
   await page.keyboard.press('Escape');
