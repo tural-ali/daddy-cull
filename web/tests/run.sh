@@ -24,10 +24,10 @@ preview=$!
 trap 'kill "$preview" 2>/dev/null || true; rm -rf "$logs"' EXIT
 for _ in $(seq 1 50); do
   kill -0 "$preview" 2>/dev/null || { cat "$logs/preview.log"; exit 1; }
-  curl -fsS -o /dev/null http://127.0.0.1:$port/ 2>/dev/null && break
+  curl -fsS -o /dev/null "http://127.0.0.1:$port/" 2>/dev/null && break
   sleep 0.2
 done
-curl -fsS -o /dev/null http://127.0.0.1:$port/ || { cat "$logs/preview.log"; exit 1; }
+curl -fsS -o /dev/null "http://127.0.0.1:$port/" || { cat "$logs/preview.log"; exit 1; }
 
 export APP_URL=http://127.0.0.1:$port
 run() {

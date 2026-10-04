@@ -17,7 +17,7 @@ const months=length.map((days,month)=>({name:new Date(Date.UTC(2000,month,1)).to
 })}));
 
 async function open(browser,address,options={}){
-  const {yearDelay=400,yearError=false,webgl=true,...browserOptions}=options;
+  const {yearDelay=400,yearReady,yearError=false,webgl=true,...browserOptions}=options;
   const page=await browser.newPage({viewport:{width:1440,height:900},deviceScaleFactor:2,...browserOptions});
   page.on('pageerror',error=>{throw error});
   await page.addInitScript(()=>{localStorage.setItem('cull-theme','night')});
@@ -34,9 +34,10 @@ async function open(browser,address,options={}){
   await page.route('**/api/**',async route=>{
     const url=new URL(route.request().url());
     if(url.pathname==='/api/stats')return route.fulfill({json:{total:10,synthetic:false,snapshotAt:'',bin:0,notifications:0}});
-    // The year takes a moment to read, as it does on a big archive.
+    // The year takes a moment to read, as it does on a big archive, or as
+    // long as the test holds it.
     if(url.pathname==='/api/year'){
-      await new Promise(done=>setTimeout(done,yearDelay));
+      await (yearReady??new Promise(done=>setTimeout(done,yearDelay)));
       if(yearError)return route.fulfill({status:500,json:{error:'Calendar unavailable'}});
       return route.fulfill({json:{months,prog:{dates:366,done:120,part:40,filesDone:0,files:20000},today:'10-01',streak:0,week:{days:0,seconds:0}}});
     }
@@ -55,7 +56,10 @@ const playing=page=>page.evaluate(()=>document.getAnimations().filter(animation=
 
 (async()=>{
   const browser=await chromium.launch({channel:'chrome',headless:true});
-  let page=await open(browser,'/');
+  // The logo waits for the year, so holding the year holds the logo however
+  // long a slow machine takes to load the 3D renderer.
+  let release;
+  let page=await open(browser,'/',{yearReady:new Promise(done=>{release=done})});
   const opening=page.locator('.opening');
   await opening.waitFor();
   assert.equal(new URL(page.url()).pathname,'/year','the bare address is the year');
@@ -75,15 +79,14 @@ const playing=page=>page.evaluate(()=>document.getAnimations().filter(animation=
     edge:path.isPointInFill(new DOMPoint(1876,342)),
   }));
   assert.ok(lettering.stem&&!lettering.edge,'the actual letter outlines are thinner, rather than faded or flattened');
+  release();
   await page.locator('.opening.dive').waitFor();
   assert.ok(await page.locator('.yearview.opening-arrive').count(),'the dates fly in as the camera dives');
   await page.locator('.opening.solid canvas').waitFor();
   const camera=page.locator('.openingcanvas');
   assert.equal(await camera.getAttribute('data-parts'),'5','tiles and both wordmark paths are extruded');
   const before=Number(await camera.getAttribute('data-camera-z'));
-  await page.waitForTimeout(120);
-  const after=Number(await camera.getAttribute('data-camera-z'));
-  assert.ok(after<before,'the camera moves forward through one rigid logo');
+  await page.waitForFunction(z=>Number(document.querySelector('.openingcanvas')?.dataset.cameraZ)<z,before,{timeout:1000});
   assert.equal(await page.locator('.opening .shine').count(),0);
   const delays=await page.locator('.cell:not(.blank)').evaluateAll(cells=>cells.map(cell=>parseFloat(getComputedStyle(cell).animationDelay)));
   assert.ok(Math.min(...delays)>=.95&&Math.max(...delays)<=1.13,'the dates arrive promptly after the camera pass');

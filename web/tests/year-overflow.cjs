@@ -26,7 +26,9 @@ const months=length.map((days,month)=>({name:new Date(Date.UTC(2000,month,1)).to
   for(const width of [2000,1440,1100,1000]){
     await page.setViewportSize({width,height:900});
     await page.goto(`${base}/year`);
-    await page.locator('.cmonth').nth(11).waitFor();
+    // Loading the year plays the opening, whose dates fly in from past the
+    // edges; the calendar is measured once they have landed.
+    await page.locator('.yearview[class="yearview"] .cmonth').nth(11).waitFor({timeout:8000});
     assert.deepEqual(await scroll(),{width:0,height:0},`no scroll at ${width}px`);
     // A date grown under the pointer at the far edge still fits.
     await page.locator('.cmonth').nth(7).locator('.cell').last().hover();
@@ -44,7 +46,7 @@ const months=length.map((days,month)=>({name:new Date(Date.UTC(2000,month,1)).to
   // A phone scrolls sideways, which is the design there.
   await page.setViewportSize({width:390,height:844});
   await page.goto(`${base}/year`);
-  await page.locator('.cmonth').nth(11).waitFor();
+  await page.locator('.yearview[class="yearview"] .cmonth').nth(11).waitFor({timeout:8000});
   assert.ok((await scroll()).width>0,'a phone scrolls the year sideways');
   await browser.close();
   console.log('year overflow: ok');
