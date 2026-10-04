@@ -156,11 +156,11 @@ type DeletingItem struct {
 // waiting and about the reaper's last run.
 type DeletingReport struct {
 	// Total counts all matching entries before pagination.
-	Total  int                       `json:"total"`
+	Total int `json:"total"`
 	// Bytes is the total size of all matching files.
-	Bytes  int64                     `json:"bytes"`
+	Bytes int64 `json:"bytes"`
 	// Next is a continuation cursor; empty means no further page.
-	Next   string                    `json:"next"`
+	Next string `json:"next"`
 	// Groups counts full batches so a page cannot understate an action.
 	Groups map[string]TrashGroupSize `json:"groups,omitempty"`
 	// GraceDays is how many days a card deleted from the Bin stays on disk

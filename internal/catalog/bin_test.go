@@ -115,6 +115,63 @@ func TestBinInterruptedMoveRecovery(t *testing.T) {
 		})
 	}
 }
+
+// A restart in the middle of a move into the Bin leaves the batch with files
+// on both sides; the writer, started again, finishes it, and leaves a batch
+// already in the Bin as it is.
+func TestBinResumeMovesAfterRestart(t *testing.T) {
+	b, s, root := binFixture(t)
+	ctx := context.Background()
+	p, e := b.Preview(ctx, []int64{1})
+	if e != nil {
+		t.Fatal(e)
+	}
+	moved := 0
+	b.checkpoint = func(label string) error {
+		if label == "after-unlink" {
+			if moved++; moved == 1 {
+				return errors.New("simulated restart")
+			}
+		}
+		return nil
+	}
+	if _, e = b.Run(ctx, p.ID, "quarantine", ""); e == nil {
+		t.Fatal("injection missed")
+	}
+	b.Close()
+	if p, e = b.load(p.ID); e != nil || p.State != "quarantining" || p.Files[0].Phase != "moving" || p.Files[1].Phase != "planned" {
+		t.Fatalf("not cut short as a restart leaves it: %+v %v", p, e)
+	}
+
+	b, e = NewBinEngine(s, root)
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() { b.Close() })
+	finished, e := b.ResumeMoves(ctx)
+	if e != nil || finished != 1 {
+		t.Fatalf("finished %d (%v), want the one batch", finished, e)
+	}
+	if p, e = b.load(p.ID); e != nil || p.State != "bin" {
+		t.Fatalf("batch %+v %v, want it in the Bin", p, e)
+	}
+	for i, f := range p.Files {
+		if _, e = os.Stat(filepath.Join(root, f.Original)); !os.IsNotExist(e) {
+			t.Fatalf("%s is still in its day folder", f.Original)
+		}
+		if data, e := os.ReadFile(filepath.Join(root, stored(p, i))); e != nil || string(data) != "family original" {
+			t.Fatalf("%s in the Bin: %q %v", f.Original, data, e)
+		}
+	}
+	var state string
+	if e = s.read.QueryRow("SELECT state FROM file_state WHERE asset_id=1").Scan(&state); e != nil || state != "bin" {
+		t.Fatalf("catalogue says %q (%v), want bin", state, e)
+	}
+	if finished, e = b.ResumeMoves(ctx); e != nil || finished != 0 {
+		t.Fatalf("second start finished %d (%v), want nothing to do", finished, e)
+	}
+}
+
 func TestBinPreflightMissingAndCollision(t *testing.T) {
 	b, _, root := binFixture(t)
 	ctx := context.Background()

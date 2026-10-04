@@ -266,9 +266,18 @@ func main() {
 			log.Fatal(e)
 		}
 		defer engine.Close()
-		// Batches made before the Bin took Live Photo videos with their photos
-		// left the videos behind; they join their photos here.
+		// A batch a restart cut short on its way into the Bin is finished
+		// first, so the videos below join whole batches. Batches made before
+		// the Bin took Live Photo videos with their photos left the videos
+		// behind; they join their photos here.
 		go func() {
+			resumed, err := engine.ResumeMoves(ctx)
+			if resumed > 0 {
+				log.Printf("bin: finished %d batches a restart cut short on their way in", resumed)
+			}
+			if err != nil {
+				log.Printf("bin: %v", err)
+			}
 			n, err := engine.AdoptAllLiveClips(ctx)
 			if n > 0 {
 				log.Printf("live photos: %d videos joined their photos in the Bin", n)

@@ -1484,20 +1484,8 @@ func (b *BinEngine) adopt(p *BinPlan, f BinFile) error {
 // how many videos it moved in with their photos. A batch it cannot finish keeps its
 // error and the rest go on.
 func (b *BinEngine) AdoptAllLiveClips(ctx context.Context) (adopted int, err error) {
-	rows, e := b.s.read.QueryContext(ctx, "SELECT id FROM file_plans WHERE json_extract(body,'$.state')='bin' ORDER BY rowid")
+	ids, e := b.plansIn(ctx, "bin")
 	if e != nil {
-		return 0, e
-	}
-	var ids []string
-	for rows.Next() {
-		var id string
-		if e = rows.Scan(&id); e != nil {
-			rows.Close()
-			return 0, e
-		}
-		ids = append(ids, id)
-	}
-	if e = rows.Close(); e != nil {
 		return 0, e
 	}
 	var failed []error
@@ -1516,6 +1504,46 @@ func (b *BinEngine) AdoptAllLiveClips(ctx context.Context) (adopted int, err err
 		}
 	}
 	return adopted, errors.Join(failed...)
+}
+
+// ResumeMoves finishes every batch cut short on its way into the Bin, as a
+// restart of the writer mid-move leaves it, and says how many it finished.
+// Until then the batch has files on both sides: some in the Bin and the rest
+// still in their day folders, though the reviewer sent them all to the Bin.
+// Each file is checked against the batch again before it moves, so one that
+// changed in the meantime stops its batch with the reason, and the rest go on.
+func (b *BinEngine) ResumeMoves(ctx context.Context) (finished int, err error) {
+	ids, e := b.plansIn(ctx, "quarantining")
+	if e != nil {
+		return 0, e
+	}
+	var failed []error
+	for _, id := range ids {
+		if _, e = b.Run(ctx, id, "quarantine", ""); e != nil {
+			failed = append(failed, fmt.Errorf("batch %s: %w", id, e))
+			continue
+		}
+		finished++
+	}
+	return finished, errors.Join(failed...)
+}
+
+// plansIn lists the batches in one state, oldest first.
+func (b *BinEngine) plansIn(ctx context.Context, state string) ([]string, error) {
+	rows, e := b.s.read.QueryContext(ctx, "SELECT id FROM file_plans WHERE json_extract(body,'$.state')=? ORDER BY rowid", state)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if e = rows.Scan(&id); e != nil {
+			return nil, e
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 func liveInBin(p *BinPlan) int {
