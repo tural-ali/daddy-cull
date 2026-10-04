@@ -82,6 +82,10 @@ func TestArrivalsReopenReviewedDaysWithARedDot(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Reviews and arrivals are stamped to the millisecond, and a file is news
+	// only if it arrived after the review, so the next scan starts a moment
+	// later, as any real one does.
+	time.Sleep(2 * time.Millisecond)
 	write("2026/2026-09/2026-09-26/IMG_0003.HEIC")
 	write("2026/2026-09/2026-09-27/IMG_0004.HEIC")
 	scan()
