@@ -8,6 +8,11 @@ import {createPortal} from 'react-dom';
 // with Mod for Command on a Mac and Control elsewhere.
 
 export const MAC=/Mac|iPhone|iPad/.test(navigator.platform);
+/** A screen worked by a finger rather than a pointer, an iPad above all: its
+ * hints say tap and hold, not click and keys. */
+export const touch=matchMedia('(hover: none) and (pointer: coarse)').matches;
+/** The word for pressing a tile, on this screen. */
+export const press=touch?'Tap':'Click';
 
 const faces:Record<string,string>=MAC
   ?{Mod:'⌘',Meta:'⌘',Control:'⌃',Shift:'⇧',Alt:'⌥',Enter:'↵',Escape:'Esc',Delete:'⌫',ArrowLeft:'←',ArrowRight:'→',ArrowUp:'↑',ArrowDown:'↓',Space:'Space'}

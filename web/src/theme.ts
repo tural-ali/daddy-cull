@@ -26,11 +26,26 @@ export function themeFor(choice:ThemeChoice,now=new Date()):Theme{
   return hour>=dayStartsAt&&hour<nightStartsAt?'day':'night';
 }
 
+/** The colours of the frame at the top of the page, which iPadOS draws the
+ * status bar of a Home Screen app in, and the review's black. */
+const barColours:Record<Theme,string>={day:'#f1f5f3',night:'#1b1c21'};
+export const reviewBar='#101010';
+let barOverride:string|null=null;
+/** Paints the status bar to match what is under it: the frame of the page, or
+ * `colour` until it is called again without one. */
+export function paintBar(colour:string|null=barOverride){
+  barOverride=colour;
+  const meta=document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  const theme=document.documentElement.dataset.theme==='day'?'day':'night';
+  if(meta)meta.content=colour??barColours[theme];
+}
+
 export function applyTheme(){
   const theme=themeFor(readChoice());
   const root=document.documentElement;
   if(root.dataset.theme!==theme){
     root.dataset.theme=theme;
+    paintBar();
     window.dispatchEvent(new Event(themeEvent));
   }
 }

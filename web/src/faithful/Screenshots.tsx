@@ -10,7 +10,7 @@ import {shapeOf} from './justified';
 import {usePhotoURL} from './photoURL';
 import {requestID,sendDecisions} from './decisions';
 import {undoableDecisions,usePageUndo,type Undoable} from './pageUndo';
-import {tipProps} from './keys';
+import {tipProps,touch} from './keys';
 import {undoKeys} from './history';
 import {flyToBin} from './binFlight';
 import {TASK_FINISHED,queueScreenshots,taskAction,waitForTask,type Task} from './taskQueue';
@@ -223,7 +223,8 @@ export function Screenshots({page,filter:initialKind,review:initialReview}:{page
     <section className="dupehead">
       <h1>Screenshots</h1>
       <p className="ysum"><b>{total.toLocaleString()}</b> {review==='reviewed'?'reviewed':review===''?'to review':total===1?'screenshot':'screenshots'} · <b>{bytes(totalBytes)}</b></p>
-      <p className="hint">Nothing here is in the archive yet. Click a screenshot to look at it; <b>k</b> keeps it, <b>x</b> moves it to the Bin and <b>{undoKeys.undo}</b> takes back each step in turn. Tick the circle on a tile to select it, then click others to add them or Shift-click to add every one between. The actions appear at the top.
+      <p className="hint">Nothing here is in the archive yet. {touch?'Tap a screenshot to look at it. Hold a tile to select it, then tap others to add them. The actions appear at the top.'
+        :<>Click a screenshot to look at it; <b>k</b> keeps it, <b>x</b> moves it to the Bin and <b>{undoKeys.undo}</b> takes back each step in turn. Tick the circle on a tile to select it, then click others to add them or Shift-click to add every one between. The actions appear at the top.</>}
         <strong> Keep</strong> moves it to Reviewed without touching the file; from there <strong>Copy into the archive</strong> files it under the date in its name. <strong>Move to Bin</strong> stays recoverable.</p>
     </section>
     {message?<p className="flash" role="status">{message} {steps.latest&&<button className="btn small" disabled={busy||steps.working} {...tipProps('Undo','Mod+Z')} onClick={steps.undo}>Undo</button>}</p>

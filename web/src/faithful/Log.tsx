@@ -5,6 +5,7 @@ import {Busy} from '../Busy';
 import {Viewer} from './Viewer';
 import {usePhotoURL} from './photoURL';
 import {dayOfPath} from './goto';
+import {press} from './keys';
 
 // where is set once the file has left its day folder: moved to the Bin,
 // deleted from it and waiting out its days, or gone.
@@ -88,7 +89,7 @@ export function Log({initial}:{initial:HistoryEvent[]}){
     return true;
   }
   return <>
-    <section className="dupehead"><h1>Log</h1><p className="ysum"><b>{events.length.toLocaleString()}</b> saved choice{events.length===1?'':'s'}, newest first</p><p className="hint">Every tile is a saved choice. Opening a photo and leaving it alone is not recorded. Click a tile to look at it again.</p>{message&&<p className="flash" role="status">{message}</p>}</section>
+    <section className="dupehead"><h1>Log</h1><p className="ysum"><b>{events.length.toLocaleString()}</b> saved choice{events.length===1?'':'s'}, newest first</p><p className="hint">Every tile is a saved choice. Opening a photo and leaving it alone is not recorded. {press} a tile to look at it again.</p>{message&&<p className="flash" role="status">{message}</p>}</section>
     {events.length===0?<p className="note">Nothing recorded yet.</p>:<div className="loggrid">{events.map((event,index)=>{
       const [label,tone]=verb(event);
       const at=new Date(event.createdAt);
@@ -101,11 +102,13 @@ export function Log({initial}:{initial:HistoryEvent[]}){
           {event.where==='deleted'
             ?<div className="shot"><div className="media-missing"><span>Deleted from the Bin</span><small>{event.asset.kind.toUpperCase()} · no longer on the server</small></div></div>
             :<button type="button" className="shot" aria-label={`Look at ${name}`} onClick={()=>photo.show(event.asset.id)}><Media asset={event.asset}/></button>}
-          <div className="bdg"><span className={`b verb ${isUndone?'':tone}`}>{isUndone?'Undone':label}</span></div>
-          {/* A file in the Bin is given back from the Bin, and one deleted
-              from it cannot be given back at all. */}
-          {!isUndone&&!event.where&&<div className="acts"><button type="button" className="act" disabled={!!busy} onClick={()=>void undo(event)}>{busy===event.requestId?<Busy label="Undoing…" state="working"/>:'Undo'}</button></div>}
-          {!isUndone&&(event.where==='bin'||event.where==='deleting')&&<div className="acts"><a className="act" href={event.where==='deleting'?'/bin?tab=deleting':'/bin'}>{event.where==='bin'?'In the Bin':'Waiting to go'}</a></div>}
+          <div className="logtop">
+            <div className="bdg"><span className={`b verb ${isUndone?'':tone}`}>{isUndone?'Undone':label}</span></div>
+            {/* A file in the Bin is given back from the Bin, and one deleted
+                from it cannot be given back at all. */}
+            {!isUndone&&!event.where&&<div className="acts"><button type="button" className="act" disabled={!!busy} onClick={()=>void undo(event)}>{busy===event.requestId?<Busy label="Undoing…" state="working"/>:'Undo'}</button></div>}
+            {!isUndone&&(event.where==='bin'||event.where==='deleting')&&<div className="acts"><a className="act" href={event.where==='deleting'?'/bin?tab=deleting':'/bin'}>{event.where==='bin'?'In the Bin':'Waiting to go'}</a></div>}
+          </div>
           <figcaption className="cap"><a href={dayOf(event.asset)} title={`Open ${event.asset.path.slice(0,event.asset.path.lastIndexOf('/'))}`}>{name}</a><span className="dim">{at.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</span></figcaption>
         </figure>
       </Fragment>;

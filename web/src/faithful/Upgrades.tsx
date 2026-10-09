@@ -4,6 +4,7 @@ import {binChanged,type Asset} from '../api';
 import {Busy} from '../Busy';
 import {Tile,bytes,dayLabel,keepOnly} from './Duplicates';
 import {usePageActions} from './pageActions';
+import {press} from './keys';
 
 type UpgradeCopy={asset:Asset;pixels:string;ratio:number;date:string;album:string;available:boolean};
 type UpgradeGroup={archive:Asset;day:string;pixels:string;accepted?:string;acceptedFrom?:string;acceptedAsset?:Asset;copies:UpgradeCopy[]};
@@ -103,13 +104,13 @@ export function Upgrades({initial}:{initial:UpgradePage}){
     }catch(reason){setError((reason as Error).message)}finally{setAdding(null)}
   }
 
-  usePageActions(open.length>0?{actions:[{label:`Merge all ${active.length.toLocaleString()}`,short:'Merge all',icon:'filter_none',keys:'Shift+M',primary:true,disabled:busy||active.length===0,onClick:()=>void resolve(active)}]}:null);
+  usePageActions(open.length>0?{actions:[{label:`Merge ${active.length.toLocaleString()} pair${active.length===1?'':'s'}`,short:'Merge all',icon:'filter_none',keys:'Shift+M',primary:true,disabled:busy||active.length===0,onClick:()=>void resolve(active)}]}:null);
 
   return <section className="dupehead dupepage">
     <h1>Upgrades</h1>
     <p className="ysum"><b>{open.length.toLocaleString()}</b> {open.length===1?'pair':'pairs'} to settle · <b>{bytes(freeing)}</b> can be freed
       <span className="dim"> · {page.accepted.toLocaleString()} {page.accepted===1?'copy':'copies'} added so far, {bytes(page.bytes)}{done>0&&` · ${done.toLocaleString()} settled`}</span></p>
-    <p className="hint">Each pair is a photo from the library and the higher-resolution copy of it added beside it from Google Takeout. Merging keeps the ticked file and marks the other for the Bin, where it stays restorable. Click the other file to keep it instead.</p>
+    <p className="hint">Each pair is a photo from the library and the higher-resolution copy of it added beside it from Google Takeout. Merging keeps the ticked file and marks the other for the Bin, where it stays restorable. {press} the other file to keep it instead.</p>
 
     {open.length>0&&<div className="dupebulk">
       <label className="dupekeep">Keep

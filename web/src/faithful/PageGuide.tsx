@@ -1,6 +1,6 @@
 import {useEffect,useState,type ReactNode} from 'react';
 import {Icon} from '../Icon';
-import {Kbd,MAC,tipProps} from './keys';
+import {Kbd,MAC,press,tipProps,touch} from './keys';
 import type {LegacyRoute} from './Layout';
 
 // Each page opens with a short guide the first time it is visited: what the
@@ -26,7 +26,13 @@ function K({keys}:{keys:string}){
 type Guide={title:string;points:ReactNode[]};
 
 const guides:Partial<Record<LegacyRoute,Guide>>={
-  today:{title:'How a day works',points:[
+  today:{title:'How a day works',points:touch?[
+    <>Every photo taken on this date, in every year, grouped by year. Tap a photo to open it.</>,
+    <>In a photo, the buttons at the top keep, remove and favourite it. Keep and remove move on to the next photo; swipe to step through, pull down to go back to the grid, and tap twice to zoom.</>,
+    <>On the grid, hold a photo to select it, then tap others to add them. The bar at the top then acts on the whole selection.</>,
+    <>Removed photos wait in the Bin: nothing is deleted from here. The Log undoes any choice.</>,
+    <>When the day is done, mark it reviewed from the top bar. Tap the date at the top to go to another.</>,
+  ]:[
     <>Every photo taken on this date, in every year, grouped by year. Click a photo, or press <K keys="Enter"/>, to open it.</>,
     <>In a photo, <K keys="K"/> keeps, <K keys="X"/> removes and <K keys="F"/> favourites. Keep and remove move on to the next photo; <K keys="ArrowLeft"/> and <K keys="ArrowRight"/> step through. <K keys="?"/> lists every key.</>,
     <>On the grid, the round tick in a photo’s corner selects it, and Shift-click selects everything up to it. The bar at the top then acts on the whole selection.</>,
@@ -35,16 +41,16 @@ const guides:Partial<Record<LegacyRoute,Guide>>={
   ]},
   year:{title:'How the calendar works',points:[
     <>Each square is a date. Its colour says how many photos taken on it, across the years, still wait for review.</>,
-    <>Click a date to review it. Reviewed dates are marked, and the Reviewed meter in the sidebar counts them.</>,
+    <>{press} a date to review it. Reviewed dates are marked, and the Reviewed meter in the sidebar counts them.</>,
   ]},
   dupes:{title:'How duplicates work',points:[
     <>Each group holds copies of one file: files with exactly the same bytes, or videos with the same pictures and sound whose metadata differs. Two photos that only look alike are not here: open one and press <K keys="C"/> to compare similar photos.</>,
-    <><b>Keep</b> chooses which copy stays in each group: the camera's own file before an export or a HandBrake copy, then a copy that records where it was taken, then the plainest name, the oldest or the newest. When an export goes to the Bin, its sidecars are copied beside the file kept. Click another copy to keep that one instead.</>,
+    <><b>Keep</b> chooses which copy stays in each group: the camera's own file before an export or a HandBrake copy, then a copy that records where it was taken, then the plainest name, the oldest or the newest. When an export goes to the Bin, its sidecars are copied beside the file kept. {press} another copy to keep that one instead.</>,
     <><b>Merge</b> moves the other copies to the Bin, where they can be restored. <b>Skip</b> leaves a group alone; <K keys="Shift+M"/> merges every group not skipped.</>,
   ]},
   upgrades:{title:'How upgrades work',points:[
     <>Each pair is a photo in the library and the copy of it from Google Takeout with more pixels. <b>Add the higher-resolution copy</b> saves that copy next to the original with “(hi-res)” in its name. Nothing is replaced.</>,
-    <>Once both are in the library, <b>Keep</b> chooses which stays: the one with more pixels or the original. Click the other file to keep it instead.</>,
+    <>Once both are in the library, <b>Keep</b> chooses which stays: the one with more pixels or the original. {press} the other file to keep it instead.</>,
     <><b>Merge</b> moves the other file to the Bin, where it can be restored. <b>Skip</b> leaves a pair alone; <K keys="Shift+M"/> merges every pair not skipped.</>,
   ]},
   shadows:{title:'What shadowed files are',points:[

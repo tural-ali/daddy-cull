@@ -15,6 +15,7 @@ import {shortLabel,usePageDate} from './DatePicker';
 import {dayName} from './goto';
 import {requestID,sendDecisions} from './decisions';
 import {historyKey,undoKeys,useHistory,type HistoryEntry,type Snapshot} from './history';
+import {touch} from './keys';
 import {CopiesHeading,CopyGroup} from './CopyGroup';
 import {fileFormat,setPaired,stackFormats,stackLead,stackOf,stackOrder,stacksBehind} from './stacks';
 import {usePageFilters,type SortOption} from './SearchFilters';
@@ -474,6 +475,10 @@ export function Today({initial}:{initial:TodayData}){
     return()=>window.removeEventListener('keydown',key);
   });
   const picks=usePicks(shown,asset=>asset.id);
+  // Once something is selected a tap adds to it, so the tip saying what a tap
+  // does is out of date and goes.
+  const selecting=picks.picked.size>0;
+  useEffect(()=>{if(selecting)setTip(false)},[selecting]);
   const place=useMemo(()=>new Map(shown.map((asset,index)=>[asset.id,index])),[shown]);
   const chosen=shown.filter(asset=>picks.picked.has(asset.id));
   const picking=chosen.length>0;
@@ -488,12 +493,18 @@ export function Today({initial}:{initial:TodayData}){
       // A selection's keys are the selection bar's.
       if(picking&&event.key!=='ArrowRight'&&event.key!=='ArrowLeft')return;
       const index=shown.findIndex(asset=>asset.id===selected);
+      // Focus goes with the keyboard's place, which brings it into view and
+      // tells the ring it was the keyboard that moved it.
+      const move=(id:number|undefined)=>{
+        setSelected(id??null);
+        if(id!==undefined)document.querySelector<HTMLElement>(`.mo[data-asset="${id}"]`)?.focus();
+      };
       if(event.key==='ArrowRight'){
         event.preventDefault();
-        setSelected(shown[Math.min(shown.length-1,Math.max(0,index+1))]?.id??null);
+        move(shown[Math.min(shown.length-1,Math.max(0,index+1))]?.id);
       }else if(event.key==='ArrowLeft'){
         event.preventDefault();
-        setSelected(shown[Math.max(0,index-1)]?.id??null);
+        move(shown[Math.max(0,index-1)]?.id);
       }else if(!event.repeat&&selected!==null){
         const asset=shown.find(item=>item.id===selected);
         if(!asset)return;
@@ -624,7 +635,8 @@ export function Today({initial}:{initial:TodayData}){
     </section>})}
     {(message||(tip&&assets.length>0&&viewing===null))&&<Snacks>
       {message&&<div className="snack" role="status">{saving?<Busy label={message} state="working"/>:message}</div>}
-      {tip&&assets.length>0&&viewing===null&&<div className="snack" role="status">Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>{undoKeys.undo}</b> undo, <b>{undoKeys.redo}</b> redo, <b>?</b> for the rest</div>}
+      {tip&&assets.length>0&&viewing===null&&<div className="snack" role="status">{touch?'Tap a photo to review it. Swipe to the next, pull down to go back, and hold a photo to select it.'
+        :<>Click any photo to review. <b>→</b> next, <b>k</b> keep, <b>x</b> remove, <b>f</b> favourite, <b>{undoKeys.undo}</b> undo, <b>{undoKeys.redo}</b> redo, <b>?</b> for the rest</>}</div>}
     </Snacks>}
     {cheer&&<Celebration tally={cheer} nextHref={`/on/${initial.next}`} nextLabel={calendarLabel(initial.next)} onClose={()=>setCheer(null)}/>}
     {viewing!==null&&<Viewer assets={walked} initialID={viewing} onClose={photo.close} onMove={moved} sessionControl={session.control} onSave={save} onPatch={patchAsset} onRecord={history.record} onTurn={(asset,quarters)=>turn([asset],quarters)}

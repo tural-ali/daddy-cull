@@ -8,7 +8,7 @@ import {usePageFilters} from './SearchFilters';
 import {MoreMarker,useMoreOnScroll} from './more';
 import {requestID,sendDecisions,type Change} from './decisions';
 import {undoableDecisions,usePageUndo} from './pageUndo';
-import {tipProps} from './keys';
+import {tipProps,touch} from './keys';
 import {flyToBin} from './binFlight';
 import {CopyGroup} from './CopyGroup';
 import {pick} from './Duplicates';
@@ -199,8 +199,9 @@ export function Social({page,band:initialBand}:{page:SocialPage;band:string}){
         {band&&<span className="dim"> · {shown.toLocaleString()} {band==='social'?'likely social':'not sure'}</span>}
         {(current.kept>0||current.marked>0)&&<span className="dim"> · {current.kept.toLocaleString()} kept, {current.marked.toLocaleString()} marked for the Bin</span>}
       </p>
-      <p className="hint">Videos that look saved from an app rather than filmed on a camera, judged from each file's own metadata. <strong>Likely social</strong> means strong evidence; <strong>Not sure</strong> is worth a look before it goes.
-        Click a video to watch it; <b>k</b> keeps it and <b>x</b> moves it to the Bin. Tick the circle on a tile to select several, and the actions appear at the top. <strong>Keep</strong> takes a video off this list; <strong>Move to Bin</strong> marks it for the Bin, where it stays recoverable.</p>
+      <p className="hint">Videos that look saved from an app rather than filmed on a camera, judged from each file's own metadata. <strong>Likely social</strong> means strong evidence; <strong>Not sure</strong> is worth a look before it goes.{' '}
+        {touch?'Tap a video to watch it, and hold a tile to select several; the actions appear at the top.'
+          :<>Click a video to watch it; <b>k</b> keeps it and <b>x</b> moves it to the Bin. Tick the circle on a tile to select several, and the actions appear at the top.</>} <strong>Keep</strong> takes a video off this list; <strong>Move to Bin</strong> marks it for the Bin, where it stays recoverable.</p>
     </section>
     {message?<p className="flash" role="status">{message} {steps.latest&&<button className="btn small" disabled={busy||steps.working} {...tipProps('Undo','Mod+Z')} onClick={steps.undo}>Undo</button>}</p>
       :steps.notice&&<p className="flash" role="status">{steps.notice} {steps.canRedo&&<button className="btn small" disabled={busy||steps.working} {...tipProps('Redo','Mod+Shift+Z Mod+U')} onClick={steps.redo}>Redo</button>}</p>}

@@ -8,7 +8,7 @@ import {MoreMarker,useMoreOnScroll} from './more';
 import {usePhotoURL} from './photoURL';
 import {Lightbox,type LightboxItem} from './Lightbox';
 import {TASK_FINISHED,queueGooglePhotos,type Task} from './taskQueue';
-import {Kbd,keyProps} from './keys';
+import {Kbd,keyProps,touch} from './keys';
 
 type Outcome='pending'|'missing'|'alternative'|'uncertain'|'represented'|'removed';
 type Item={id:number;name:string;kind:string;size:number;taken:string;takenFrom?:string;outcome:Outcome;reason:string;
@@ -220,7 +220,7 @@ export function GooglePhotos({initial}:{initial:GooglePhotosPage}){
           </button>;
         })}
       </nav>
-      <p className="hint">{about.about}{addable.has(tab)&&items.length>0?' Click a photo to look at it; tick the circle to select, Shift-click to select a run.':''}</p>
+      <p className="hint">{about.about}{addable.has(tab)&&items.length>0?touch?' Tap a photo to look at it; hold one to select it.':' Click a photo to look at it; tick the circle to select, Shift-click to select a run.':''}</p>
     </>}
     {message&&<p className="flash" role="status">{message}</p>}
     {error&&<p className="note warn" role="alert">{error}</p>}

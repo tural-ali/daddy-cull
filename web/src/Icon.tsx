@@ -39,6 +39,8 @@ import RotateRight from '@material-symbols/svg-400/outlined/rotate_right.svg?raw
 import RotateRightFill from '@material-symbols/svg-400/outlined/rotate_right-fill.svg?raw';
 import RotateLeft from '@material-symbols/svg-400/outlined/rotate_left.svg?raw';
 import RotateLeftFill from '@material-symbols/svg-400/outlined/rotate_left-fill.svg?raw';
+import ScreenRotation from '@material-symbols/svg-400/outlined/screen_rotation_alt.svg?raw';
+import ScreenRotationFill from '@material-symbols/svg-400/outlined/screen_rotation_alt-fill.svg?raw';
 import RestoreBin from '@material-symbols/svg-400/outlined/restore_from_trash.svg?raw';
 import RestoreBinFill from '@material-symbols/svg-400/outlined/restore_from_trash-fill.svg?raw';
 import DeleteForever from '@material-symbols/svg-400/outlined/delete_forever.svg?raw';
@@ -163,6 +165,7 @@ const icons={
   select_all:[SelectAll,SelectAllFill],
   rotate_right:[RotateRight,RotateRightFill],
   rotate_left:[RotateLeft,RotateLeftFill],
+  screen_rotation_alt:[ScreenRotation,ScreenRotationFill],
   restore_from_trash:[RestoreBin,RestoreBinFill],
   delete_forever:[DeleteForever,DeleteForeverFill],
   local_fire_department:[Fire,FireFill],

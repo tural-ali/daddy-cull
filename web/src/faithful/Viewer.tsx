@@ -10,6 +10,8 @@ import {Kbd,tipProps} from './keys';
 import {TurnedControls} from './TurnedControls';
 import {useShownPath} from './libraryPath';
 import {fileFormat as format,stacksBehind,stackOf} from './stacks';
+import {useStageGestures} from './stageGestures';
+import {paintBar,reviewBar} from '../theme';
 
 function requestID(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('')}
 function preview(asset:Asset){return `/api/media/${asset.id}/preview?size=large`}
@@ -141,6 +143,26 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   const [comparing,setComparing]=useState(false);
   const media=useRef<HTMLImageElement&HTMLVideoElement>(null);
   const stage=useRef<HTMLDivElement>(null);
+  const root=useRef<HTMLDivElement>(null);
+  // Where on the picture a double tap or a pinch asked to zoom, as a share of
+  // its width and height, so the zoomed picture opens on that spot.
+  const zoomPoint=useRef<{x:number;y:number}|null>(null);
+  function zoomAt(point:{x:number;y:number}){
+    if(zoom){setZoom(false);return}
+    const element=media.current;
+    if(element instanceof HTMLImageElement){
+      const rect=element.getBoundingClientRect();
+      zoomPoint.current={x:(point.x-rect.left)/rect.width,y:(point.y-rect.top)/rect.height};
+    }
+    setZoom(true);
+  }
+  useLayoutEffect(()=>{
+    const point=zoomPoint.current,element=media.current,scroller=stage.current;
+    zoomPoint.current=null;
+    if(!zoom||!point||!(element instanceof HTMLImageElement)||!scroller||turn)return;
+    scroller.scrollLeft=element.offsetLeft+point.x*element.offsetWidth-scroller.clientWidth/2;
+    scroller.scrollTop=element.offsetTop+point.y*element.offsetHeight-scroller.clientHeight/2;
+  },[zoom,turn]);
 
   // The opening flight: the tile's own thumbnail grows to where the large
   // preview will be drawn, and stays there until that preview has arrived.
@@ -296,11 +318,17 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     }catch(reason){setError((reason as Error).message)}finally{setComparing(false)}
   }
 
+  const gestures=useStageGestures({stage,root,infoOpen:info,canStep:assets.length>1,
+    enabled:!zoom&&!related&&!finding&&!flight&&!ask&&!menu&&!help,
+    onStep:step,onLeave:leave,onInfo:setInfo,onBare:()=>setBare(value=>!value),onZoomAt:zoomAt});
+  const neighbour=gestures.peek?assets[(Math.min(at,assets.length-1)+gestures.peek+assets.length)%assets.length]:undefined;
+
   const shownID=current?.id;
   useEffect(()=>{if(shownID!==undefined)onMove?.(shownID)},[shownID,onMove]);
   useEffect(()=>{
     document.documentElement.classList.add('rv-open');
-    return()=>document.documentElement.classList.remove('rv-open');
+    paintBar(reviewBar);
+    return()=>{document.documentElement.classList.remove('rv-open');paintBar(null)};
   },[]);
   useEffect(()=>{
     const warmed:HTMLImageElement[]=[];
@@ -376,7 +404,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     :current.status==='cull'?{icon:'delete' as IconName,text:'Marked for the Bin'}
     :{icon:'schedule' as IconName,text:'Not decided yet'};
   // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- a click outside the photo is the mouse's Esc
-  return <div className={`rv on${bare?' bare':''}${info?' info':''}${related||finding?' cmp':''}${flight?` flight ${flight.mode}`:''}`} role="dialog" aria-modal="true" aria-label="Photo review" onClick={outside}>
+  return <div ref={root} className={`rv on${bare?' bare':''}${info?' info':''}${related||finding?' cmp':''}${flight?` flight ${flight.mode}`:''}`} role="dialog" aria-modal="true" aria-label="Photo review" onClick={outside}>
     <div className="rvbody">
     {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- drops the focus ring a mouse click leaves on a button; keys never need it */}
     <div className="rvtop" onMouseUp={event=>(event.target as HTMLElement).closest('button')?.blur()}>
@@ -414,13 +442,26 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
     {/* The stage's children are keyed by the file they show, so each sort has
         a key of its own: a clip and its controls, or a still and its Live
         Photo video, sharing one would leave the clip behind on moving on. */}
+    {/* A tap waits a moment for a second one, which zooms, before it hides
+        the controls; a tap anywhere on the stage does it, as in Photos, since
+        a finger closes the review by pulling down rather than by missing. */}
     {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- clicking the photo hides the controls; H does the same */}
-    <div ref={stage} className={`rvstage${zoom?' zoom':''}${current.kind==='video'?' hasvideo':''}`} onClick={event=>{if((event.target as HTMLElement).tagName==='IMG')setBare(value=>!value)}}>
+    <div ref={stage} className={`rvstage${zoom?' zoom':''}${current.kind==='video'?' hasvideo':''}`} {...gestures.handlers} onClick={event=>{
+      const target=event.target as HTMLElement;
+      if(gestures.touched()&&!menu&&!ask){
+        if(target.closest('button,a,input,video'))return;
+        event.stopPropagation();
+        if(!gestures.swallowed())gestures.tap(event,target.tagName==='IMG');
+        return;
+      }
+      if(target.tagName==='IMG')setBare(value=>!value);
+    }}>
       <button type="button" className="rvnav prev" aria-label="Previous" {...tipProps('Previous','ArrowLeft')} onClick={event=>{event.stopPropagation();step(-1)}}>‹</button>
       {broken?.id===onStage.id?<div className="rvgone" role="status"><b>{broken.gone?'This file is no longer in the archive':'This file could not be shown'}</b><span>{broken.gone?'It was moved or removed on the server since the last scan. It leaves review at the next nightly scan.':'Try again in a moment.'}</span></div>
         :current.kind==='video'?<SessionVideo ref={media} key={current.id} data-turn={turn||undefined} controls={!turn} autoPlay playsInline poster={preview(current)} src={`/api/media/${current.id}/original`} onLoadedData={()=>setShown(current.id)} onError={()=>failed(current.id)}/>:<img ref={media} key={onStage.id} data-turn={turn||undefined} src={preview(onStage)} alt={onStage.path.split('/').pop()} onLoad={()=>setShown(current.id)} onError={()=>failed(onStage.id)}/>}
       {live&&livePlays&&current.kind!=='video'&&broken?.id!==onStage.id&&<LiveClip key={`live:${live.id}`} src={`/api/media/${live.id}/live`} still={media} turn={turn} onDone={()=>setPlaying(null)} onFail={()=>{setPlaying(null);setError('The Live Photo video could not be played.')}}/>}
       {current.kind==='video'&&turn!==0&&broken?.id!==onStage.id&&<TurnedControls key={`controls:${current.id}`} video={media}/>}
+      {neighbour&&<img className={`rvpeek ${gestures.peek>0?'next':'prev'}`} key={`peek:${neighbour.id}`} src={preview(neighbour)} alt="" data-turn={neighbour.turn||undefined}/>}
       <button type="button" className="rvnav next" aria-label="Next" {...tipProps('Next','ArrowRight')} onClick={event=>{event.stopPropagation();step(1)}}>›</button>
     </div>
     <aside className="rvinfo" aria-label="Info">

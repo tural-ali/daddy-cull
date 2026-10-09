@@ -7,6 +7,7 @@ import {Busy} from '../Busy';
 import {Icon} from '../Icon';
 import {usePageActions} from './pageActions';
 import {useShownPath} from './libraryPath';
+import {press} from './keys';
 
 export type {DuplicateGroup} from './Today';
 export type DuplicateMember=DuplicateGroup['members'][number];
@@ -285,7 +286,7 @@ export function Duplicates({report:initial}:{report:DuplicateReport}){
     <h1>Duplicates</h1>
     <p className="ysum"><b>{groups.length.toLocaleString()}</b> {groups.length===1?'group':'groups'}{report.total!==undefined&&<> on this page · {report.total.toLocaleString()} groups remaining</>} · <b>{bytes(freeing)}</b> can be freed
       <span className="dim"> · {report.hashed.toLocaleString()} of {report.candidates.toLocaleString()} possible duplicates checked</span></p>
-    <p className="hint">Every group is proven on a full hash: the copies are byte-identical, or, for videos marked same footage, their pictures and sound are identical and only their metadata differs. Merging keeps the ticked copy and marks the rest for the Bin, where they stay restorable. Click another copy to keep that one instead.</p>
+    <p className="hint">Every group is proven on a full hash: the copies are byte-identical, or, for videos marked same footage, their pictures and sound are identical and only their metadata differs. Merging keeps the ticked copy and marks the rest for the Bin, where they stay restorable. {press} another copy to keep that one instead.</p>
 
     {groups.length>0&&<div className="dupebulk">
       <label className="dupekeep">Keep
