@@ -29,7 +29,8 @@ async function run(browser,slowdown){
   const settled=async n=>{for(let i=0;i<50*slowdown&&writes.length<n;i++)await page.waitForTimeout(50);assert.equal(writes.length,n,'decision count');return writes[n-1]};
 
   await page.goto(`${base}/on/09-07/photo/1`);
-  await viewer.waitFor();
+  // A slowed CPU on a busy machine takes longer than the default to draw it.
+  await viewer.waitFor({timeout:15000*slowdown});
   await page.keyboard.press('k');
   assert.deepEqual((({status,favourite})=>({status,favourite}))(await settled(1)),{status:'keep',favourite:false});
   await page.waitForURL(/\/photo\/2$/);
