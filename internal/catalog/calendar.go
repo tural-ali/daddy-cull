@@ -368,6 +368,9 @@ func (s *Store) Today(ctx context.Context, md string) (TodayData, error) {
 	if err := s.markShapes(ctx, all); err != nil {
 		return data, err
 	}
+	if err := s.markHints(ctx, all); err != nil {
+		return data, err
+	}
 	return data, s.markDurations(ctx, all)
 }
 

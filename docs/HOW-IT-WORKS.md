@@ -69,6 +69,15 @@ It installs `~/Applications/Cull Sync.app`, keeps its key in `~/.config/daddy-cu
 Daddy Cull keeps only a hash of that key, and each new setup command replaces it.
 The first time, macOS asks whether Cull Sync may use Photos.
 
+**Hints from Photos.**
+Photos scores every picture for its Memories: how good it looks overall, whether the shot failed, what is in it, which faces it found, and a one-line caption.
+`daddy-cull apple-photos scores` reads those scores with osxphotos and sends them to Daddy Cull with Cull Sync's key; nothing in Photos changes.
+A day page then shows a small mark on each file Photos knows by name and day: a tick where Photos would pick it for Memories, a cross where Photos calls it a failed shot, and the reasons in the viewer's Info.
+They are hints, never decisions, and they are weak ones: checked against 779 files already reviewed here, only those two marks stood apart from chance.
+Everything else Photos scored sat within a few points of the reviewer's base rate, so it is shown as description, not advice.
+Run the command again after a big import; the newest run replaces the last.
+The hints live in one table, `photos_scores`, and dropping it loses nothing else.
+
 ## Google Photos
 
 There is no icloudpd for Google Photos.

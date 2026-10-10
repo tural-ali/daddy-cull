@@ -541,6 +541,13 @@ type PhotosTaskApply struct {
 	Photos []string `json:"photos"`
 }
 
+// Scores records one page of what Photos worked out about its items, sent
+// by mac/photos-scores.py with the helper's key. It is not the helper
+// calling in, so the helper is not marked seen.
+func (h *PhotosHub) Scores(ctx context.Context, report PhotosScoresReport) (PhotosScoresStored, error) {
+	return h.s.RecordPhotosScores(ctx, report, h.now())
+}
+
 // Seen records a heartbeat and returns whether the helper should abandon the
 // job it is working on, because the reviewer cancelled it or it was replaced.
 func (h *PhotosHub) Seen(beat PhotosHeartbeat) (cancel bool) {

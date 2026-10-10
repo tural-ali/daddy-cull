@@ -423,6 +423,35 @@ CREATE TABLE IF NOT EXISTS photos_sync (
  day TEXT NOT NULL DEFAULT '',
  PRIMARY KEY(asset_key,action)
 );
+-- What Apple Photos worked out about each of its items, sent across by
+-- mac/photos-scores.py and matched to archive files by name and day when a
+-- day is read; see photos_scores.go. A score Photos has not worked out is
+-- NULL. Evidence only: dropping the table loses hints and nothing else.
+CREATE TABLE IF NOT EXISTS photos_scores (
+ photos_id TEXT PRIMARY KEY,
+ stem TEXT NOT NULL,
+ ext TEXT NOT NULL,
+ day TEXT NOT NULL,
+ name TEXT NOT NULL,
+ kind TEXT NOT NULL,
+ size_bytes INTEGER NOT NULL,
+ favourite INTEGER NOT NULL,
+ hidden INTEGER NOT NULL,
+ adjusted INTEGER NOT NULL,
+ deleted INTEGER NOT NULL,
+ overall REAL, curation REAL, failure REAL, sharp REAL, blur REAL, low_light REAL, noise REAL, intrusive REAL,
+ composition REAL, framing REAL, subject REAL, interesting REAL, timing REAL, lighting REAL,
+ faces INTEGER NOT NULL,
+ face_min REAL,
+ face_max REAL,
+ smiles INTEGER NOT NULL,
+ labels TEXT NOT NULL,
+ caption TEXT NOT NULL,
+ version TEXT NOT NULL,
+ run TEXT NOT NULL,
+ synced_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS photos_scores_day ON photos_scores(day,stem,ext);
 -- Archive files the last scan did not find on disk, typically moved away by a
 -- host script. They stay catalogued, with their decisions and history, but
 -- leave the calendar and related groups until a scan finds them again.

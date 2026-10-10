@@ -53,6 +53,10 @@ import Undo from '@material-symbols/svg-400/outlined/undo.svg?raw';
 import UndoFill from '@material-symbols/svg-400/outlined/undo-fill.svg?raw';
 import Pending from '@material-symbols/svg-400/outlined/pending_actions.svg?raw';
 import PendingFill from '@material-symbols/svg-400/outlined/pending_actions-fill.svg?raw';
+import Star from '@material-symbols/svg-400/outlined/star_rate.svg?raw';
+import StarFill from '@material-symbols/svg-400/outlined/star_rate-fill.svg?raw';
+import Broken from '@material-symbols/svg-400/outlined/broken_image.svg?raw';
+import BrokenFill from '@material-symbols/svg-400/outlined/broken_image-fill.svg?raw';
 import Done from '@material-symbols/svg-400/outlined/task_alt.svg?raw';
 import DoneFill from '@material-symbols/svg-400/outlined/task_alt-fill.svg?raw';
 import Media from '@material-symbols/svg-400/outlined/perm_media.svg?raw';
@@ -158,6 +162,8 @@ const icons={
   menu:[Menu,MenuFill],
   close:[Close,CloseFill],
   task_alt:[Done,DoneFill],
+  star_rate:[Star,StarFill],
+  broken_image:[Broken,BrokenFill],
   perm_media:[Media,MediaFill],
   pending_actions:[Pending,PendingFill],
   play_circle:[PlayCircle,PlayCircleFill],

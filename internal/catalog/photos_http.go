@@ -164,6 +164,18 @@ func (h *PhotosHub) Routes(m *api.Mux) {
 	m.HandleFunc(route("GET", "/api/photos", api.Read, "Get Cull Sync's state",
 		"Whether Cull Sync is set up and online, and the sync in hand, if any.", nil, PhotosStatus{}),
 		func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, h.Status()) })
+	m.HandleFunc(route("GET", "/api/photos/scores", api.Read, "Count Apple's scores held",
+		"How many Photos items the Mac's photos-scores script has sent across, and when the last page arrived.", nil, PhotosScoresState{}),
+		func(w http.ResponseWriter, r *http.Request) {
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			defer cancel()
+			state, err := h.s.PhotosScoresState(ctx)
+			if err != nil {
+				failFor(w, err)
+				return
+			}
+			writeJSON(w, 200, state)
+		})
 	m.HandleFunc(route("GET", "/api/photos/overview", api.Read, "Count what is waiting for Photos",
 		"From Cull's own records, without asking the Mac: what would be deleted and favourited, and what is held back.", nil, PhotosOverview{}, notSetUp),
 		func(w http.ResponseWriter, r *http.Request) {
@@ -450,6 +462,25 @@ func (h *PhotosHub) Routes(m *api.Mux) {
 			return
 		}
 		writeJSON(w, 200, Done{OK: true})
+	}))
+	m.Handle(agent("POST", "/api/photos/agent/scores", "Send what Photos thinks of its pictures",
+		"Records one page of Apple's scores, faces, labels and captions, read from the Photos library by mac/photos-scores.py. Pages carry the run they belong to; when the last page of a run is in, items from earlier runs are dropped. Day pages then carry a hint beside each file Photos knows by name and day. A page with any item out of shape is refused whole with 400.",
+		PhotosScoresReport{}, PhotosScoresStored{}), agentOnly(func(w http.ResponseWriter, r *http.Request) {
+		var report PhotosScoresReport
+		if !decode(w, r, 8<<20, &report) {
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		stored, err := h.Scores(ctx, report)
+		if err != nil {
+			if !errors.Is(err, ErrInvalid) {
+				log.Printf("photos: could not record Apple's scores: %v", err)
+			}
+			failFor(w, err)
+			return
+		}
+		writeJSON(w, 200, stored)
 	}))
 	m.Handle(agent("POST", "/api/photos/agent/jobs/{job}/applied", "Report what changed in Photos",
 		"Ends an apply with what Photos was seen to do to each chosen entry. What was done is recorded so it is never offered again, and the job is done. Only entries the apply asked for are accepted; a report already recorded is answered ok again, so a retry is safe.",

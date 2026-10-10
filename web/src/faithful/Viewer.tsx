@@ -121,6 +121,9 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
   // What each file records about itself, read once it is asked for.
   const [details,setDetails]=useState<ReadonlyMap<number,FileDetails|null>>(()=>new Map());
   const detailsID=info?onStage?.id:undefined;
+  // What Apple Photos made of the picture, when the Mac sent its scores.
+  const hint=current.hint??onStage?.hint;
+  const hintLine=hint?[...(hint.reasons??[]).filter(reason=>!reason.startsWith('Photos')),hint.overall!==undefined?`scored ${Math.round(hint.overall*100)}`:'',hint.faces?`${hint.faces} ${hint.faces===1?'face':'faces'}`:'',...(hint.labels??[]).slice(0,6)].filter(Boolean).join(' · '):'';
   useEffect(()=>{
     if(detailsID===undefined||details.has(detailsID))return;
     const controller=new AbortController();
@@ -473,6 +476,7 @@ export function Viewer({assets,initialID,onClose,onSave,onPatch,dayOf,onMove,onR
       {facts&&<div className="irow"><Icon name="edit"/><div><b>{facts.software||'Software not recorded'}</b><span>File last saved {new Date(facts.modified).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</span></div></div>}
       {facts&&<div className="irow"><Icon name={facts.located?'location_on':'location_off'}/><div><b>{facts.located?'Records where it was taken':'No location recorded'}</b></div></div>}
       <div className="irow"><Icon name={decision.icon}/><div><b>{decision.text}</b><span>{current.favourite?'Favourite · ':''}<span className="rvpos">{at+1} / {assets.length}</span> in this review</span></div></div>
+      {hint&&<div className="irow"><Icon name={hint.keep?'star_rate':hint.cull?'broken_image':'photo_library'}/><div><b>{hint.keep?'Photos would pick it for Memories':hint.cull?'Photos marks it a failed shot':'Photos has it'}</b>{hintLine&&<span>{hintLine}</span>}{hint.caption&&<span>{hint.caption}</span>}</div></div>}
       <div className="irow"><Icon name="folder"/><div><b>{folder.split('/').pop()||folder}</b><span className="mono">{onDisk(onStage.path)}</span></div><button type="button" className="rvact copy" aria-label="Copy file path" {...tipProps(copied?'Copied':'Copy file path')} onClick={copyPath}><Icon name={copied?'check':'content_copy'}/></button></div>
       {others&&<>
         <h4>Files of this photo</h4>

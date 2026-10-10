@@ -59,6 +59,9 @@ type Asset struct {
 	// Turn is how many quarter turns clockwise the reviewer turned the file
 	// in Cull, 0 to 3. Width and Height are before it.
 	Turn int `json:"turn,omitempty"`
+	// Hint is what Apple Photos made of the picture, when its scores have
+	// been sent across and the file was found in them; on day pages only.
+	Hint *AssetHint `json:"hint,omitempty"`
 }
 type Cursor struct {
 	Version int    `json:"v"`

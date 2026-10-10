@@ -93,7 +93,7 @@ async function setProgress(day:string,status:'pending'|'done'){
 
 /** The day's filters, which live in the search bar. One from a group narrows
  * the day to it; two from the same group widen it to either; groups combine. */
-type Filter='favourites'|'videos'|'photos'|'undecided'|'kept'|'removed';
+type Filter='favourites'|'videos'|'photos'|'undecided'|'kept'|'removed'|'picks'|'failed';
 const filterChips:{id:Filter;label:string;icon:IconName;group:string;words:string[]}[]=[
   {id:'favourites',label:'Favourites',icon:'favorite',group:'Favourites',words:['favourites','favorites','hearts']},
   {id:'videos',label:'Videos',icon:'videocam',group:'Type',words:['videos','clips','movies']},
@@ -101,6 +101,10 @@ const filterChips:{id:Filter;label:string;icon:IconName;group:string;words:strin
   {id:'undecided',label:'Undecided',icon:'schedule',group:'Decision',words:['undecided','unreviewed','to do','todo','not decided']},
   {id:'kept',label:'Kept',icon:'check_circle',group:'Decision',words:['kept','keep']},
   {id:'removed',label:'Removed',icon:'delete',group:'Decision',words:['removed','remove','deleted','bin']},
+  // What Apple Photos made of a picture, once the Mac has sent its scores
+  // across: the two of its judgements that stood apart from chance here.
+  {id:'picks',label:'Photos would pick',icon:'star_rate',group:'Apple Photos',words:['picks','pick','memories','apple','photos would pick','good']},
+  {id:'failed',label:'Failed shots',icon:'broken_image',group:'Apple Photos',words:['failed','failed shots','bad','blurred','apple']},
 ];
 const filterKey='cull.day-filters';
 const filterStatus:Record<'undecided'|'kept'|'removed',Status>={undecided:'unreviewed',kept:'keep',removed:'cull'};
@@ -116,8 +120,17 @@ function matches(asset:Asset,filters:ReadonlySet<Filter>):boolean{
   if(filters.has('favourites')&&!asset.favourite)return false;
   const videos=filters.has('videos'),photos=filters.has('photos');
   if((videos||photos)&&!(videos&&asset.kind==='video'||photos&&asset.kind!=='video'))return false;
+  const picks=filters.has('picks'),failed=filters.has('failed');
+  if((picks||failed)&&!(picks&&asset.hint?.keep||failed&&asset.hint?.cull))return false;
   const statuses=(['undecided','kept','removed'] as const).filter(id=>filters.has(id)).map(id=>filterStatus[id]);
   return statuses.length===0||statuses.includes(asset.status);
+}
+
+/** The words a hint's badge shows on hover: what Photos found. */
+function hintTitle(asset:Asset):string{
+  const hint=asset.hint;
+  if(!hint)return '';
+  return [hint.keep?'Photos would pick it for Memories':hint.cull?'Photos marks it a failed shot':'',...(hint.reasons??[]).filter(reason=>!reason.startsWith('Photos'))].filter(Boolean).join(' · ');
 }
 
 /** How long the keyboard tip stays, and whether this page load has had it. */
@@ -627,7 +640,7 @@ export function Today({initial}:{initial:TodayData}){
         <Media asset={asset}/>
         {liveTile===asset.id&&<video className="actual-media liveclip" src={`/api/media/${asset.id}/live`} autoPlay muted playsInline aria-hidden="true" onEnded={()=>setLiveTile(null)} onError={()=>{setLiveTile(null);setMessage('The Live Photo video could not be played.')}}/>}
         <Pick checked={picks.picked.has(asset.id)} label={`Select ${fileName(asset)}`} onToggle={extend=>picks.toggle(place.get(asset.id)??0,extend)}/>
-        <div className="bdg end">{asset.live&&<button type="button" className="b live" aria-label={liveTile===asset.id?'Stop the Live Photo':'Play the Live Photo'} aria-pressed={liveTile===asset.id} onClick={event=>{event.stopPropagation();setLiveTile(id=>id===asset.id?null:asset.id)}}><Icon name="motion_photos_on" filled={liveTile===asset.id}/>Live</button>}{asset.new&&asset.status==='unreviewed'&&<span className="b new">new</span>}{behind.has(asset.id)&&stackFormats(stackOf(asset,behind)).map(format=><span className="b pair" key={format}>{format}</span>)}</div>
+        <div className="bdg end">{asset.live&&<button type="button" className="b live" aria-label={liveTile===asset.id?'Stop the Live Photo':'Play the Live Photo'} aria-pressed={liveTile===asset.id} onClick={event=>{event.stopPropagation();setLiveTile(id=>id===asset.id?null:asset.id)}}><Icon name="motion_photos_on" filled={liveTile===asset.id}/>Live</button>}{asset.new&&asset.status==='unreviewed'&&<span className="b new">new</span>}{asset.hint?.keep&&<span className="b pick" title={hintTitle(asset)} aria-label="Photos would pick it for Memories"><Icon name="star_rate" filled/></span>}{asset.hint?.cull&&<span className="b fail" title={hintTitle(asset)} aria-label="Photos marks it a failed shot"><Icon name="broken_image" filled/></span>}{behind.has(asset.id)&&stackFormats(stackOf(asset,behind)).map(format=><span className="b pair" key={format}>{format}</span>)}</div>
         <button type="button" className="tfav" disabled={!queue.ready} aria-pressed={asset.favourite} aria-label={asset.favourite?'Remove from favourites':'Favourite'} onClick={event=>{event.stopPropagation();save(asset,asset.status==='cull'?'unreviewed':asset.status,!asset.favourite)}}><Icon name="favorite" filled={asset.favourite}/></button>
         {(asset.duration||asset.kind==='video')&&<span className="dur" aria-label={asset.duration?`Video, ${runningTime(asset.duration)}`:'Video'}>{asset.duration?runningTime(asset.duration):<Icon name="play_circle" filled/>}</span>}
         {asset.status==='cull'&&<div className="undo"><span>Removed</span><button type="button" className="act" disabled={!queue.ready} onClick={event=>{event.stopPropagation();save(asset,'unreviewed')}}>Undo</button></div>}

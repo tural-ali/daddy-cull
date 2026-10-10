@@ -13,7 +13,27 @@ export type Asset = {comparisonReason?:string;comparisonPending?:boolean; id:num
   width?:number; height?:number;
   /** Quarter turns clockwise the reviewer gave it in Cull, 1 to 3; the file
    * itself is as it was. Width and height are before the turn. */
-  turn?:number };
+  turn?:number;
+  /** What Apple Photos made of the picture, on day pages, once the Mac has
+   * sent its scores across and the file was found in them by name and day. */
+  hint?:AssetHint };
+/** Apple Photos' view of a file: evidence to weigh, never a decision. */
+export type AssetHint = {source:'apple-photos';
+  /** exact when Photos has the name on the same day, near when a day off. */
+  how:'exact'|'near';
+  /** Apple's overall aesthetic score, 0 to 1; absent when Photos never scored it. */
+  overall?:number;
+  /** Photos would pick it for Memories, which this reviewer mostly kept. */
+  keep?:boolean;
+  /** Photos marks it a failed shot, which this reviewer mostly removed. */
+  cull?:boolean;
+  /** Why, in words: "edited in Photos", "dark", "a face came out poorly". */
+  reasons?:string[];
+  faces?:number;
+  /** What Photos saw in it, such as people or water. */
+  labels?:string[];
+  /** Apple's one-line description, when it has one. */
+  caption?:string};
 export type Page = {assets:Asset[];next:string};
 /** What one file records about itself, read from the file on request. */
 export type FileDetails = {camera?:string;lens?:string;shutter?:string;aperture?:number;iso?:number;focal?:number;software?:string;width?:number;height?:number;located:boolean;modified:string};

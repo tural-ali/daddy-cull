@@ -162,6 +162,15 @@ expect "nothing new" "Nothing new in Apple Photos." "$(field "$photos" message)"
 if FAKE=broken "$CLI" apple-photos import >/dev/null 2>&1; then fail "an error fails"; else pass "an error fails"; fi
 expect "an error is recorded" "false" "$(field "$photos" ok)"
 
+echo "Apple Photos scores"
+CULL_SYNC_TOKEN=test FAKE=0 "$CLI" apple-photos scores --no-captions >/dev/null
+has "runs the script under osxphotos" "run
+$HERE/photos-scores.py
+--no-captions" "$(cat "$STATE/osxphotos.args")"
+holds "keeps a log" [ -f "$STATE/logs/apple-photos-scores.log" ]
+if CULL_SYNC_TOKEN=test FAKE=broken "$CLI" apple-photos scores >/dev/null 2>&1; then fail "a failed run fails"; else pass "a failed run fails"; fi
+if HOME="$WORK/nohome" FAKE=0 "$CLI" apple-photos scores >/dev/null 2>&1; then fail "without Cull Sync it refuses"; else pass "without Cull Sync it refuses"; fi
+
 echo "Status"
 out=$("$CLI" status)
 has "status: folders" "$WORK/home/Library" "$out"

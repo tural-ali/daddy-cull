@@ -26,7 +26,7 @@ ICLOUDPD_VERSION="1.32.2"
 ICLOUDPD_WHEEL="icloudpd-1.32.2-py3-none-any.whl"
 ICLOUDPD_URL="https://files.pythonhosted.org/packages/4d/06/3fed66a7ee0c9e84c0a7cf1c731931d188e74314fadafb3775b6ac4419ab/$ICLOUDPD_WHEEL"
 ICLOUDPD_SHA256="14df1380cd8fa6bbfe083079651a51809c5a57beb9986b307e8ddba53f16671a"
-OSXPHOTOS_VERSION="0.76.1"
+OSXPHOTOS_VERSION="0.77.2"
 PYTHON_VERSION="3.12"
 
 # uv keeps the downloaders, and the Python they run on, inside the state
@@ -462,6 +462,19 @@ cmd_apple_photos_import() {
   say "$(status_value "$status" message) Daddy Cull files them under the day each was taken within a minute."
 }
 
+cmd_apple_photos_scores() {
+  command -v osxphotos >/dev/null 2>&1 || fail "osxphotos is not installed. Run daddy-cull apple-photos install first."
+  local script="$APP/bin/photos-scores.py"
+  [ -f "$script" ] || script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/photos-scores.py"
+  [ -f "$script" ] || fail "photos-scores.py is missing beside daddy-cull. Run daddy-cull update."
+  [ -f "$HOME/.config/daddy-cull/sync.conf" ] || [ -n "${CULL_SYNC_TOKEN:-}" ] ||
+    fail "Cull Sync is not set up on this Mac. Set it up from the Apple Photos page first; the scores go across with its key."
+  mkdir -p "$LOGS"
+  say "Reading what Apple Photos thinks of each picture and sending it to Daddy Cull."
+  say "Photos itself is not changed. macOS may ask to let Terminal use Photos: allow it."
+  osxphotos run "$script" "$@" 2>&1 | tee -a "$LOGS/apple-photos-scores.log" || fail "the scores did not go across. The log is $LOGS/apple-photos-scores.log."
+}
+
 # ---------------------------------------------------------------- help
 
 usage() {
@@ -479,6 +492,7 @@ daddy-cull runs Daddy Cull on this Mac.
 
   daddy-cull apple-photos install   install osxphotos, which exports from Apple Photos
   daddy-cull apple-photos import    copy new photos from Apple Photos into the Import folder
+  daddy-cull apple-photos scores    send what Photos thinks of each picture, as hints on day pages
 
   daddy-cull update                 install the latest release
   daddy-cull uninstall              remove the app; your photos and catalogue stay
@@ -509,7 +523,8 @@ main() {
       case "${1:-}" in
         install) cmd_apple_photos_install ;;
         import) shift; cmd_apple_photos_import "$@" ;;
-        *) fail "daddy-cull apple-photos takes install or import." ;;
+        scores) shift; cmd_apple_photos_scores "$@" ;;
+        *) fail "daddy-cull apple-photos takes install, import or scores." ;;
       esac
       ;;
     help | -h | --help) usage ;;

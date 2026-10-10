@@ -1000,6 +1000,13 @@ main.wide, main:has(.gal, .rows, .calendar) { max-width: 100%; }
 .bdg .b.keep { background: color-mix(in oklab, var(--good) 78%, #000); }
 .bdg .b.new  { background: color-mix(in oklab, var(--dot) 88%, #000); color: #fff; }
 .bdg .b.pair { letter-spacing: .04em; }
+/* What Apple Photos made of the picture: a spark where it would pick the
+   photo for Memories, a cracked frame where it calls the shot failed. Icons
+   only, as the tile already carries words for the state Cull itself knows. */
+.bdg .b.pick, .bdg .b.fail { padding: 0 4px; }
+.bdg .b.pick { background: color-mix(in oklab, var(--good) 70%, #000); }
+.bdg .b.fail { background: color-mix(in oklab, #c0392b 78%, #000); }
+.bdg .b.pick .icon, .bdg .b.fail .icon, .bdg .b.pick .icon svg, .bdg .b.fail .icon svg { width: 13px; height: 13px; }
 
 /* A Live Photo says so as the phone does, and the badge is the way to play
    it, so it takes pointer events back like the badges below. */

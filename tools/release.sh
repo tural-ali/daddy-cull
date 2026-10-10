@@ -37,6 +37,7 @@ echo "Building the web app"
 (cd "$root/web" && npm ci --no-audit --no-fund --loglevel=error && npm run build --silent)
 cp -R "$root/web/dist" "$stage/web"
 cp "$root/mac/daddy-cull" "$stage/bin/daddy-cull"
+cp "$root/mac/photos-scores.py" "$stage/bin/photos-scores.py"
 chmod 755 "$stage/bin/cull" "$stage/bin/daddy-cull"
 cp "$root/LICENSE" "$root/README.md" "$stage/"
 

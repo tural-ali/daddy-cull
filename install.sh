@@ -181,6 +181,7 @@ build() {
     fail "the web build failed."
   cp -R "$SOURCE/web/dist" "$into/web"
   cp "$SOURCE/mac/daddy-cull" "$into/bin/daddy-cull"
+  cp "$SOURCE/mac/photos-scores.py" "$into/bin/photos-scores.py"
 }
 
 release_base() { printf '%s/v%s' "${DADDY_CULL_RELEASES:-https://github.com/$REPO/releases/download}" "$VERSION"; }
