@@ -438,8 +438,10 @@ func (b *BinEngine) Preview(ctx context.Context, ids []int64) (*BinPlan, error) 
 // as it goes to the Bin with that photograph. A video beside its photograph,
 // such as 2022/2022-08/2022-08-03/IMG_6390_HEVC.MOV, is taken only as a second
 // copy of the one at the same place in .live-photos, identical to it, which
-// stays with the photograph. Pairing is by name, as everywhere else, so a
-// video whose photograph has another name is the caller's to have checked.
+// stays with the photograph. Pairing is by name, confirmed by the Live Photo
+// identifier as everywhere else, so a video whose photograph has another name
+// is the caller's to have checked, and one filed under the name of a
+// photograph of another exposure may go.
 func (b *BinEngine) PreviewVideos(ctx context.Context, videos []string) (*BinPlan, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -458,8 +460,7 @@ func (b *BinEngine) PreviewVideos(ctx context.Context, videos []string) (*BinPla
 			return nil, ErrInvalid
 		}
 		seen[video] = true
-		dir, stem, ok := livePhotoOf(video)
-		if !ok {
+		if _, _, ok := livePhotoOf(video); !ok {
 			return nil, fmt.Errorf("not the video of a Live Photo: %s", video)
 		}
 		fp, e := b.fingerprint(ctx, video)
@@ -476,7 +477,7 @@ func (b *BinEngine) PreviewVideos(ctx context.Context, videos []string) (*BinPla
 			}
 			fp.Twin = liveFolder + "/" + video
 		} else {
-			owners, e := b.liveOwners(ctx, dir, stem, "")
+			owners, _, e := b.liveOwners(ctx, video, "")
 			if e != nil {
 				return nil, e
 			}
@@ -504,7 +505,8 @@ type binClip struct {
 }
 
 // liveClips finds, on disk, the Live Photo videos of the photograph at rel:
-// in .live-photos and beside it, by the names livePhotoOf pairs. A video goes
+// in .live-photos and beside it, by the names livePhotoOf pairs, unless the
+// video's Live Photo identifier is another photograph's. A video goes
 // with the batch only when every photograph it belongs to that is still in
 // the archive is in batch; otherwise it stays with the others, with a
 // warning, and leaves with the last of them.
@@ -534,9 +536,12 @@ func (b *BinEngine) liveClips(ctx context.Context, rel string, batch []int64, pl
 			if !ok || photoDir+"/"+stem != key || !entry.Type().IsRegular() {
 				continue
 			}
-			owners, e := b.liveOwners(ctx, photoDir, stem, plan)
+			owners, photos, e := b.liveOwners(ctx, clip, plan)
 			if e != nil {
 				return nil, nil, e
+			}
+			if !slices.Contains(photos, rel) {
+				continue
 			}
 			if !allIn(owners, batch) {
 				warnings = append(warnings, "Live Photo video stays in archive with another copy of its photo: "+clip)
@@ -552,10 +557,21 @@ func (b *BinEngine) liveClips(ctx context.Context, rel string, batch []int64, pl
 	return clips, warnings, nil
 }
 
-// liveOwners lists the photographs in the archive that a Live Photo video
-// named for dir and stem belongs to: catalogued, on disk, and not in the Bin,
-// except in the batch plan, whose own photographs still count.
-func (b *BinEngine) liveOwners(ctx context.Context, dir, stem, plan string) ([]int64, error) {
+// liveOwners lists the photographs in the archive that the Live Photo video
+// at clip, relative to the archive root, belongs to, and where they are:
+// catalogued, on disk, not in the Bin, except in the batch plan, whose own
+// photographs still count, named for the video, and with its identifier where
+// both record one. The video is read where it is now, which for one in the
+// batch may be in the Bin.
+func (b *BinEngine) liveOwners(ctx context.Context, clip, plan string) ([]int64, []string, error) {
+	return b.liveOwnersAt(ctx, clip, clip, plan)
+}
+
+func (b *BinEngine) liveOwnersAt(ctx context.Context, clip, now, plan string) ([]int64, []string, error) {
+	dir, stem, ok := livePhotoOf(clip)
+	if !ok {
+		return nil, nil, fmt.Errorf("not the video of a Live Photo: %s", clip)
+	}
 	prefix := "/archive/" + dir + "/"
 	rows, e := b.s.read.QueryContext(ctx, `SELECT a.id,a.relative_path FROM assets a
 		WHERE a.source_id='archive' AND a.kind IN ('image','raw') AND substr(a.relative_path,1,?)=?
@@ -563,22 +579,39 @@ func (b *BinEngine) liveOwners(ctx context.Context, dir, stem, plan string) ([]i
 		  AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored' AND fs.plan_id!=?)
 		ORDER BY a.id`, len(prefix), prefix, plan)
 	if e != nil {
-		return nil, e
+		return nil, nil, e
 	}
-	defer rows.Close()
-	var owners []int64
+	var named []int64
+	var paths []string
 	for rows.Next() {
 		var id int64
 		var p string
 		if e = rows.Scan(&id, &p); e != nil {
-			return nil, e
+			rows.Close()
+			return nil, nil, e
 		}
 		rel := strings.TrimPrefix(p, "/archive/")
 		if path.Dir(rel) == dir && photoKey(rel) == dir+"/"+stem {
-			owners = append(owners, id)
+			named = append(named, id)
+			paths = append(paths, rel)
 		}
 	}
-	return owners, rows.Err()
+	if e = rows.Close(); e != nil || len(named) == 0 {
+		return nil, nil, e
+	}
+	ids, e := b.s.liveIDs(ctx, b.root.Name(), append([]string{now}, paths...), true)
+	if e != nil {
+		return nil, nil, e
+	}
+	var owners []int64
+	var where []string
+	for i, id := range named {
+		if sameLive(ids, now, paths[i]) {
+			owners = append(owners, id)
+			where = append(where, paths[i])
+		}
+	}
+	return owners, where, nil
 }
 
 func allIn(ids, set []int64) bool {
@@ -595,8 +628,7 @@ func allIn(ids, set []int64) bool {
 // it without the video. A second copy goes while its twin is there unchanged,
 // which the photograph keeps.
 func (b *BinEngine) checkLive(p *BinPlan, f BinFile) error {
-	dir, stem, ok := livePhotoOf(f.Original)
-	if !ok {
+	if _, _, ok := livePhotoOf(f.Original); !ok {
 		return fmt.Errorf("not the video of a Live Photo: %s", f.Original)
 	}
 	if f.Twin != "" {
@@ -608,9 +640,28 @@ func (b *BinEngine) checkLive(p *BinPlan, f BinFile) error {
 		}
 		return nil
 	}
-	owners, e := b.liveOwners(context.Background(), dir, stem, p.ID)
+	ctx := context.Background()
+	clip := b.whereNow(p, f.Original)
+	owners, _, e := b.liveOwnersAt(ctx, f.Original, clip, p.ID)
 	if e != nil {
 		return e
+	}
+	// A batch planned before pairs were confirmed may hold the video of
+	// another exposure: it goes nowhere with photographs it is not part of.
+	if len(f.LiveOf) > 0 {
+		var photos []string
+		for _, a := range p.Assets {
+			if slices.Contains(f.LiveOf, a.ID) {
+				photos = append(photos, b.whereNow(p, strings.TrimPrefix(a.Path, "/archive/")))
+			}
+		}
+		ids, e := b.s.liveIDs(ctx, b.root.Name(), append([]string{clip}, photos...), true)
+		if e != nil {
+			return e
+		}
+		if !slices.ContainsFunc(photos, func(photo string) bool { return sameLive(ids, clip, photo) }) {
+			return fmt.Errorf("the video is not the Live Photo of the photos it was put in the Bin with; restore this batch and create a new preview: %s", f.Original)
+		}
 	}
 	var batch []int64
 	for _, a := range p.Assets {
@@ -622,6 +673,20 @@ func (b *BinEngine) checkLive(p *BinPlan, f BinFile) error {
 		return fmt.Errorf("the Live Photo video belongs to a photo still in the archive; restore this batch and create a new preview: %s", f.Original)
 	}
 	return nil
+}
+
+// whereNow is where the file of p from rel, relative to the archive root, is
+// now: in the Bin once it is there, since another file may have taken its
+// place since, or else still at rel.
+func (b *BinEngine) whereNow(p *BinPlan, rel string) string {
+	for i, f := range p.Files {
+		if f.Original == rel {
+			if _, e := b.root.Lstat(stored(p, i)); e == nil {
+				return stored(p, i)
+			}
+		}
+	}
+	return rel
 }
 
 func (b *BinEngine) verify(ctx context.Context, p string, expected BinFile) error {

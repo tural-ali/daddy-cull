@@ -47,6 +47,10 @@ type Store struct {
 	comparisonWake     chan struct{}
 	comparisonPriority atomic.Int64
 	comparisonRunning  atomic.Bool
+	// liveIDReader reads Apple's Live Photo identifier, which confirms a
+	// Live Photo's clip belongs to its photo; see live_photos.go. Without
+	// one, a clip is its photo's by name alone.
+	liveIDReader LiveIDReader
 }
 
 func Open(path string) (*Store, error) {
@@ -187,6 +191,11 @@ CREATE TABLE IF NOT EXISTS live_clips (
  PRIMARY KEY(photo_id,clip)
 );
 CREATE INDEX IF NOT EXISTS live_clips_asset ON live_clips(clip_id) WHERE clip_id IS NOT NULL;
+-- Apple's Live Photo identifier of each archive file that a Live Photo pairing
+-- by name has to confirm, by its path relative to the archive root, read when
+-- the file had size_bytes and mtime (Unix nanoseconds); content_id is '' for a
+-- file that records none. A file changed since is read again.
+CREATE TABLE IF NOT EXISTS live_ids (path TEXT PRIMARY KEY, size_bytes INTEGER NOT NULL, mtime INTEGER NOT NULL, content_id TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS video_durations (asset_id INTEGER PRIMARY KEY REFERENCES assets(id), size_bytes INTEGER NOT NULL, seconds REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS media_shapes (asset_id INTEGER PRIMARY KEY REFERENCES assets(id), size_bytes INTEGER NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL);
 -- How far the reviewer turned a file in Cull, in quarter turns clockwise. The

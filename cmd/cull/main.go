@@ -137,6 +137,13 @@ func main() {
 		log.Fatal(err)
 	}
 	defer s.Close()
+	// A Live Photo's clip pairs with its photo by name only where Apple's
+	// identifier, which exiftool reads, does not say otherwise.
+	if liveTool := resolveTool(*rawTool); liveTool != "" {
+		s.ReadLiveIDsWith(liveTool)
+	} else {
+		log.Printf("without %q, a Live Photo's video is paired with its photo by name alone", *rawTool)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if *importFile != "" {
@@ -236,10 +243,11 @@ func main() {
 		return
 	}
 	if !*writer {
-		// Live Photo clips leave the indexes below, so they are paired first.
-		// Without the archive to read, the pairs the last scan found stand.
+		// Live Photo clips leave the indexes below, so they are paired first,
+		// with the identifiers already read. Without the archive to read, the
+		// pairs the last scan found stand.
 		if *archiveMedia != "" {
-			if _, err := s.IndexLiveClips(ctx, *archiveMedia); err != nil {
+			if _, err := s.IndexKnownLiveClips(ctx, *archiveMedia); err != nil {
 				log.Printf("live photos: %v", err)
 			}
 		}
@@ -248,6 +256,28 @@ func main() {
 		}
 		if err := s.IndexCalendar(ctx); err != nil {
 			log.Fatal(err)
+		}
+		// The identifiers not read yet are read while the pages are served,
+		// which the first time takes minutes, and the indexes follow.
+		if *archiveMedia != "" {
+			go func() {
+				changed, err := s.IndexLiveClips(ctx, *archiveMedia)
+				if err != nil {
+					log.Printf("live photos: %v", err)
+					return
+				}
+				if !changed {
+					return
+				}
+				if err = s.IndexRelated(ctx); err == nil {
+					err = s.IndexCalendar(ctx)
+				}
+				if err != nil {
+					log.Printf("live photos: rebuilding the indexes: %v", err)
+					return
+				}
+				log.Printf("live photos: pairs confirmed by their identifiers")
+			}()
 		}
 	}
 	mux := http.NewServeMux()

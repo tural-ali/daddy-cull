@@ -30,6 +30,8 @@ On a large library this means the disk is read steadily for a while after the fi
 
 Removing a file sends it to the Bin.
 The writer checks the file's size and SHA-256 against what the page saw, then moves it to `.culled` inside the library, on the same disk.
+A Live Photo's video goes with its photo, and the writer reads Apple's Live Photo identifier from both first.
+A video filed under the photo's name that carries another identifier is another exposure's, as when two phones take `IMG_3043` on one day, so it stays in the library.
 Restore puts it back where it was, and refuses if another file has taken that name since.
 Deleting from the Bin starts the grace period set in Settings, from 0 to 365 days.
 Until it ends the file stays on disk and can be restored from the Log; then the writer deletes it for good.
