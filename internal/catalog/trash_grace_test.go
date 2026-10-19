@@ -183,8 +183,8 @@ func TestDeletingAgainAfterARestartFinishesTheJob(t *testing.T) {
 				marked = append(marked, item)
 			}
 		}
-		if _, err = f.trash.quarantine(ctx, marked); err != nil {
-			t.Fatal(err)
+		if plan, _, failed := f.trash.quarantine(ctx, marked); plan == nil || len(failed) != 0 {
+			t.Fatalf("move: %+v", failed)
 		}
 		result, err := f.trash.Delete(ctx, []string{"marked:1"}, "DELETE 1")
 		if err != nil || result.Done != 1 || result.KeptDays != 7 || len(result.Failures) != 0 {

@@ -33,6 +33,7 @@ The writer checks the file's size and SHA-256 against what the page saw, then mo
 A Live Photo's video goes with its photo, and the writer reads Apple's Live Photo identifier from both first.
 A video filed under the photo's name that carries another identifier is another exposure's, as when two phones take `IMG_3043` on one day, so it stays in the library.
 Restore puts it back where it was, and refuses if another file has taken that name since.
+A file the last archive scan did not find is left out of the Bin, and a file that goes between scans fails on its own while the rest of the run carries on.
 Deleting from the Bin starts the grace period set in Settings, from 0 to 365 days.
 Until it ends the file stays on disk and can be restored from the Log; then the writer deletes it for good.
 

@@ -194,7 +194,7 @@ func (s *Store) Stats(ctx context.Context, loc *time.Location) (Stats, error) {
 	st.Favourites = countQuery(ctx, s.read, "SELECT count(*) FROM decisions WHERE favourite=1")
 	st.Evidence = countQuery(ctx, s.read, "SELECT count(*) FROM asset_evidence")
 	st.FullHashes = countQuery(ctx, s.read, "SELECT count(*) FROM asset_evidence WHERE full_hash IS NOT NULL")
-	st.Marked = countQuery(ctx, s.read, "SELECT count(*) FROM decisions d WHERE d.status='cull' AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=d.asset_id AND fs.state!='restored')")
+	st.Marked = countQuery(ctx, s.read, "SELECT count(*) FROM decisions d WHERE d.status='cull' AND NOT EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=d.asset_id AND fs.state!='restored') AND NOT EXISTS(SELECT 1 FROM missing_assets m WHERE m.asset_id=d.asset_id)")
 	st.LegacyBin = countQuery(ctx, s.read, "SELECT count(*) FROM legacy_culled WHERE restored_at IS NULL AND purged_at IS NULL")
 	st.ShadowGroups = countQuery(ctx, s.read, "SELECT count(*) FROM (SELECT 1 FROM shadow_entries GROUP BY kind,group_key)")
 	st.Screenshots = countQuery(ctx, s.read, "SELECT count(*) FROM screenshot_items shots JOIN assets a ON a.id=shots.asset_id WHERE shots.state='waiting'"+screenshotNotQueued)

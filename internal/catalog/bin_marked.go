@@ -25,6 +25,9 @@ type MarkedAsset struct {
 // Rows imported from the earlier tool have no event and so no time; they sort
 // after everything marked in this tool, by capture date as before.
 //
+// A file the last archive scan did not find is left out: there is nothing to
+// move, and it comes back if the file does.
+//
 // Only archive files are listed. Screenshots and Google Takeout sources have
 // their own routes out and are never offered to this writer.
 func (s *Store) MarkedForBin(ctx context.Context, limit int) ([]MarkedAsset, error) {
@@ -42,6 +45,7 @@ func (s *Store) markedForBin(ctx context.Context, limit int) ([]MarkedAsset, err
 	 FROM assets a JOIN decisions d ON d.asset_id=a.id
 	 WHERE d.status='cull' AND a.source_id='archive'
 	   AND NOT EXISTS (SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored')
+	   AND NOT EXISTS (SELECT 1 FROM missing_assets m WHERE m.asset_id=a.id)
 	 ORDER BY `+markedAt+` DESC, a.captured_at DESC, a.id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"strconv"
 	"strings"
 	"sync"
@@ -332,15 +333,15 @@ func (t *TrashWriter) remove(ctx context.Context, items []TrashItem) (TrashResul
 	}
 	for start := 0; start < len(marked); start += engineBatch {
 		chunk := marked[start:min(start+engineBatch, len(marked))]
-		id, err := t.quarantine(ctx, chunk)
-		if err != nil {
-			for _, item := range chunk {
-				result.Failures = append(result.Failures, TrashFailure{Name: item.Name, Error: err.Error()})
-			}
+		plan, moved, failed := t.quarantine(ctx, chunk)
+		for _, f := range failed {
+			result.Failures = append(result.Failures, TrashFailure{Name: f.item.Name, Error: f.err.Error()})
+		}
+		if plan == nil {
 			continue
 		}
-		groups = append(groups, "bin:"+id)
-		for _, item := range chunk {
+		groups = append(groups, "bin:"+plan.ID)
+		for _, item := range moved {
 			result.Done++
 			result.Bytes += item.Size
 		}
@@ -348,24 +349,83 @@ func (t *TrashWriter) remove(ctx context.Context, items []TrashItem) (TrashResul
 	return result, t.s.scheduleDeletion(ctx, groups, time.Now())
 }
 
-// quarantine moves marked files into the Bin as one writer batch and returns
-// the batch, so it can be scheduled for deletion as a whole.
-func (t *TrashWriter) quarantine(ctx context.Context, chunk []TrashItem) (string, error) {
+// itemFailure is one file the writer could not take, and why.
+type itemFailure struct {
+	item TrashItem
+	err  error
+}
+
+// errNotInArchive stands for a file the archive no longer has where the
+// catalogue says, in place of the bare stat error, which names the path again
+// and reads as code. It is one sentence for every such file, so the Bin lists
+// them together.
+var errNotInArchive = errors.New("the file is no longer where the catalogue has it; the next archive scan takes it off this list")
+
+func failuresOf(items []TrashItem, err error) []itemFailure {
+	if errors.Is(err, fs.ErrNotExist) {
+		err = errNotInArchive
+	}
+	failed := make([]itemFailure, 0, len(items))
+	for _, item := range items {
+		failed = append(failed, itemFailure{item, err})
+	}
+	return failed
+}
+
+// planMarked plans marked files as one writer batch and returns the files it
+// holds. One file that cannot be planned, gone from disk since the last scan
+// say, would otherwise fail every file planned with it. Nothing has moved
+// yet, so each file is then tried alone to find the ones at fault, and the
+// rest are planned together again.
+func (t *TrashWriter) planMarked(ctx context.Context, chunk []TrashItem) (*BinPlan, []TrashItem, []itemFailure) {
 	if t.bin == nil {
-		return "", fmt.Errorf("the archive writer is not configured")
+		return nil, nil, failuresOf(chunk, fmt.Errorf("the archive writer is not configured"))
 	}
-	ids := make([]int64, 0, len(chunk))
+	ids := func(items []TrashItem) []int64 {
+		ids := make([]int64, 0, len(items))
+		for _, item := range items {
+			ids = append(ids, item.assetID)
+		}
+		return ids
+	}
+	plan, err := t.bin.Preview(ctx, ids(chunk))
+	if err == nil {
+		return plan, chunk, nil
+	}
+	if len(chunk) == 1 {
+		return nil, nil, failuresOf(chunk, err)
+	}
+	var good []TrashItem
+	var failed []itemFailure
 	for _, item := range chunk {
-		ids = append(ids, item.assetID)
+		if _, e := t.bin.Preview(ctx, []int64{item.assetID}); e != nil {
+			failed = append(failed, failuresOf([]TrashItem{item}, e)...)
+		} else {
+			good = append(good, item)
+		}
 	}
-	plan, err := t.bin.Preview(ctx, ids)
+	if len(good) == 0 {
+		return nil, nil, failed
+	}
+	if plan, err = t.bin.Preview(ctx, ids(good)); err != nil {
+		return nil, nil, append(failed, failuresOf(good, err)...)
+	}
+	return plan, good, failed
+}
+
+// quarantine moves marked files into the Bin as one writer batch and returns
+// the batch, so it can be scheduled for deletion as a whole, with the files it
+// moved and those it could not. The batch is nil when nothing moved.
+func (t *TrashWriter) quarantine(ctx context.Context, chunk []TrashItem) (*BinPlan, []TrashItem, []itemFailure) {
+	plan, planned, failed := t.planMarked(ctx, chunk)
+	if plan == nil {
+		return nil, nil, failed
+	}
+	plan, err := t.bin.Run(ctx, plan.ID, "quarantine", "")
 	if err != nil {
-		return "", err
+		return nil, nil, append(failed, failuresOf(planned, err)...)
 	}
-	if plan, err = t.bin.Run(ctx, plan.ID, "quarantine", ""); err != nil {
-		return "", err
-	}
-	return plan.ID, nil
+	return plan, planned, failed
 }
 
 // Empty deletes everything the Bin holds. The confirmation must name the count
@@ -429,11 +489,11 @@ func (t *TrashWriter) act(ctx context.Context, items []TrashItem, purge bool) (T
 	}
 	for start := 0; start < len(marked); start += engineBatch {
 		chunk := marked[start:min(start+engineBatch, len(marked))]
-		if err := t.markedChunk(ctx, chunk, purge); err != nil {
-			fail(chunk, err)
-		} else {
-			done(chunk)
+		moved, failed := t.markedChunk(ctx, chunk, purge)
+		for _, f := range failed {
+			fail([]TrashItem{f.item}, f.err)
 		}
+		done(moved)
 	}
 	for _, id := range binOrder {
 		if err := t.binPlan(ctx, id, purge); err != nil {
@@ -467,39 +527,34 @@ func (t *TrashWriter) act(ctx context.Context, items []TrashItem, purge bool) (T
 	return result, outcome
 }
 
-// markedChunk handles files that were marked but never moved. Restoring one is
-// only a change of mind, so its decision goes back to undecided and no file is
-// touched. Deleting one moves it into the Bin through the writer's own checks
-// first, then deletes exactly what was moved.
-func (t *TrashWriter) markedChunk(ctx context.Context, chunk []TrashItem, purge bool) error {
+// markedChunk handles files that were marked but never moved, and returns
+// the files it handled and those it could not. Restoring one is only a change
+// of mind, so its decision goes back to undecided and no file is touched.
+// Deleting one moves it into the Bin through the writer's own checks first,
+// then deletes exactly what was moved.
+func (t *TrashWriter) markedChunk(ctx context.Context, chunk []TrashItem, purge bool) ([]TrashItem, []itemFailure) {
 	if !purge {
 		decisions := make([]Decision, 0, len(chunk))
 		for _, item := range chunk {
 			id, err := randomID()
 			if err != nil {
-				return err
+				return nil, failuresOf(chunk, err)
 			}
 			decisions = append(decisions, Decision{RequestID: id, AssetID: item.assetID, ExpectedRevision: item.revision, Status: "unreviewed", Favourite: item.favourite})
 		}
-		_, err := t.s.DecideBatch(ctx, decisions)
-		return err
+		if _, err := t.s.DecideBatch(ctx, decisions); err != nil {
+			return nil, failuresOf(chunk, err)
+		}
+		return chunk, nil
 	}
-	if t.bin == nil {
-		return fmt.Errorf("the archive writer is not configured")
+	plan, moved, failed := t.quarantine(ctx, chunk)
+	if plan == nil {
+		return nil, failed
 	}
-	ids := make([]int64, 0, len(chunk))
-	for _, item := range chunk {
-		ids = append(ids, item.assetID)
+	if _, err := t.bin.Run(ctx, plan.ID, "purge", DeleteConfirmation(len(plan.Files))); err != nil {
+		return nil, append(failed, failuresOf(moved, err)...)
 	}
-	plan, err := t.bin.Preview(ctx, ids)
-	if err != nil {
-		return err
-	}
-	if plan, err = t.bin.Run(ctx, plan.ID, "quarantine", ""); err != nil {
-		return err
-	}
-	_, err = t.bin.Run(ctx, plan.ID, "purge", DeleteConfirmation(len(plan.Files)))
-	return err
+	return moved, failed
 }
 
 func (t *TrashWriter) binPlan(ctx context.Context, id string, purge bool) error {

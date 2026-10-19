@@ -138,12 +138,20 @@ func (s *Store) markPhoneDeletion(ctx context.Context, d phoneDeletion, result *
 		size, revision     int64
 		status             string
 		favourite, binning bool
+		missing            bool
 	)
 	err = tx.QueryRowContext(ctx, `SELECT a.id,a.size_bytes,COALESCE(d.status,'unreviewed'),COALESCE(d.favourite,0),COALESCE(d.revision,0),
-	 EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored')
-	 FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id WHERE a.source_id='archive' AND a.relative_path=?`, d.archivePath).Scan(&assetID, &size, &status, &favourite, &revision, &binning)
+	 EXISTS(SELECT 1 FROM file_state fs WHERE fs.asset_id=a.id AND fs.state!='restored'),
+	 EXISTS(SELECT 1 FROM missing_assets m WHERE m.asset_id=a.id)
+	 FROM assets a LEFT JOIN decisions d ON d.asset_id=a.id WHERE a.source_id='archive' AND a.relative_path=?`, d.archivePath).Scan(&assetID, &size, &status, &favourite, &revision, &binning, &missing)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
+	}
+	// A row the archive scan no longer finds names a file that has gone or
+	// moved, such as a Live Photo video filed beside its photo and later moved
+	// into .live-photos. Marking it would offer the Bin a file it cannot move.
+	if missing {
+		assetID = sql.NullInt64{}
 	}
 	live := strings.HasPrefix(d.archivePath, "/archive/"+liveFolder+"/")
 	if assetID.Valid && !live {
